@@ -11,6 +11,7 @@
     dispreferred: 'Lesson in a non-preferred period (~)', dispreferred2: 'Lesson in a strongly non-preferred period (~~)', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
+    freeHalves: 'Teacher short of the free mornings / afternoons they asked for (per half-day)',
     afterBreak: 'Lesson in the first period after a break', afternoon: 'Lesson in the afternoon (after lunch)', sameHour: 'Same hour of the day repeated (or varied) across a lesson row’s sessions',
     activityMin: 'Day below the minimum periods of an activity or lesson row (per period short)',
     roomSize: 'Lesson in a room that seats fewer than the class', classGapStrict: 'Free gap in the day of a “no gaps” class',
@@ -27,7 +28,7 @@
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
   const classDefaults = () => ({ code: '', extKey: '', homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
-  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
+  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, freeHalves: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
   // ---------- State ----------
@@ -361,7 +362,7 @@
     s.settings.options = { ...base.settings.options, ...(s.settings.options || {}) };
     ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; x.dispreferred2 = x.dispreferred2 || []; }); });
     s.teachers.forEach((t) => {
-      for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
+      for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays', 'freeHalves']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
       for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
     });
@@ -657,6 +658,7 @@
         else if (t.maxPerDay && nl > usable * t.maxPerDay) issues.push({ lvl: 'err', msg: `${t.name} teaches ${nl} periods; with ${t.freeDays} free day(s) and max ${t.maxPerDay}/day only ${usable * t.maxPerDay} fit.` });
         else if (nl > usable * teachingPeriods(s)) issues.push({ lvl: 'err', msg: `${t.name} teaches ${nl} periods but ${usable} working day(s) hold only ${usable * teachingPeriods(s)}.` });
       }
+      if (t.freeHalves && t.freeHalves > (e.tHalves[t.id] || []).length) issues.push({ lvl: 'warn', msg: `${t.name} asks for ${t.freeHalves} free half-day(s) but can only teach in ${(e.tHalves[t.id] || []).length} half-days.` });
       if (t.presenceStrict && t.maxPresenceWeek && n > t.maxPresenceWeek) issues.push({ lvl: 'err', msg: `${t.name} has ${n} periods but the strict weekly presence limit is ${t.maxPresenceWeek}.` });
       if (t.maxPresenceDay && t.maxPresenceWeek && t.maxPresenceDay > t.maxPresenceWeek) issues.push({ lvl: 'warn', msg: `${t.name}: presence/day is above presence/week.` });
       if (t.presenceStrict && t.maxPresenceDay && n > t.maxPresenceDay * workDays) issues.push({ lvl: 'err', msg: `${t.name} has ${n} periods but presence ${t.maxPresenceDay}/day over ${workDays} day(s) allows only ${t.maxPresenceDay * workDays}.` });

@@ -997,6 +997,28 @@ check('row options: first period after a break, afternoon and same-hour wishes a
   assert.strictEqual(new Set(solveAll(s2).placements.map((p) => p.period)).size, 3, 'and varies it when avoided');
 });
 
+check('free half-days: the wish counts mornings or afternoons without lessons, and weighs the shortfall', () => {
+  const s = school({ days: 3, periods: 'tttlttt' });       // morning 0-2, lunch, afternoon 4-6
+  const subj = add.subject(s), c = add.cls(s, 'A'), t = add.teacher(s, 'T', { freeHalves: 3, unavailable: ['2-4', '2-5', '2-6'] });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1] });
+  const e0 = new Engine(s, []);
+  assert.strictEqual(e0.tHalves[t.id].length, 5, '3 mornings + 2 afternoons (Wednesday afternoon is ✕)');
+  assert.strictEqual(e0.teacherFreeHalvesMissing(t.id), 0, 'an empty week has every half-day free');
+  // Lessons in Mon morning, Mon afternoon, Tue morning: 2 of 5 halves are free, 3 wanted → 1 short.
+  const e = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 4, 1), pl(l, 2, 1, 1, 1)]);
+  assert.strictEqual(e.teacherFreeHalvesMissing(t.id), 1);
+  assert.strictEqual(e.totalCost().freeHalves, 1);
+  assert.ok(Math.abs(e.teacherWeekCost(t.id) - e.W.balance * e.teacherBalance(t.id) - e.W.freeHalves) < 1e-9);
+  // Meetings and duties do not count as lessons for this wish.
+  const m = add.meeting(s, 'Sync', [t], { sessions: 1 });
+  const e2 = new Engine(s, [pl(l, 0, 0, 0, 1), { unitId: `m:${m.id}#0`, day: 2, period: 1, len: 1, rooms: [null], locked: false }]);
+  assert.strictEqual(e2.teacherFreeHalvesMissing(t.id), 0, '4 free halves of 5');
+  // The annealer packs the lessons into few half-days.
+  s.settings.weights = { freeHalves: 10, balance: 0 };
+  const r = solveAll(s);
+  assert.strictEqual(r.engine.totalCost().freeHalves, 0);
+});
+
 // ---------- complementary activities ----------
 const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
 const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });
@@ -1505,7 +1527,7 @@ check('teachers without week rules cost and behave as before', () => {
   const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
   const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1] });
   const e = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1), pl(l, 2, 0, 2, 1)]);
-  eq(e.tRule[t.id], { maxCons: 0, presDay: 0, presWeek: 0, strict: false, free: 0, exclusive: false, day: false, week: false, hard: false });
+  eq(Object.entries(e.tRule[t.id]).filter(([k, v]) => v && k !== 'priority'), [], 'every week rule is off by default');
   const st = e.totalCost();
   assert.strictEqual(st.consecutive + st.presence + st.exclusive, 0);
 });

@@ -194,6 +194,7 @@ function renderTeachers(root) {
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day'),
     numCol('Min/day', 'minPerDay', 'Preference: on days they teach, at least this many periods'),
     numCol('Max in a row', 'maxConsecutive', 'Preference: no more than this many teaching periods back to back (a break or lunch ends the run)'),
+    numCol('Free halves', 'freeHalves', 'Preference: this many mornings or afternoons (half-days) with no lessons at all', state.settings.days.length * 2),
     numCol('Free days', 'freeDays', 'Hard limit: this many working days with no lessons at all (meetings and duties may still use them)', state.settings.days.length),
     numCol('Presence/day', 'maxPresenceDay', 'Time at school in a day, first to last period including free periods. Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state)),
     numCol('Presence/week', 'maxPresenceWeek', 'Time at school in the week (sum of the daily presence). Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state) * state.settings.days.length),
@@ -984,6 +985,7 @@ function renderStats(box) {
     ${s.afterBreak ? `<div class="stat"><b>${s.afterBreak}</b><span>lessons right after a break they avoid</span></div>` : ''}
     ${s.afternoon ? `<div class="stat"><b>${s.afternoon}</b><span>lessons in an afternoon they avoid</span></div>` : ''}
     ${s.sameHour ? `<div class="stat"><b>${s.sameHour}</b><span>same-hour repeats / variations against a row’s wish</span></div>` : ''}
+    ${s.freeHalves ? `<div class="stat"><b>${s.freeHalves}</b><span>free half-days teachers are short of</span></div>` : ''}
     ${s.balance ? `<div class="stat"><b>${s.balance}</b><span>teacher periods off an even week</span></div>` : ''}
     <div class="stat"><b>${s.cost}</b><span>weighted score (lower is better)</span></div>
   </div>

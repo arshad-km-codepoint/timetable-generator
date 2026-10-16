@@ -69,7 +69,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 
 - [x] Max consecutive teaching periods (rest period required). Soft: periods over the limit are weighted (`consecutive`); a break or lunch ends a run unless a lesson straddles it.
 - [x] Daily and weekly presence (first to last period, including gaps) limits, hard (`Strict`, for lessons, meetings and teaching duties) or soft (`presence` weight); lunch counts only with the existing `countMiddayGap` option.
-- [ ] Minimum free days, or free mornings/afternoons, in non-preset positions. *Done:* free days (hard; days without lessons, meetings and duties may still use them; opening an extra day evicts the teacher's lightest day). *Open:* free mornings/afternoons.
+- [x] Minimum free days, or free mornings/afternoons, in non-preset positions. Free days are hard (days without lessons; meetings and duties may still use them; opening an extra day evicts the teacher's lightest day). Free mornings/afternoons (`Free halves`) are a weighted wish (`freeHalves`, default 4 per missing half-day); a half-day is a morning (before the lunch period) or an afternoon and only counts where the teacher can teach at all.
 - [ ] Mutually exclusive periods: last period then first next day (n periods apart), first and last on the same day, morning/afternoon combinations, Friday→Monday option. *Done:* last period then first period of the next day (soft, `noLastFirst`). *Open:* the rest.
 - [ ] Concentrate load in the fewest days.
 - [ ] Associated timetables (a named set of teachers who should start and finish together).

@@ -852,6 +852,18 @@ check('(x) row options: migrate normalises, validation notes options with no eff
   l.lengths = [1, 1]; s.settings.periods[1].type = 'break'; s.settings.periods[1].label = 'Break';
   assert.ok(!hasMsg(s, /Same hour|first period after a break/), msgs(s).join('\n'));
 });
+check('(y) free half-days migrate and are checked against the half-days a teacher can teach in', () => {
+  const s = school('ttltt', 2);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  t.freeHalves = '2.8'; add.lesson(s, subj, t, [c], 1, 1);
+  M.migrate(s);
+  assert.strictEqual(t.freeHalves, 2);
+  assert.ok(!hasMsg(s, /free half-day/));
+  t.freeHalves = 5;
+  assert.ok(hasMsg(s, /warn: Teacher asks for 5 free half-day\(s\) but can only teach in 4 half-days/), msgs(s).join('\n'));
+  t.unavailable = ['0-0', '0-1', '0-3', '0-4'];
+  assert.ok(hasMsg(s, /can only teach in 2 half-days/), msgs(s).join('\n'));
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

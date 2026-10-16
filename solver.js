@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5, freeHalves: 4 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart', 'before', 'after']);
 
 // A room record with count N > 1 stands for N identical unnamed rooms ("20 general classrooms"):
@@ -114,10 +114,20 @@ class Engine {
     // Per-teacher week rules (0 / false = off). Hard: freeDays (days without any lesson) and, with
     // presenceStrict, the presence limits (for every unit in teaching periods). Soft: maxConsecutive, the presence
     // limits otherwise, noLastFirst. `day` / `week` say which soft terms need computing.
+    // Half-days (morning / afternoon of a day) in which each teacher could teach at all, for the free-half-day wish.
+    this.tHalves = {};
+    for (const t of data.teachers) {
+      this.tHalves[t.id] = [];
+      for (let d = 0; d < D; d++) for (const half of [false, true]) {
+        const ps = [];
+        for (let p = 0; p < P; p++) if (this.periodTypes[p] === 'teaching' && this.afternoonP[p] === half && !this.general.has(d * P + p) && !this.blocked['t' + t.id].has(d * P + p)) ps.push(p);
+        if (ps.length) this.tHalves[t.id].push({ d, ps });
+      }
+    }
     this.tRule = {};
     for (const t of data.teachers) {
       const n = (v) => Math.max(0, Math.floor(Number(v)) || 0);
-      const r = { maxCons: n(t.maxConsecutive), presDay: n(t.maxPresenceDay), presWeek: n(t.maxPresenceWeek), strict: !!t.presenceStrict, free: n(t.freeDays), exclusive: !!t.noLastFirst };
+      const r = { maxCons: n(t.maxConsecutive), presDay: n(t.maxPresenceDay), presWeek: n(t.maxPresenceWeek), strict: !!t.presenceStrict, free: n(t.freeDays), exclusive: !!t.noLastFirst, freeHalves: n(t.freeHalves) };
       r.day = !!(r.maxCons || r.presDay); r.week = !!(r.presWeek || r.exclusive);
       r.hard = !!(r.free || (r.strict && (r.presDay || r.presWeek)));
       this.tRule[t.id] = r;
@@ -866,12 +876,23 @@ class Engine {
     return Math.max(0, week - r.presWeek);
   }
 
+  // Free half-days still missing: the wish is `freeHalves` mornings or afternoons without any lesson.
+  teacherFreeHalvesMissing(t) {
+    const need = Math.min(this.tRule[t].freeHalves, this.tHalves[t].length); const occ = this.occ['t' + t];
+    let free = 0;
+    for (const h of this.tHalves[t]) {
+      if (!h.ps.some((p) => { const o = occ[h.d * this.P + p]; return o >= 0 && this.units[o].kind === 'lesson'; })) free++;
+    }
+    return Math.max(0, need - free);
+  }
+
   // Week-level soft cost of teacher t: balance, exclusive periods and weekly presence.
   teacherWeekCost(t) {
     const r = this.tRule[t]; let c = 0;
     if (this.W.balance) c += this.W.balance * this.teacherBalance(t);
     if (r.exclusive && this.W.exclusive) c += this.W.exclusive * this.teacherExclusive(t);
     if (r.presWeek && this.W.presence) c += this.W.presence * this.teacherPresenceWeek(t);
+    if (r.freeHalves && this.W.freeHalves) c += this.W.freeHalves * this.teacherFreeHalvesMissing(t);
     return c;
   }
 
@@ -1035,7 +1056,7 @@ class Engine {
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0, freeHalves: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
@@ -1047,6 +1068,7 @@ class Engine {
       st.balance += b; c += this.W.balance * b;
       if (r.exclusive) { const x = this.teacherExclusive(t); st.exclusive += x; c += this.W.exclusive * x; }
       if (r.presWeek) { const x = this.teacherPresenceWeek(t); st.presence += x; c += this.W.presence * x; }
+      if (r.freeHalves) { const x = this.teacherFreeHalvesMissing(t); st.freeHalves += x; c += this.W.freeHalves * x; }
     }
     for (let d = 0; d < this.D; d++) {
       for (const t in this.teachers) {
