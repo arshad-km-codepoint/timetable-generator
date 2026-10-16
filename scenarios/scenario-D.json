@@ -1,0 +1,8106 @@
+{
+  "settings": {
+    "name": "Scenario D — Primary with impossible demands",
+    "days": [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday"
+    ],
+    "periods": [
+      {
+        "label": "1",
+        "start": "07:45",
+        "end": "08:25"
+      },
+      {
+        "label": "2",
+        "start": "08:25",
+        "end": "09:05"
+      },
+      {
+        "label": "3",
+        "start": "09:05",
+        "end": "09:45"
+      },
+      {
+        "label": "4",
+        "start": "10:05",
+        "end": "10:45"
+      },
+      {
+        "label": "5",
+        "start": "10:45",
+        "end": "11:25"
+      },
+      {
+        "label": "6",
+        "start": "11:45",
+        "end": "12:25"
+      },
+      {
+        "label": "7",
+        "start": "12:25",
+        "end": "13:05"
+      }
+    ],
+    "weights": {
+      "classGap": 3,
+      "teacherGap": 1,
+      "sameDay": 4,
+      "late": 0.15,
+      "dispreferred": 2,
+      "teacherMin": 2,
+      "dutyUncovered": 1
+    },
+    "attempts": 2
+  },
+  "teachers": [
+    {
+      "id": "tiu",
+      "name": "Class teacher 1A",
+      "code": "CT1A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tiw",
+      "name": "Class teacher 1B",
+      "code": "CT1B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tiy",
+      "name": "Class teacher 1C",
+      "code": "CT1C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tj0",
+      "name": "Class teacher 2A",
+      "code": "CT2A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tj2",
+      "name": "Class teacher 2B",
+      "code": "CT2B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tj4",
+      "name": "Class teacher 2C",
+      "code": "CT2C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tj6",
+      "name": "Class teacher 3A",
+      "code": "CT3A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tj8",
+      "name": "Class teacher 3B",
+      "code": "CT3B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tja",
+      "name": "Class teacher 3C",
+      "code": "CT3C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjc",
+      "name": "Class teacher 4A",
+      "code": "CT4A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tje",
+      "name": "Class teacher 4B",
+      "code": "CT4B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjg",
+      "name": "Class teacher 4C",
+      "code": "CT4C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tji",
+      "name": "Class teacher 5A",
+      "code": "CT5A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjk",
+      "name": "Class teacher 5B",
+      "code": "CT5B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjm",
+      "name": "Class teacher 5C",
+      "code": "CT5C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 0,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjn",
+      "name": "Arabic 1",
+      "code": "AR1",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjo",
+      "name": "Arabic 2",
+      "code": "AR2",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjp",
+      "name": "PE 1",
+      "code": "PE1",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjq",
+      "name": "PE 2",
+      "code": "PE2",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjr",
+      "name": "Music",
+      "code": "MUS",
+      "unavailable": [
+        "3-0",
+        "3-1",
+        "3-2",
+        "3-3",
+        "3-4",
+        "3-5",
+        "3-6",
+        "4-0",
+        "4-1",
+        "4-2",
+        "4-3",
+        "4-4",
+        "4-5",
+        "4-6"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjs",
+      "name": "Art",
+      "code": "ART",
+      "unavailable": [
+        "4-5",
+        "4-6"
+      ],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjt",
+      "name": "ICT",
+      "code": "ICT",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tju",
+      "name": "Moral Ed.",
+      "code": "MOR",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    },
+    {
+      "id": "tjv",
+      "name": "Librarian",
+      "code": "LIB",
+      "unavailable": [],
+      "dispreferred": [],
+      "maxPerDay": 7,
+      "minPerDay": 0
+    }
+  ],
+  "classes": [
+    {
+      "id": "cit",
+      "name": "1A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "civ",
+      "name": "1B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cix",
+      "name": "1C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "ciz",
+      "name": "2A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cj1",
+      "name": "2B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cj3",
+      "name": "2C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cj5",
+      "name": "3A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cj7",
+      "name": "3B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cj9",
+      "name": "3C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cjb",
+      "name": "4A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cjd",
+      "name": "4B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cjf",
+      "name": "4C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cjh",
+      "name": "5A",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cjj",
+      "name": "5B",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    },
+    {
+      "id": "cjl",
+      "name": "5C",
+      "unavailable": [
+        "0-0"
+      ],
+      "dispreferred": []
+    }
+  ],
+  "rooms": [
+    {
+      "id": "ri8",
+      "name": "Class 1",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "ri9",
+      "name": "Class 2",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "ria",
+      "name": "Class 3",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rib",
+      "name": "Class 4",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "ric",
+      "name": "Class 5",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rid",
+      "name": "Class 6",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rie",
+      "name": "Class 7",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rif",
+      "name": "Class 8",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rig",
+      "name": "Class 9",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rih",
+      "name": "Class 10",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rii",
+      "name": "Class 11",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rij",
+      "name": "Class 12",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rik",
+      "name": "Class 13",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "ril",
+      "name": "Class 14",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rim",
+      "name": "Class 15",
+      "type": "Homeroom",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rin",
+      "name": "Sports Hall",
+      "type": "Sports",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rio",
+      "name": "Playground",
+      "type": "Sports",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rip",
+      "name": "Music Room",
+      "type": "Music",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "riq",
+      "name": "Art Room",
+      "type": "Art",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "rir",
+      "name": "ICT Lab",
+      "type": "ICT",
+      "unavailable": [],
+      "dispreferred": []
+    },
+    {
+      "id": "ris",
+      "name": "Library",
+      "type": "Library",
+      "unavailable": [],
+      "dispreferred": []
+    }
+  ],
+  "subjects": [
+    {
+      "id": "shy",
+      "name": "English",
+      "code": "ENG",
+      "color": "#2f6fdb"
+    },
+    {
+      "id": "shz",
+      "name": "Maths",
+      "code": "MAT",
+      "color": "#d9534f"
+    },
+    {
+      "id": "si0",
+      "name": "EVS",
+      "code": "EVS",
+      "color": "#1f8a4c"
+    },
+    {
+      "id": "si1",
+      "name": "Arabic",
+      "code": "ARA",
+      "color": "#b7791f"
+    },
+    {
+      "id": "si2",
+      "name": "PE",
+      "code": "PE",
+      "color": "#7b4fd6"
+    },
+    {
+      "id": "si3",
+      "name": "Music",
+      "code": "MUS",
+      "color": "#0f8f99"
+    },
+    {
+      "id": "si4",
+      "name": "Art",
+      "code": "ART",
+      "color": "#c2417e"
+    },
+    {
+      "id": "si5",
+      "name": "ICT",
+      "code": "ICT",
+      "color": "#5c6f2b"
+    },
+    {
+      "id": "si6",
+      "name": "Moral Ed.",
+      "code": "MOR",
+      "color": "#8a5a44"
+    },
+    {
+      "id": "si7",
+      "name": "Library",
+      "code": "LIB",
+      "color": "#4a6fa5"
+    }
+  ],
+  "lessons": [
+    {
+      "id": "ljw",
+      "subjectId": "shy",
+      "teacherId": "tiu",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ri8",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "ljx",
+      "subjectId": "shz",
+      "teacherId": "tiu",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ri8",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "ljy",
+      "subjectId": "si0",
+      "teacherId": "tiu",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "ri8",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ljz",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "ri8",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk0",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk1",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk2",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk3",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk4",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "ri8",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk5",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cit"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk6",
+      "subjectId": "shy",
+      "teacherId": "tiw",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ri9",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lk7",
+      "subjectId": "shz",
+      "teacherId": "tiw",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ri9",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lk8",
+      "subjectId": "si0",
+      "teacherId": "tiw",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "ri9",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lk9",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "ri9",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lka",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkb",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkc",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkd",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lke",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "ri9",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkf",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "civ"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkg",
+      "subjectId": "shy",
+      "teacherId": "tiy",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ria",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lkh",
+      "subjectId": "shz",
+      "teacherId": "tiy",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ria",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lki",
+      "subjectId": "si0",
+      "teacherId": "tiy",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "ria",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkj",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "ria",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkk",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkl",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkm",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkn",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lko",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "ria",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkp",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cix"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkq",
+      "subjectId": "shy",
+      "teacherId": "tj0",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rib",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lkr",
+      "subjectId": "shz",
+      "teacherId": "tj0",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rib",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lks",
+      "subjectId": "si0",
+      "teacherId": "tj0",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rib",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkt",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rib",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lku",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkv",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkw",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkx",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lky",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rib",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lkz",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "ciz"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll0",
+      "subjectId": "shy",
+      "teacherId": "tj2",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ric",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "ll1",
+      "subjectId": "shz",
+      "teacherId": "tj2",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ric",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "ll2",
+      "subjectId": "si0",
+      "teacherId": "tj2",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "ric",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll3",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "ric",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll4",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll5",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll6",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll7",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll8",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "ric",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ll9",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cj1"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lla",
+      "subjectId": "shy",
+      "teacherId": "tj4",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rid",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "llb",
+      "subjectId": "shz",
+      "teacherId": "tj4",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rid",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "llc",
+      "subjectId": "si0",
+      "teacherId": "tj4",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rid",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lld",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rid",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lle",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llf",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llg",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llh",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lli",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rid",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llj",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cj3"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llk",
+      "subjectId": "shy",
+      "teacherId": "tj6",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rie",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lll",
+      "subjectId": "shz",
+      "teacherId": "tj6",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rie",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "llm",
+      "subjectId": "si0",
+      "teacherId": "tj6",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rie",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lln",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rie",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llo",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llp",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llq",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llr",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lls",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rie",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llt",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cj5"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llu",
+      "subjectId": "shy",
+      "teacherId": "tj8",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rif",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "llv",
+      "subjectId": "shz",
+      "teacherId": "tj8",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rif",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "llw",
+      "subjectId": "si0",
+      "teacherId": "tj8",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rif",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llx",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rif",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lly",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "llz",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm0",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm1",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm2",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rif",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm3",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cj7"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm4",
+      "subjectId": "shy",
+      "teacherId": "tja",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rig",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lm5",
+      "subjectId": "shz",
+      "teacherId": "tja",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rig",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lm6",
+      "subjectId": "si0",
+      "teacherId": "tja",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rig",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm7",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rig",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm8",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lm9",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lma",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmb",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmc",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rig",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmd",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cj9"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lme",
+      "subjectId": "shy",
+      "teacherId": "tjc",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rih",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lmf",
+      "subjectId": "shz",
+      "teacherId": "tjc",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rih",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lmg",
+      "subjectId": "si0",
+      "teacherId": "tjc",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rih",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmh",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rih",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmi",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmj",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmk",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lml",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmm",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rih",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmn",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cjb"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmo",
+      "subjectId": "shy",
+      "teacherId": "tje",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rii",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lmp",
+      "subjectId": "shz",
+      "teacherId": "tje",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rii",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lmq",
+      "subjectId": "si0",
+      "teacherId": "tje",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rii",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmr",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rii",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lms",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmt",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmu",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmv",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmw",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rii",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmx",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cjd"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lmy",
+      "subjectId": "shy",
+      "teacherId": "tjg",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rij",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lmz",
+      "subjectId": "shz",
+      "teacherId": "tjg",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rij",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "ln0",
+      "subjectId": "si0",
+      "teacherId": "tjg",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rij",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln1",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rij",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln2",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln3",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln4",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln5",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln6",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rij",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln7",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cjf"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "ln8",
+      "subjectId": "shy",
+      "teacherId": "tji",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rik",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "ln9",
+      "subjectId": "shz",
+      "teacherId": "tji",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rik",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lna",
+      "subjectId": "si0",
+      "teacherId": "tji",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rik",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnb",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rik",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnc",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnd",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lne",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnf",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lng",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rik",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnh",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cjh"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lni",
+      "subjectId": "shy",
+      "teacherId": "tjk",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ril",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lnj",
+      "subjectId": "shz",
+      "teacherId": "tjk",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "ril",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lnk",
+      "subjectId": "si0",
+      "teacherId": "tjk",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "ril",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnl",
+      "subjectId": "si1",
+      "teacherId": "tjo",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "ril",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnm",
+      "subjectId": "si2",
+      "teacherId": "tjq",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnn",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lno",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnp",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnq",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "ril",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnr",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cjj"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lns",
+      "subjectId": "shy",
+      "teacherId": "tjm",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rim",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lnt",
+      "subjectId": "shz",
+      "teacherId": "tjm",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 6,
+      "length": 1,
+      "room": "rim",
+      "maxOnePerDay": false,
+      "parallel": ""
+    },
+    {
+      "id": "lnu",
+      "subjectId": "si0",
+      "teacherId": "tjm",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 5,
+      "length": 1,
+      "room": "rim",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnv",
+      "subjectId": "si1",
+      "teacherId": "tjn",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 4,
+      "length": 1,
+      "room": "rim",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnw",
+      "subjectId": "si2",
+      "teacherId": "tjp",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 3,
+      "length": 1,
+      "room": "type:Sports",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnx",
+      "subjectId": "si3",
+      "teacherId": "tjr",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Music",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lny",
+      "subjectId": "si4",
+      "teacherId": "tjs",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:Art",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lnz",
+      "subjectId": "si5",
+      "teacherId": "tjt",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "type:ICT",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lo0",
+      "subjectId": "si6",
+      "teacherId": "tju",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 2,
+      "length": 1,
+      "room": "rim",
+      "maxOnePerDay": true,
+      "parallel": ""
+    },
+    {
+      "id": "lo1",
+      "subjectId": "si7",
+      "teacherId": "tjv",
+      "classIds": [
+        "cjl"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "type:Library",
+      "maxOnePerDay": true,
+      "parallel": ""
+    }
+  ],
+  "meetings": [
+    {
+      "id": "mo2",
+      "name": "Grade 1 planning",
+      "teacherIds": [
+        "tiu",
+        "tiw",
+        "tiy"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "",
+      "allowed": []
+    },
+    {
+      "id": "mo3",
+      "name": "Grade 2 planning",
+      "teacherIds": [
+        "tj0",
+        "tj2",
+        "tj4"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "",
+      "allowed": []
+    },
+    {
+      "id": "mo4",
+      "name": "Grade 3 planning",
+      "teacherIds": [
+        "tj6",
+        "tj8",
+        "tja"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "",
+      "allowed": []
+    },
+    {
+      "id": "mo5",
+      "name": "Grade 4 planning",
+      "teacherIds": [
+        "tjc",
+        "tje",
+        "tjg"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "",
+      "allowed": []
+    },
+    {
+      "id": "mo6",
+      "name": "Grade 5 planning",
+      "teacherIds": [
+        "tji",
+        "tjk",
+        "tjm"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "",
+      "allowed": []
+    },
+    {
+      "id": "mo8",
+      "name": "Impossible all-hands (period 1 Monday = assembly)",
+      "teacherIds": [
+        "tiu",
+        "tiw",
+        "tiy",
+        "tj0",
+        "tj2",
+        "tj4",
+        "tj6",
+        "tj8",
+        "tja",
+        "tjc",
+        "tje",
+        "tjg",
+        "tji",
+        "tjk",
+        "tjm",
+        "tjn",
+        "tjo",
+        "tjp",
+        "tjq",
+        "tjr",
+        "tjs",
+        "tjt",
+        "tju",
+        "tjv"
+      ],
+      "sessions": 1,
+      "length": 1,
+      "room": "",
+      "allowed": [
+        "0-0"
+      ]
+    }
+  ],
+  "duties": [
+    {
+      "id": "do7",
+      "name": "Sick-bay cover",
+      "maxPerSlot": 1,
+      "allowed": [],
+      "assignments": [
+        {
+          "teacherId": "tjr",
+          "hours": 3
+        },
+        {
+          "teacherId": "tjs",
+          "hours": 3
+        },
+        {
+          "teacherId": "tjt",
+          "hours": 3
+        },
+        {
+          "teacherId": "tju",
+          "hours": 3
+        },
+        {
+          "teacherId": "tjv",
+          "hours": 3
+        },
+        {
+          "teacherId": "tjn",
+          "hours": 3
+        },
+        {
+          "teacherId": "tjo",
+          "hours": 3
+        },
+        {
+          "teacherId": "tiu",
+          "hours": 4
+        },
+        {
+          "teacherId": "tiw",
+          "hours": 4
+        },
+        {
+          "teacherId": "tiy",
+          "hours": 4
+        },
+        {
+          "teacherId": "tj0",
+          "hours": 4
+        },
+        {
+          "teacherId": "tj2",
+          "hours": 4
+        }
+      ]
+    }
+  ],
+  "timetable": {
+    "placements": [
+      {
+        "unitId": "ljw#0",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljw#1",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljw#2",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljw#3",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljw#4",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljw#5",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljx#0",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljx#1",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljx#2",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljx#3",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljx#4",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljx#5",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljy#0",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljy#1",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljy#2",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljy#3",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljy#4",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljz#0",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljz#1",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljz#2",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ljz#3",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk0#0",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk0#1",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk0#2",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk1#0",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk1#1",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk2#0",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk2#1",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk3#0",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk3#1",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk4#0",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk4#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri8"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk5#0",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk6#0",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk6#1",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk6#2",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk6#3",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk6#4",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk6#5",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk7#0",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk7#1",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk7#2",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk7#3",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk7#4",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk7#5",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk8#0",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk8#1",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk8#2",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk8#3",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk8#4",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk9#0",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk9#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk9#2",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lk9#3",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lka#0",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lka#1",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lka#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkb#1",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkc#0",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkc#1",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkd#0",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkd#1",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lke#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lke#1",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ri9"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkf#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkg#0",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkg#1",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkg#2",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkg#3",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkg#4",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkg#5",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkh#0",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkh#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkh#2",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkh#3",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkh#4",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkh#5",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lki#0",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lki#1",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lki#2",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lki#3",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lki#4",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkj#0",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkj#1",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkj#2",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkj#3",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkk#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkk#1",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkk#2",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkl#0",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkm#0",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkm#1",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkn#0",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkn#1",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lko#0",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lko#1",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ria"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkp#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkq#0",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkq#1",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkq#2",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkq#3",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkq#4",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkq#5",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkr#0",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkr#1",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkr#2",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkr#3",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkr#4",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkr#5",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lks#0",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lks#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lks#2",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lks#3",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lks#4",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkt#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkt#1",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkt#2",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkt#3",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lku#0",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lku#1",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lku#2",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkv#1",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkw#0",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkw#1",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkx#0",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkx#1",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lky#0",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lky#1",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rib"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lkz#0",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll0#0",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll0#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll0#2",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll0#3",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll0#4",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll0#5",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll1#0",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll1#1",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll1#2",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll1#3",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll1#4",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll1#5",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll2#0",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll2#1",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll2#2",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll2#3",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll2#4",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll3#0",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll3#1",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll3#2",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll3#3",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll4#0",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll4#1",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll4#2",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll5#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll5#1",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll6#0",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll6#1",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll7#0",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll7#1",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll8#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll8#1",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ric"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ll9#0",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lla#0",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lla#1",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lla#2",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lla#3",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lla#4",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lla#5",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llb#0",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llb#1",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llb#2",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llb#3",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llb#4",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llb#5",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llc#0",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llc#1",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llc#2",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llc#3",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llc#4",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lld#0",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lld#1",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lld#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lld#3",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lle#0",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lle#1",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lle#2",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llf#1",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llg#0",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llg#1",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llh#0",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llh#1",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lli#0",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lli#1",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rid"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llj#0",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llk#0",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llk#1",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llk#2",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llk#3",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llk#4",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llk#5",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lll#0",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lll#1",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lll#2",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lll#3",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lll#4",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lll#5",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llm#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llm#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llm#2",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llm#3",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llm#4",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lln#0",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lln#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lln#2",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lln#3",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llo#0",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llo#1",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llo#2",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llp#1",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llq#0",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llq#1",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llr#0",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llr#1",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lls#0",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lls#1",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rie"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llt#0",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llu#0",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llu#1",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llu#2",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llu#3",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llu#4",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llu#5",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llv#0",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llv#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llv#2",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llv#3",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llv#4",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llv#5",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llw#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llw#1",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llw#2",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llw#3",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llw#4",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llx#0",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llx#1",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llx#2",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llx#3",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lly#0",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lly#1",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lly#2",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llz#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "llz#1",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm0#0",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm0#1",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm1#0",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm1#1",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm2#0",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm2#1",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rif"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm3#0",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm4#0",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm4#1",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm4#2",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm4#3",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm4#4",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm4#5",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm5#0",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm5#1",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm5#2",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm5#3",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm5#4",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm5#5",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm6#0",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm6#1",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm6#2",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm6#3",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm6#4",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm7#0",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm7#1",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm7#2",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm7#3",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm8#0",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm8#1",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm8#2",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm9#0",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lm9#1",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lma#0",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lma#1",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmb#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmb#1",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmc#0",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmc#1",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rig"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmd#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lme#0",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lme#1",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lme#2",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lme#3",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lme#4",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lme#5",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmf#0",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmf#1",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmf#2",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmf#3",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmf#4",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmf#5",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmg#0",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmg#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmg#2",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmg#3",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmg#4",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmh#0",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmh#1",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmh#2",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmh#3",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmi#0",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmi#1",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmi#2",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmj#1",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmk#0",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmk#1",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lml#0",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lml#1",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmm#0",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmm#1",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rih"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmn#0",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmo#0",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmo#1",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmo#2",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmo#3",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmo#4",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmo#5",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmp#0",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmp#1",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmp#2",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmp#3",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmp#4",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmp#5",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmq#0",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmq#1",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmq#2",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmq#3",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmq#4",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmr#0",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmr#1",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmr#2",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmr#3",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lms#0",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lms#1",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lms#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmt#0",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmt#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmu#0",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmu#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmv#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmv#1",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmw#0",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmw#1",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rii"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmx#0",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmy#0",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmy#1",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmy#2",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmy#3",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmy#4",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmy#5",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmz#0",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmz#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmz#2",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmz#3",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmz#4",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lmz#5",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln0#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln0#1",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln0#2",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln0#3",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln0#4",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln1#0",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln1#1",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln1#2",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln1#3",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln2#0",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln2#1",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln2#2",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln3#0",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln4#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln4#1",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln5#0",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln5#1",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln6#0",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln6#1",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rij"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln7#0",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln8#0",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln8#1",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln8#2",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln8#3",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln8#4",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln8#5",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln9#0",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln9#1",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln9#2",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln9#3",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln9#4",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "ln9#5",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lna#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lna#1",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lna#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lna#3",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lna#4",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnb#0",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnb#1",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnb#2",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnb#3",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnc#0",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnc#1",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnc#2",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnd#0",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lne#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lne#1",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnf#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnf#1",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lng#0",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lng#1",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rik"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnh#0",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lni#0",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lni#1",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lni#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lni#3",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lni#4",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lni#5",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnj#0",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnj#1",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnj#2",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnj#3",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnj#4",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnj#5",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnk#0",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnk#1",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnk#2",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnk#3",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnk#4",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnl#0",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnl#1",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnl#2",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnl#3",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnm#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnm#1",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnm#2",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rio"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnn#1",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lno#0",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lno#1",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnp#0",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnp#1",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnq#0",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnq#1",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "ril"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnr#0",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lns#0",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lns#1",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lns#2",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lns#3",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lns#4",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lns#5",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnt#0",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnt#1",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnt#2",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnt#3",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnt#4",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnt#5",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnu#0",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnu#1",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnu#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnu#3",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnu#4",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnv#0",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnv#1",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnv#2",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnv#3",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnw#0",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnw#1",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnw#2",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          "rin"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnx#0",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          "rip"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lny#0",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lny#1",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          "riq"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnz#0",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lnz#1",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          "rir"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lo0#0",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lo0#1",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          "rim"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "lo1#0",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          "ris"
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "m:mo2#0",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "m:mo3#0",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "m:mo4#0",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "m:mo5#0",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "m:mo6#0",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjs#0",
+        "day": 0,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjs#1",
+        "day": 1,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjs#2",
+        "day": 2,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjt#0",
+        "day": 3,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjt#1",
+        "day": 0,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjt#2",
+        "day": 4,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tju#0",
+        "day": 0,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tju#2",
+        "day": 1,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjv#0",
+        "day": 0,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjv#2",
+        "day": 2,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjn#0",
+        "day": 4,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjn#2",
+        "day": 2,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjo#0",
+        "day": 3,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjo#1",
+        "day": 0,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tjo#2",
+        "day": 3,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiu#0",
+        "day": 4,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiu#1",
+        "day": 2,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiu#2",
+        "day": 3,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiu#3",
+        "day": 0,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiw#0",
+        "day": 4,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiw#1",
+        "day": 1,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiw#2",
+        "day": 4,
+        "period": 5,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiw#3",
+        "day": 1,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiy#0",
+        "day": 1,
+        "period": 2,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiy#1",
+        "day": 2,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiy#2",
+        "day": 3,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tiy#3",
+        "day": 1,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj0#0",
+        "day": 0,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj0#1",
+        "day": 2,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj0#2",
+        "day": 1,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj0#3",
+        "day": 4,
+        "period": 3,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj2#0",
+        "day": 4,
+        "period": 6,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj2#1",
+        "day": 3,
+        "period": 0,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj2#2",
+        "day": 2,
+        "period": 4,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      },
+      {
+        "unitId": "d:do7:tj2#3",
+        "day": 3,
+        "period": 1,
+        "len": 1,
+        "rooms": [
+          null
+        ],
+        "locked": false
+      }
+    ],
+    "generatedAt": "2026-10-16T02:54:31.886Z",
+    "difficulty": {
+      "units": [
+        {
+          "id": "lk1#1",
+          "n": 41
+        },
+        {
+          "id": "lmj#0",
+          "n": 41
+        },
+        {
+          "id": "lk1#0",
+          "n": 40
+        },
+        {
+          "id": "lkb#0",
+          "n": 40
+        },
+        {
+          "id": "lkb#1",
+          "n": 40
+        }
+      ],
+      "teachers": [
+        {
+          "id": "tjr",
+          "pct": 69
+        },
+        {
+          "id": "tjs",
+          "pct": 9
+        },
+        {
+          "id": "tjn",
+          "pct": 6
+        },
+        {
+          "id": "tiy",
+          "pct": 2
+        },
+        {
+          "id": "tiu",
+          "pct": 2
+        }
+      ],
+      "classes": [
+        {
+          "id": "cix",
+          "pct": 6
+        },
+        {
+          "id": "cj5",
+          "pct": 6
+        },
+        {
+          "id": "cj9",
+          "pct": 6
+        },
+        {
+          "id": "cjd",
+          "pct": 6
+        },
+        {
+          "id": "cjl",
+          "pct": 6
+        }
+      ],
+      "total": 1738
+    },
+    "attempts": 2
+  }
+}

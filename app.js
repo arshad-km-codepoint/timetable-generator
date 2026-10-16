@@ -551,6 +551,9 @@ function validate() {
   }
   const seen = new Set();
   e.units.forEach((u) => { if (!u.starts.length && !seen.has(u.key)) { seen.add(u.key); issues.push({ lvl: 'err', msg: `${describeUnit(u.id)} has no period where all its teachers and classes are available.` }); } });
+  state.lessons.forEach((l) => {
+    if (l.maxOnePerDay && Number(l.sessions) > D()) issues.push({ lvl: 'err', msg: `${describeLesson(l.id)} has ${l.sessions} sessions marked “1/day” but the week has only ${D()} days — untick 1/day or reduce sessions.` });
+  });
   state.duties.forEach((d) => {
     const hours = (d.assignments || []).reduce((a, x) => a + (Number(x.hours) || 0), 0);
     const periods = (d.allowed || []).length || D() * P();

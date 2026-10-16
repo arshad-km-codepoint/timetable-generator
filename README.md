@@ -30,6 +30,19 @@ Meetings and duties are placed by the same engine (most-constrained first); they
 
 The sample school (6 classes, 12 teachers, 12 rooms, 140 lesson sessions including a parallel language elective, a whole-staff meeting, a department meeting and a 10-hour library duty rota) solves fully — every duty period covered — in about 2 s per attempt.
 
+## Real-world test scenarios
+
+`scenarios/` holds four schools you can load with **Open…**, each already generated:
+
+| File | School | Size | Result |
+|---|---|---|---|
+| `scenario-A.json` | Secondary 6–10 × divisions A–D, 6-day week (Saturday half day), 2nd-language regrouping per grade (Hindi ∥ French ∥ Sanskrit), lab doubles, staff + department meetings, substitution on-call (2 per period) | 20 classes, 32 teachers, 666 units | all placed |
+| `scenario-B.json` | Grades 11–12 Science/Commerce/Humanities with option blocks (parallel subjects, split Humanities class), practicals in specialist labs, teachers shared across both grades | 8 classes, 18 teachers, 127 units | all lessons placed |
+| `scenario-C.json` | Primary 1–5 × 3 divisions, class teachers in their own homeroom + specialists, Monday assembly, grade-level planning meetings, sick-bay cover; classes 33/34 periods full | 15 classes, 24 teachers, 521 units | all lessons placed |
+| `scenario-D.json` | C plus impossible demands (music teacher on 3 days for 30 periods, over-assigned duty, a meeting only at assembly time) | 542 units | validation flags each problem; only the impossible items stay unplaced |
+
+`node tests/scenarios.js .` regenerates all four and runs an **independent auditor** (it does not reuse engine code) that checks every teacher, class, room and duty period for double-booking, prohibited periods, room types, parallel groups sharing one slot, 1/day, max/day, meeting members and duty capacity. It also re-generates with locked lessons and fires 400 random editor moves per school. Current result: **0 overlaps and 0 rule violations** in all scenarios.
+
 ## Not implemented (GHC has these)
 
 Break-time supervision between periods (duties use teaching periods), complementary activities, multi-week and overlapping time frames, fractional periods, flexible weekly distributions (e.g. 4 = 2-2 or 3-1), group-assignment assistant, import from school-management systems / XML-GHC exchange.

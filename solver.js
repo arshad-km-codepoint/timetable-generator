@@ -317,6 +317,21 @@ class Engine {
     return c + this.unitCost(ui);
   }
 
+  // Soft cost of everything a set of units touches on the given days, each entity counted once.
+  areaCost(uis, days) {
+    const ts = new Set(), cs = new Set(), keys = new Set(), svcs = new Set();
+    for (const ui of uis) { const u = this.units[ui]; u.teachers.forEach((t) => ts.add(t)); u.classes.forEach((c) => cs.add(c)); keys.add(u.key); if (u.service) svcs.add(u.service); }
+    let c = 0;
+    for (const d of days) {
+      for (const t of ts) c += this.teacherDayCost(t, d);
+      for (const k of cs) c += this.classDayCost(k, d);
+      for (const key of keys) c += this.W.sameDay * Math.max(0, this.sameDayCount(key, d) - 1);
+      for (const sv of svcs) c += this.W.dutyUncovered * this.uncovered(sv, d);
+    }
+    for (const ui of uis) c += this.unitCost(ui);
+    return c;
+  }
+
   totalCost() {
     const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0 };
     let c = 0;
@@ -362,6 +377,9 @@ class Solver {
     // Discard every non-locked unit so construction starts clean around the locks.
     e.units.forEach((u, i) => { if (!e.locked[i]) e.remove(i); });
     this.rejections = new Array(e.units.length).fill(0);
+    // How often a unit may still push others out. Once spent it only takes free slots, so one
+    // impossible demand is reported as unplaced instead of churning the whole timetable.
+    this.evictBudget = e.units.map((u) => (u.kind === 'lesson' ? 40 : 8));
     this.impossible = e.units.filter((u, i) => !e.locked[i] && !u.starts.length).map((u) => u.i);
     const order = e.units
       .filter((u, i) => !e.locked[i] && u.starts.length)
@@ -372,7 +390,7 @@ class Solver {
     this.maxIter = Math.max(20000, e.units.length * 400);
     this.phase = 'construct';
     this.saIter = 0;
-    this.saMax = Math.min(600000, Math.max(40000, e.units.length * 1500));
+    this.saMax = Math.min(300000, Math.max(40000, e.units.length * 600));
     this.T0 = 3; this.T1 = 0.02;
   }
 
@@ -392,7 +410,7 @@ class Solver {
         const score = e.localCost(ui, [d]) + Math.random() * 0.5;
         e.remove(ui);
         if (!bestFree || score < bestFree.score) bestFree = { s, rooms: pick.rooms, score };
-      } else if (!bestFree) {
+      } else if (!bestFree && this.evictBudget[ui] > 0) {
         // Meetings and duties may displace lessons, but at a higher price than the reverse.
         let score = Math.random();
         for (const o of pick.conf) score += (u.kind !== 'lesson' && e.units[o].kind === 'lesson' ? 3 : 1) * (1 + 2 * this.rejections[o]);
@@ -401,11 +419,62 @@ class Solver {
     }
     if (bestFree) { e.place(ui, bestFree.s, bestFree.rooms); return; }
     if (!bestClash) { this.impossible.push(ui); return; }
+    this.evictBudget[ui]--;
     for (const o of bestClash.conf) { e.remove(o); this.rejections[o]++; this.queue.unshift(o); }
     e.place(ui, bestClash.s, bestClash.rooms);
   }
 
+  // After construction: drop any leftover unit into a free slot if one has opened up.
+  fillFree() {
+    const e = this.e;
+    for (const ui of [...this.queue, ...this.impossible]) {
+      if (e.pos[ui]) continue;
+      for (const s of e.units[ui].starts) {
+        const base = e.baseConflicts(ui, s);
+        if (!base || base.size) continue;
+        const pick = e.bestRooms(ui, s, base);
+        if (pick && !pick.conf.size) { e.place(ui, s, pick.rooms); break; }
+      }
+    }
+    this.queue = [];
+  }
+
+  // Exchange two same-length lessons of one class — closes gaps that single moves cannot.
+  swapStep() {
+    const e = this.e;
+    const ui = Math.floor(Math.random() * e.units.length);
+    const u = e.units[ui]; const pu = e.pos[ui];
+    if (!pu || e.locked[ui] || u.kind !== 'lesson' || !u.classes.length) return;
+    const c = u.classes[Math.floor(Math.random() * u.classes.length)];
+    const occ = e.occ['c' + c];
+    const k = Math.floor(Math.random() * e.N);
+    const vi = occ[k];
+    if (vi < 0 || vi === ui || e.locked[vi]) return;
+    const v = e.units[vi]; const pv = e.pos[vi];
+    if (v.len !== u.len || v.kind !== 'lesson' || pv.s === pu.s) return;
+    if (!u.starts.includes(pv.s) || !v.starts.includes(pu.s)) return;
+    const days = [...new Set([e.dayOf(pu.s), e.dayOf(pv.s)])];
+    const before = e.areaCost([ui, vi], days);
+    e.remove(ui); e.remove(vi);
+    const undo = () => { e.remove(ui); e.remove(vi); e.place(ui, pu.s, pu.rooms); e.place(vi, pv.s, pv.rooms); };
+    const bu = e.baseConflicts(ui, pv.s);
+    const ru = bu && !bu.size ? e.bestRooms(ui, pv.s, bu) : null;
+    if (!ru || ru.conf.size) { undo(); return; }
+    e.place(ui, pv.s, ru.rooms);
+    const bv = e.baseConflicts(vi, pu.s);
+    const rv = bv && !bv.size ? e.bestRooms(vi, pu.s, bv) : null;
+    if (!rv || rv.conf.size) { undo(); return; }
+    e.place(vi, pu.s, rv.rooms);
+    const delta = e.areaCost([ui, vi], days) - before;
+    const T = this.T0 * Math.pow(this.T1 / this.T0, this.saIter / this.saMax);
+    if (delta <= 0 || Math.random() < Math.exp(-delta / T)) {
+      this.cost += delta;
+      if (this.cost < this.bestCost - 1e-9) { this.bestCost = this.cost; this.best = e.pos.slice(); }
+    } else undo();
+  }
+
   annealStep() {
+    if (Math.random() < 0.4) { this.swapStep(); return; }
     const e = this.e;
     const ui = Math.floor(Math.random() * e.units.length);
     const u = e.units[ui];
@@ -445,6 +514,7 @@ class Solver {
     while (performance.now() - t0 < ms) {
       if (this.phase === 'construct') {
         if (!this.queue.length || this.iter >= this.maxIter) {
+          this.fillFree();
           this.phase = 'optimize';
           this.cost = e.totalCost().cost;
           this.bestCost = this.cost; this.best = e.pos.slice();
