@@ -569,7 +569,7 @@ check('relation differentDays holds after solveAll; baseConflicts names the viol
     assert.ok(db.every((d) => !da.has(d)), `A days ${[...da]} vs B days ${db}`);
   }
   const e = new Engine(s, [pl(a, 0, 0, 0, 1)]);
-  eq(e.rel[a.id], [{ type: 'differentDays', other: b.id, min: 0, max: null }], 'stored on the row that did not declare it');
+  eq(e.rel[a.id], [{ type: 'differentDays', other: b.id, min: 0, max: null, strict: false, first: null }], 'stored on the row that did not declare it');
   const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
   eq([...e.baseConflicts(bi, 1)], [ai]);
   eq([...e.baseConflicts(bi, 5)], []);
@@ -664,7 +664,7 @@ check('relation daysApart: min and max distance in days', () => {
   }
   const e = new Engine(s, [pl(a, 0, 0, 0, 1)]);
   assert.strictEqual(e.rel[a.id].length, 1); assert.strictEqual(e.rel[b.id].length, 1);
-  eq(e.rel[b.id], [{ type: 'daysApart', other: a.id, min: 2, max: 3 }]);
+  eq(e.rel[b.id], [{ type: 'daysApart', other: a.id, min: 2, max: 3, strict: false, first: null }]);
   const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
   eq([...e.baseConflicts(bi, 1)], [ai]); eq([...e.baseConflicts(bi, 2)], []); eq([...e.baseConflicts(bi, 3)], []); eq([...e.baseConflicts(bi, 4)], [ai]);
   b.relations = [{ type: 'daysApart', lessonId: a.id, min: 0, max: '' }];
@@ -841,6 +841,57 @@ check('homeroom with an alternative type: the homeroom is preferred, the type is
   const r = solveAll(s);
   assert.ok(r.placed < r.total);
   void lb;
+});
+
+check('relations: consecutive can fix the order, a break can divide, and before/after compare matching sessions', () => {
+  const s = school({ days: 2, periods: 'tttbtt' });
+  const subj = add.subject(s), c = add.cls(s, 'A'), c2 = add.cls(s, 'B'), t = add.teacher(s, 'T'), u = add.teacher(s, 'U');
+  const a = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1] }), b = add.lesson(s, subj, u, [c2], 0, 1, { lengths: [1, 1] });
+  const link = (relA, relB) => { a.relations = relA ? [{ lessonId: b.id, ...relA }] : []; b.relations = relB ? [{ lessonId: a.id, ...relB }] : []; };
+  const bad = (placeA, ua, uslot) => { const e = new Engine(s, placeA); const x = e.unitById[ua].i; return e.baseConflicts(x, uslot); };
+  const A0 = `${a.id}#0`, B0 = `${b.id}#0`, B1 = `${b.id}#1`;
+  // consecutive, order: A first. A at period 1 → B must be at period 2 (right after), not 0.
+  link({ type: 'consecutive', order: 'first' }, { type: 'consecutive', order: 'second' });
+  assert.strictEqual(bad([pl(a, 0, 0, 1, 1)], B0, 2).size, 0, 'B right after A');
+  assert.ok(bad([pl(a, 0, 0, 1, 1)], B0, 0).size === 1, 'B right before A violates "A first"');
+  // The same relation declared on only one row behaves identically.
+  link({ type: 'consecutive', order: 'first' }, null);
+  assert.ok(bad([pl(a, 0, 0, 1, 1)], B0, 0).size === 1);
+  link(null, { type: 'consecutive', order: 'second' });
+  assert.ok(bad([pl(a, 0, 0, 1, 1)], B0, 0).size === 1, 'declared on B as "second" = A first');
+  // consecutive without an order: either side is fine.
+  link({ type: 'consecutive', order: '' }, { type: 'consecutive', order: '' });
+  assert.strictEqual(bad([pl(a, 0, 0, 1, 1)], B0, 0).size, 0); assert.strictEqual(bad([pl(a, 0, 0, 1, 1)], B0, 2).size, 0);
+  // Breaks: periods 0,1,2 | break | 4,5. Across the break, A at 2 and B at 4 are adjacent in teaching order…
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 4).size, 0, 'teaching-order adjacency ignores the break');
+  link({ type: 'consecutive', breaks: true }, { type: 'consecutive', breaks: true });
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 4).size, 1, '…but a dividing break separates them');
+  assert.strictEqual(bad([pl(a, 0, 0, 1, 1)], B0, 2).size, 0, 'periods 1 and 2 are still next to each other');
+  link({ type: 'nonConsecutive', breaks: true }, { type: 'nonConsecutive', breaks: true });
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 4).size, 0, 'across a dividing break the sessions are not consecutive, so non-consecutive holds');
+  link({ type: 'nonConsecutive' }, { type: 'nonConsecutive' });
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 4).size, 1, 'without breaks-divide they are consecutive, so non-consecutive is violated');
+  // before / after: session k of A earlier in the week than session k of B.
+  link({ type: 'before' }, { type: 'after' });
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 4).size, 0, 'later period, same day');
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 1).size, 1, 'earlier period');
+  assert.strictEqual(bad([pl(a, 0, 1, 0, 1)], B0, 5).size, 1, 'A on Tuesday, B on Monday');
+  assert.strictEqual(bad([pl(a, 0, 0, 5, 1)], B0, 6).size, 0, 'A on Monday, B on Tuesday');
+  assert.strictEqual(bad([pl(a, 1, 1, 0, 1)], B0, 5).size, 0, 'session 0 of B is compared with session 0 of A only (A#0 is unplaced)');
+  link(null, { type: 'after' });
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 1).size, 1, 'declared on B only: "B after A"');
+  link({ type: 'after' }, { type: 'before' });
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 4).size, 1, 'A after B: B#0 at 4 is after A#0 at 2, so that is wrong');
+  assert.strictEqual(bad([pl(a, 0, 0, 2, 1)], B0, 1).size, 0);
+  // Whole solve: every B session is after the matching A session.
+  link({ type: 'before' }, { type: 'after' });
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  for (const k of [0, 1]) {
+    const pa = r.placements.find((x) => x.unitId === `${a.id}#${k}`), pb = r.placements.find((x) => x.unitId === `${b.id}#${k}`);
+    assert.ok(pa.day * 6 + pa.period < pb.day * 6 + pb.period, `session ${k}: A ${pa.day}/${pa.period} before B ${pb.day}/${pb.period}`);
+  }
+  void B1;
 });
 
 // ---------- complementary activities ----------

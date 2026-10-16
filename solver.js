@@ -11,7 +11,7 @@
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
 const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1 };
-const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
+const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart', 'before', 'after']);
 
 // A room record with count N > 1 stands for N identical unnamed rooms ("20 general classrooms"):
 // they become instances "<id>" (the first), "<id>~2" … "<id>~N", each with the template, capacity and
@@ -213,15 +213,21 @@ class Engine {
           const min = type === 'daysApart' && Number(r.min) > 0 ? Math.floor(Number(r.min)) : 0;
           const max = type === 'daysApart' && r.max !== '' && r.max !== null && r.max !== undefined && Number.isFinite(Number(r.max)) ? Math.floor(Number(r.max)) : null;
           if (type === 'daysApart' && !min && max === null) continue;
-          const sig = `${type}|${[gkey, other].sort().join('|')}|${min}|${max}`;
+          // `strict`: a break between two sessions divides them. `first`: which group's session
+          // comes first (before/after, and consecutive with an order), seen from this group.
+          const strict = (type === 'consecutive' || type === 'nonConsecutive') && !!r.breaks;
+          const firstGroup = type === 'before' ? gkey : type === 'after' ? other : type === 'consecutive' && r.order === 'first' ? gkey : type === 'consecutive' && r.order === 'second' ? other : null;
+          const canon = type === 'after' ? 'before' : type;
+          const sig = `${canon}|${[gkey, other].sort().join('|')}|${min}|${max}|${strict}|${firstGroup}`;
           if (seenRel.has(sig)) continue;
           seenRel.add(sig);
           if (type === 'consecutive' && this.groupUnits[gkey].length !== this.groupUnits[other].length) {
             this.problems.push({ lessonIds: [...gkey.split('+'), ...other.split('+')], msg: 'must run consecutively but have different numbers of sessions' });
             continue;
           }
-          this.rel[gkey].push({ type, other, min, max });
-          this.rel[other].push({ type, other: gkey, min, max });
+          const side = (g) => (firstGroup === null ? null : firstGroup === g ? 'me' : 'other');
+          this.rel[gkey].push({ type: canon, other, min, max, strict, first: side(gkey) });
+          this.rel[other].push({ type: canon, other: gkey, min, max, strict, first: side(other) });
         }
       }
     }
@@ -443,10 +449,13 @@ class Engine {
     return null;
   }
 
-  // Teaching cells a and b are adjacent in teaching order on one day (breaks between them ignored).
-  adjacent(a, b) {
-    return this.nextTeach[a[a.length - 1]] === b[0] || this.nextTeach[b[b.length - 1]] === a[0];
+  // Teaching cells b directly follow cells a on one day: in teaching order (breaks between them
+  // ignored), or — strict — in the very next period, so a break between them divides them.
+  follows(a, b, strict = false) {
+    const last = a[a.length - 1];
+    return strict ? this.dayOf(last) === this.dayOf(b[0]) && last + 1 === b[0] : this.nextTeach[last] === b[0];
   }
+  adjacent(a, b, strict = false) { return this.follows(a, b, strict) || this.follows(b, a, strict); }
 
   dayOf(s) { return Math.floor(s / this.P); }
 
@@ -483,15 +492,16 @@ class Engine {
     // violate must leave; a locked one makes the start impossible.
     const cells = this.cellsAt(ui, s);
     for (const r of this.rel[u.key] || []) {
-      const others = r.type === 'consecutive' ? [this.groupUnits[r.other][u.k]] : this.groupUnits[r.other];
+      const others = r.type === 'consecutive' || r.type === 'before' ? [this.groupUnits[r.other][u.k]] : this.groupUnits[r.other];
       for (const vi of others) {
         if (vi === undefined || vi === ui || !this.pos[vi]) continue;
         const pv = this.pos[vi]; const dv = this.dayOf(pv.s); const diff = Math.abs(d - dv);
         let bad = false;
         if (r.type === 'differentDays') bad = dv === d;
         else if (r.type === 'notSameTime') bad = span[0] <= pv.span[pv.span.length - 1] && pv.span[0] <= span[span.length - 1];
-        else if (r.type === 'nonConsecutive') bad = dv === d && this.adjacent(cells, pv.cells);
-        else if (r.type === 'consecutive') bad = dv !== d || !this.adjacent(cells, pv.cells);
+        else if (r.type === 'nonConsecutive') bad = dv === d && this.adjacent(cells, pv.cells, r.strict);
+        else if (r.type === 'consecutive') bad = dv !== d || !(r.first === 'me' ? this.follows(cells, pv.cells, r.strict) : r.first === 'other' ? this.follows(pv.cells, cells, r.strict) : this.adjacent(cells, pv.cells, r.strict));
+        else if (r.type === 'before') bad = r.first === 'me' ? !(span[span.length - 1] < pv.span[0]) : !(pv.span[pv.span.length - 1] < span[0]);
         else if (r.type === 'daysApart') bad = (r.min > 0 && diff < r.min) || (r.max !== null && diff > r.max);
         if (!bad) continue;
         if (this.locked[vi]) return null;

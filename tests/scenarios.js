@@ -107,6 +107,10 @@ function scenarioA() {
   pinRow(s.lessons.find((l) => l.subjectId === S.math.id && l.classIds[0] === s.classes[0].id), 0, 3, 5);
   pinRow(s.lessons.find((l) => l.subjectId === S.pe.id && l.classIds[0] === s.classes[5].id), 0, 2, 2);
   pinRow(s.lessons.find((l) => l.subjectId === S.hin.id), 0, 3, 3);
+  // Relations: each Maths session of 9A comes before the matching Science session; a Science double and the lab session after it.
+  const rowOf = (subj, ci, pred = () => true) => s.lessons.find((l) => l.subjectId === subj.id && l.classIds[0] === s.classes[ci].id && pred(l));
+  const rel = (a, b, ra, rb) => { a.relations = [...(a.relations || []), { lessonId: b.id, ...ra }]; b.relations = [...(b.relations || []), { lessonId: a.id, ...rb }]; };
+  rel(rowOf(S.math, 12), rowOf(S.sci, 12, (l) => (l.sessions || (l.lengths || []).length) === 4), { type: 'before' }, { type: 'after' });
   pinRow(s.lessons.find((l) => l.subjectId === S.sci.id && (l.lengths ? l.lengths[0] === 2 : l.length === 2) && l.classIds[0] === s.classes[7].id), 0, 1, 4);
   s.pins.push({ kind: 'meeting', id: s.meetings[0].id, k: 0, day: 2, period: 7 });
   s.pins.push({ kind: 'activity', id: s.activities[0].id, k: 0, day: 4, period: 3 });
@@ -462,7 +466,9 @@ function audit(s, placements, chosen = {}, checkPins = true) {
   for (const lid in roomsUsed) if (L[lid].sameRoom && roomsUsed[lid].size > 1) err(`sameRoom row ${lid} uses ${roomsUsed[lid].size} rooms`);
   // Relations, checked from both rows' point of view. Teaching order skips breaks, not lunch.
   const nextTeaching = (p) => { let q = p + 1; while (q < P && ptype(q) === 'break') q++; return q < P && ptype(q) === 'teaching' ? q : -1; };
-  const adjacent = (a, b) => a.day === b.day && (nextTeaching(a.last) === b.first || nextTeaching(b.last) === a.first);
+  const follows = (a, b, strict) => a.day === b.day && (strict ? a.last + 1 === b.first : nextTeaching(a.last) === b.first);
+  const adjacent = (a, b, strict = false) => follows(a, b, strict) || follows(b, a, strict);
+  const abs = (x) => x.day * P;   // absolute slot of a session's first / last period
   for (const l of s.lessons) {
     for (const r of l.relations || []) {
       const o = L[r.lessonId]; if (!o || o === l) continue;
@@ -470,8 +476,15 @@ function audit(s, placements, chosen = {}, checkPins = true) {
         const what = `${r.type} ${l.id}#${a.k}/${o.id}#${b.k}`;
         if (r.type === 'differentDays' && a.day === b.day) err(`relation broken: ${what} on day ${a.day}`);
         if (r.type === 'notSameTime' && a.day === b.day && a.first <= b.last && b.first <= a.last) err(`relation broken: ${what} overlap`);
-        if (r.type === 'nonConsecutive' && adjacent(a, b)) err(`relation broken: ${what} adjacent`);
-        if (r.type === 'consecutive' && a.k === b.k && !adjacent(a, b)) err(`relation broken: ${what} not adjacent`);
+        if (r.type === 'nonConsecutive' && adjacent(a, b, r.breaks)) err(`relation broken: ${what} adjacent`);
+        if (r.type === 'consecutive' && a.k === b.k) {
+          const ok = r.order === 'first' ? follows(a, b, r.breaks) : r.order === 'second' ? follows(b, a, r.breaks) : adjacent(a, b, r.breaks);
+          if (!ok) err(`relation broken: ${what} not adjacent${r.order ? ' in the required order' : ''}`);
+        }
+        if ((r.type === 'before' || r.type === 'after') && a.k === b.k) {
+          const aEnd = abs(a) + a.last, bStart = abs(b) + b.first, bEnd = abs(b) + b.last, aStart = abs(a) + a.first;
+          if (r.type === 'before' ? !(aEnd < bStart) : !(bEnd < aStart)) err(`relation broken: ${what} ${r.type} violated`);
+        }
         if (r.type === 'daysApart') {
           const diff = Math.abs(a.day - b.day);
           if (Number(r.min) > 0 && diff < Number(r.min)) err(`relation broken: ${what} only ${diff} days apart`);

@@ -21,6 +21,7 @@
   const RELATION_TYPES = {
     differentDays: 'On different days', notSameTime: 'Not at the same time', nonConsecutive: 'Not in consecutive periods',
     consecutive: 'In consecutive periods (same day)', daysApart: 'Days apart (min–max)',
+    before: 'Each session before the other row’s matching session', after: 'Each session after the other row’s matching session',
   };
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
@@ -262,8 +263,18 @@
     l.relations = (Array.isArray(l.relations) ? l.relations : []).filter((r) => r && RELATION_TYPES[r.type] && r.lessonId && r.lessonId !== l.id).map((r) => relationOf(r.type, r.lessonId, r));
     return l;
   }
-  const relationOf = (type, lessonId, { min, max } = {}) => (type === 'daysApart'
-    ? { type, lessonId, min: Math.max(0, Math.floor(Number(min)) || 0), max: Math.max(0, Math.floor(Number(max)) || 0) } : { type, lessonId });
+  // consecutive / nonConsecutive may say that a break between two sessions divides them (`breaks`);
+  // consecutive may fix the order (`order`: 'first' = this row's session comes first, 'second' = last).
+  const relationOf = (type, lessonId, { min, max, order, breaks } = {}) => {
+    if (type === 'daysApart') return { type, lessonId, min: Math.max(0, Math.floor(Number(min)) || 0), max: Math.max(0, Math.floor(Number(max)) || 0) };
+    if (type === 'consecutive') return { type, lessonId, order: order === 'first' || order === 'second' ? order : '', breaks: !!breaks };
+    if (type === 'nonConsecutive') return { type, lessonId, breaks: !!breaks };
+    return { type, lessonId };
+  };
+  const MIRROR_TYPE = { before: 'after', after: 'before' };
+  const MIRROR_ORDER = { first: 'second', second: 'first', '': '' };
+  // The same relation as seen from the other row.
+  const mirrorRelation = (r, fromId) => ({ ...r, type: MIRROR_TYPE[r.type] || r.type, ...(r.type === 'consecutive' ? { order: MIRROR_ORDER[r.order || ''] } : {}), lessonId: fromId });
   const sameRelation = (a, b) => a.type === b.type && a.lessonId === b.lessonId;
   // Relations pointing at rows that no longer exist are removed. Returns how many were dropped.
   function dropDeadRelations(s) {
@@ -279,7 +290,7 @@
     for (const l of s.lessons) for (const r of l.relations || []) {
       const o = find(s, 'lessons', r.lessonId); if (!o) continue;
       o.relations = o.relations || [];
-      const mirror = { ...r, lessonId: l.id };
+      const mirror = mirrorRelation(r, l.id);
       const i = o.relations.findIndex((x) => sameRelation(x, mirror));
       if (i < 0) o.relations.push(mirror); else o.relations[i] = mirror;
     }
@@ -288,14 +299,14 @@
   function addRelation(s, aId, bId, type, opts) {
     const a = find(s, 'lessons', aId), b = find(s, 'lessons', bId);
     if (!a || !b || a === b || !RELATION_TYPES[type]) return false;
-    for (const [row, other] of [[a, bId], [b, aId]]) {
-      const r = relationOf(type, other, opts);
+    const mine = relationOf(type, bId, opts);
+    for (const [row, r] of [[a, mine], [b, mirrorRelation(mine, aId)]]) {
       row.relations = (row.relations || []).filter((x) => !sameRelation(x, r)); row.relations.push(r);
     }
     return true;
   }
   function removeRelation(s, aId, bId, type) {
-    for (const [x, y] of [[aId, bId], [bId, aId]]) { const row = find(s, 'lessons', x); if (row) row.relations = (row.relations || []).filter((r) => !(r.type === type && r.lessonId === y)); }
+    for (const [x, y, ty] of [[aId, bId, type], [bId, aId, MIRROR_TYPE[type] || type]]) { const row = find(s, 'lessons', x); if (row) row.relations = (row.relations || []).filter((r) => !(r.type === ty && r.lessonId === y)); }
   }
   // Give the class tutor every row of the class's own that has no teacher yet. Returns how many.
   function applyTutor(s, classId) {

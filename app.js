@@ -530,18 +530,24 @@ function editRelations(l) {
   const others = state.lessons.filter((x) => x !== l);
   const same = others.filter((x) => (x.classIds || []).some((c) => mine.has(c))), rest = others.filter((x) => !same.includes(x));
   const rowOpt = (x) => `<option value="${x.id}">${esc(describeLesson(state, x.id))}</option>`;
-  const listHtml = () => ((l.relations || []).length ? `<table class="edit rel"><tbody>${l.relations.map((r, i) => `<tr><td>${esc(REL_LABELS[r.type] || r.type)}${r.type === 'daysApart' ? ` <small class="hint">(${r.min}–${r.max || '∞'} days)</small>` : ''}</td><td>${esc(describeLesson(state, r.lessonId))}</td><td><button type="button" class="danger" data-del-rel="${i}" title="Remove on both rows">✕</button></td></tr>`).join('')}</tbody></table>`
+  const listHtml = () => ((l.relations || []).length ? `<table class="edit rel"><tbody>${l.relations.map((r, i) => `<tr><td>${esc(REL_LABELS[r.type] || r.type)}${r.type === 'daysApart' ? ` <small class="hint">(${r.min}–${r.max || '∞'} days)</small>` : ''}${r.type === 'consecutive' && r.order ? ` <small class="hint">(${r.order === 'first' ? 'this row first' : 'this row second'})</small>` : ''}${r.breaks ? ' <small class="hint">(a break divides them)</small>' : ''}</td><td>${esc(describeLesson(state, r.lessonId))}</td><td><button type="button" class="danger" data-del-rel="${i}" title="Remove on both rows">✕</button></td></tr>`).join('')}</tbody></table>`
     : '<p class="hint">No relations yet.</p>');
   openModal(`Relations — ${describeLesson(state, l.id)}`, `<div id="relList">${listHtml()}</div>
     ${others.length ? `<h4>Add a relation</h4><div class="row rel-add">
       <select id="relType" aria-label="Relation type">${Object.keys(REL_LABELS).map((k) => `<option value="${k}">${REL_LABELS[k]}</option>`).join('')}</select>
       <select id="relOther" aria-label="Other lesson row">${same.length ? `<optgroup label="Same class">${same.map(rowOpt).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="${same.length ? 'Other rows' : 'All rows'}">${rest.map(rowOpt).join('')}</optgroup>` : ''}</select>
+      <label class="row" id="relOrder" style="gap:4px" hidden>order <select id="relOrderSel" aria-label="Order"><option value="">either</option><option value="first">this row first</option><option value="second">this row second</option></select></label>
+      <label class="row" id="relBreaks" style="gap:4px" hidden><input type="checkbox" id="relBreaksChk"> a break divides them</label>
       <label class="row" id="relRange" style="gap:4px" hidden>min <input type="number" id="relMin" min="0" max="${D()}" value="1" style="width:64px"> max <input type="number" id="relMax" min="0" max="${D()}" value="" placeholder="∞" style="width:64px"></label>
       <button type="button" data-add-rel>Add</button></div>
       <p class="hint">Relations are symmetric: they appear on both rows and are removed from both.</p>` : '<p class="hint">Add another lesson row to relate this one to.</p>'}`,
   () => render());
   const box = $('#modalContent');
-  box.onchange = (e) => { if (e.target.id === 'relType') $('#relRange').hidden = e.target.value !== 'daysApart'; };
+  box.onchange = (e) => {
+    if (e.target.id !== 'relType') return;
+    const t = e.target.value;
+    $('#relRange').hidden = t !== 'daysApart'; $('#relOrder').hidden = t !== 'consecutive'; $('#relBreaks').hidden = t !== 'consecutive' && t !== 'nonConsecutive';
+  };
   box.onclick = (e) => {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.delRel !== undefined) {
@@ -552,7 +558,7 @@ function editRelations(l) {
       const min = Number($('#relMin').value) || 0, max = $('#relMax').value === '' ? 0 : Number($('#relMax').value) || 0;
       if (type === 'daysApart' && !min && !max) { toast('Give a minimum and/or maximum number of days apart.'); return; }
       if (type === 'daysApart' && max && max < min) { toast('Max days apart is below min.'); return; }
-      addRelation(state, l.id, other, type, { min, max });
+      addRelation(state, l.id, other, type, { min, max, order: type === 'consecutive' ? $('#relOrderSel').value : '', breaks: (type === 'consecutive' || type === 'nonConsecutive') && $('#relBreaksChk').checked });
     } else return;
     changed();
     $('#relList').innerHTML = listHtml();

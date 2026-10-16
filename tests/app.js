@@ -785,6 +785,29 @@ check('(u) anonymous rooms: migrate, labels and demand count instances; dedicate
   gen.dedicated = true;
   assert.ok(hasMsg(s, /needs a room type that has no rooms/), msgs(s).join('\n'));
 });
+check('(v) relations: before/after and order mirror between the rows, break-divides is kept, remove clears both', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), u = add.teacher(s, 'U'), c = add.cls(s, 'A'), d = add.cls(s, 'B');
+  const a = add.lesson(s, subj, t, [c], 2, 1), b = add.lesson(s, subj, u, [d], 2, 1);
+  const rel = (row) => row.relations.map((r) => ({ ...r }));
+  M.addRelation(s, a.id, b.id, 'before');
+  eq(rel(a), [{ type: 'before', lessonId: b.id }]); eq(rel(b), [{ type: 'after', lessonId: a.id }]);
+  M.addRelation(s, b.id, a.id, 'consecutive', { order: 'first', breaks: true });
+  eq(rel(b).find((r) => r.type === 'consecutive'), { type: 'consecutive', lessonId: a.id, order: 'first', breaks: true });
+  eq(rel(a).find((r) => r.type === 'consecutive'), { type: 'consecutive', lessonId: b.id, order: 'second', breaks: true }, 'the order flips on the other row');
+  M.addRelation(s, a.id, b.id, 'nonConsecutive', { breaks: 1 });
+  eq(rel(b).find((r) => r.type === 'nonConsecutive'), { type: 'nonConsecutive', lessonId: a.id, breaks: true });
+  M.removeRelation(s, a.id, b.id, 'before');
+  assert.ok(!a.relations.some((r) => r.type === 'before') && !b.relations.some((r) => r.type === 'after'), 'removing before also removes the mirrored after');
+  // Declared on one row only: migrate adds the mirrored record to the other.
+  a.relations = [{ type: 'after', lessonId: b.id }]; b.relations = [];
+  M.migrate(s);
+  eq(rel(b), [{ type: 'before', lessonId: a.id }]);
+  a.relations = [{ type: 'consecutive', lessonId: b.id, order: 'first', breaks: 0 }]; b.relations = [{ type: 'consecutive', lessonId: a.id, order: 'bogus' }];
+  M.migrate(s);
+  eq([rel(a), rel(b)], [[{ type: 'consecutive', lessonId: b.id, order: 'first', breaks: false }], [{ type: 'consecutive', lessonId: a.id, order: 'second', breaks: false }]], 'rows that disagree: the earlier row wins and is mirrored (order normalised, flag coerced)');
+  assert.ok(M.RELATION_TYPES.before && M.RELATION_TYPES.after);
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
