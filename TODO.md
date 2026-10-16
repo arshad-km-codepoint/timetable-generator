@@ -67,10 +67,10 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 
 ### Teachers
 
-- [ ] Max consecutive teaching periods (rest period required).
-- [ ] Daily and weekly presence (first to last period, including gaps) limits, hard or soft, optionally counting the midday gap.
-- [ ] Minimum free days, or free mornings/afternoons, in non-preset positions.
-- [ ] Mutually exclusive periods: last period then first next day (n periods apart), first and last on the same day, morning/afternoon combinations, Friday→Monday option.
+- [x] Max consecutive teaching periods (rest period required). Soft: periods over the limit are weighted (`consecutive`); a break or lunch ends a run unless a lesson straddles it.
+- [x] Daily and weekly presence (first to last period, including gaps) limits, hard (`Strict`, for lessons, meetings and teaching duties) or soft (`presence` weight); lunch counts only with the existing `countMiddayGap` option.
+- [ ] Minimum free days, or free mornings/afternoons, in non-preset positions. *Done:* free days (hard; days without lessons, meetings and duties may still use them; opening an extra day evicts the teacher's lightest day). *Open:* free mornings/afternoons.
+- [ ] Mutually exclusive periods: last period then first next day (n periods apart), first and last on the same day, morning/afternoon combinations, Friday→Monday option. *Done:* last period then first period of the next day (soft, `noLastFirst`). *Open:* the rest.
 - [ ] Concentrate load in the fewest days.
 - [ ] Associated timetables (a named set of teachers who should start and finish together).
 - [ ] Count meetings, duties and activities toward daily min/max load (per item).
@@ -91,7 +91,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Non-preferred positions in subject/task templates and in lesson templates (separate weights).
 - [ ] Consecutive days; non-preferred room; same room; first/last-period concentration; afternoon coincidence; same-hour coincidence; elective overlap. *Done:* the first four (`consecutiveDays`, `roomPref`, `roomSame`, `ends`). *Open:* afternoon coincidence, same-hour coincidence, elective overlap.
 - [x] Teacher balanced week (engine `W.balance`: periods above/below an even spread over the days the teacher can work; counts lessons, meetings and duties like min/day).
-- [ ] Teacher: exclusive periods, continuous hours, presence, followed by the same group, duties at the ends of the day, priority order.
+- [ ] Teacher: exclusive periods, continuous hours, presence, followed by the same group, duties at the ends of the day, priority order. *Done:* exclusive periods (last→first), continuous hours (`consecutive`), presence. *Open:* followed by the same group, duties at the ends of the day, priority order.
 - [ ] Priority warnings (e.g. class gaps) minimised before the global weight.
 
 ### Engine controls

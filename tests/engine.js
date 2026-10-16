@@ -768,5 +768,151 @@ check('balance: periods off an even week over the days a teacher can work; carri
   assert.strictEqual(engine.totalCost().balance, 0, `teacher load per day ${[0, 1, 2].map((d) => engine.dayStats(engine.occ['t' + t2.id], d).n)}`);
 });
 
+// ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
+const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
+
+check('maxConsecutive: runs over the limit cost per extra period; a break ends the run unless a lesson straddles it', () => {
+  const s = school({ days: 1, periods: 'tttbtt' });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T', { maxConsecutive: 2 });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1, 1], allowBreakInside: true });
+  const e = new Engine(s, [[0, 0], [1, 1], [2, 2], [3, 4], [4, 5]].map(([k, p]) => pl(l, k, 0, p, 1)));
+  eq(e.teacherDayRules(t.id, 0), { consecutive: 1, presence: 0 }, '0,1,2 | break | 4,5');
+  assert.strictEqual(e.totalCost().consecutive, 1);
+  assert.strictEqual(e.teacherDayCost(t.id, 0) - e.W.teacherGap * e.dayStats(e.occ['t' + t.id], 0).gaps, e.W.consecutive);
+  const s2 = school({ days: 1, periods: 'tttbtt' });
+  const subj2 = add.subject(s2), c2 = add.cls(s2), t2 = add.teacher(s2, 'T', { maxConsecutive: 2 });
+  const l2 = add.lesson(s2, subj2, t2, [c2], 0, 1, { lengths: [1, 1, 2], allowBreakInside: true });
+  const e2 = new Engine(s2, [pl(l2, 0, 0, 0, 1), pl(l2, 1, 0, 1, 1), pl(l2, 2, 0, 2, 2)]);
+  assert.strictEqual(e2.units[2].len, 2); eq(e2.pos[2].span, [2, 3, 4], 'the double straddles the break');
+  assert.strictEqual(e2.teacherDayRules(t2.id, 0).consecutive, 2, '0,1,2,(break held),4 is one run of four');
+  assert.strictEqual(new Engine(s2, []).teacherDayRules(t2.id, 0).consecutive, 0);
+  // Over a solve: five single lessons for different classes fit in 2+2+… only around the break.
+  const s3 = school({ days: 1, periods: 'tttbtt' }); s3.settings.weights = { consecutive: 5, teacherGap: 0.01 };
+  const subj3 = add.subject(s3), t3 = add.teacher(s3, 'T', { maxConsecutive: 2 });
+  for (let i = 0; i < 4; i++) add.lesson(s3, subj3, t3, [add.cls(s3, 'C' + i)], 1, 1);
+  const { engine, placed, total } = solveAll(s3);
+  assert.strictEqual(placed, total);
+  assert.strictEqual(engine.totalCost().consecutive, 0, `held ${engine.heldPeriods(t3.id, 0, () => false)}`);
+});
+
+check('presence: first to last period (gaps included), lunch only with countMiddayGap; day and week excess', () => {
+  const s = school({ days: 2, periods: 'ttltt', options: {} });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T', { maxPresenceDay: 2, maxPresenceWeek: 3 });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1] });
+  const at = (cells, opts) => new Engine(opts ? { ...s, settings: { ...s.settings, options: opts } } : s, cells.map(([d, p], k) => pl(l, k, d, p, 1)));
+  let e = at([[0, 1], [0, 3], [1, 0]]);
+  assert.strictEqual(e.presenceOf(0, [1, 3]), 2, 'lunch is not counted');
+  assert.strictEqual(e.teacherDayRules(t.id, 0).presence, 0);
+  assert.strictEqual(at([[0, 1], [0, 3]], { countMiddayGap: true }).presenceOf(0, [1, 3]), 3, 'lunch counted');
+  eq(heldDays(e, t), [2, 1]);
+  assert.strictEqual(e.teacherPresenceWeek(t.id), 0, 'presence 2 + 1 = 3');
+  e = at([[0, 0], [0, 4], [1, 0]]);
+  assert.strictEqual(e.teacherDayRules(t.id, 0).presence, 2, 'periods 0..4 without lunch = 4, limit 2');
+  assert.strictEqual(e.teacherPresenceWeek(t.id), 2, 'week 4 + 1 = 5, limit 3');
+  const st = e.totalCost();
+  assert.strictEqual(st.presence, 4, 'day excess 2 + week excess 2');
+  assert.strictEqual(e.teacherWeekCost(t.id) - e.W.balance * e.teacherBalance(t.id), 2 * e.W.presence);
+});
+
+check('presenceStrict is hard for every unit in teaching periods: a start that widens the day past the limit is refused', () => {
+  const s = school({ days: 2, periods: 5 });
+  const subj = add.subject(s), c1 = add.cls(s, 'A'), c2 = add.cls(s, 'B'), t = add.teacher(s, 'T', { maxPresenceDay: 3, presenceStrict: true });
+  const l1 = add.lesson(s, subj, t, [c1], 1, 1), l2 = add.lesson(s, subj, t, [c2], 1, 1);
+  const e = new Engine(s, [pl(l1, 0, 0, 0, 1)]);
+  const u2 = e.unitById[`${l2.id}#0`].i;
+  for (const [p, ok] of [[1, true], [2, true], [3, false], [4, false]]) assert.strictEqual(e.baseConflicts(u2, p) !== null, ok, `Monday period ${p}`);
+  assert.notStrictEqual(e.baseConflicts(u2, 5 + 4), null, 'a fresh day is always fine');
+  const soft = new Engine({ ...s, teachers: [{ ...t, presenceStrict: false }] }, [pl(l1, 0, 0, 0, 1)]);
+  assert.notStrictEqual(soft.baseConflicts(soft.unitById[`${l2.id}#0`].i, 4), null, 'soft limit only costs');
+  // A weekly strict limit counts the other days.
+  const sw = school({ days: 2, periods: 5 });
+  const sub = add.subject(sw), a = add.cls(sw, 'A'), b = add.cls(sw, 'B'), tw = add.teacher(sw, 'T', { maxPresenceWeek: 3, presenceStrict: true });
+  const w1 = add.lesson(sw, sub, tw, [a], 1, 1, { lengths: [1, 1] }), w2 = add.lesson(sw, sub, tw, [b], 1, 1);
+  const ew = new Engine(sw, [pl(w1, 0, 0, 0, 1), pl(w1, 1, 0, 2, 1)]); // Monday presence 3
+  const v = ew.unitById[`${w2.id}#0`].i;
+  assert.strictEqual(ew.baseConflicts(v, 5 + 0), null, 'Tuesday would make 4 in the week');
+  assert.notStrictEqual(ew.baseConflicts(v, 1), null, 'inside Monday\'s span the week stays 3');
+  // Meetings and duties are bound too (a break duty holds no teaching period, so it is not).
+  const sm = school({ days: 1, periods: 'tttbttt' });
+  const sj = add.subject(sm), cm = add.cls(sm, 'A'), tm = add.teacher(sm, 'T', { maxPresenceDay: 3, presenceStrict: true }), um = add.teacher(sm, 'U');
+  const lm = add.lesson(sm, sj, tm, [cm], 1, 1);
+  const mt = add.meeting(sm, 'Sync', [tm, um]); const dt = add.duty(sm, 'Yard', [[tm, 1]], { kind: 'break' });
+  const em = new Engine(sm, [pl(lm, 0, 0, 0, 1)]);
+  const mi = em.unitById[`m:${mt.id}#0`].i, di = em.unitById[`d:${dt.id}:${tm.id}#0`].i;
+  assert.strictEqual(em.baseConflicts(mi, 4), null, 'a meeting in the 4th teaching period would stretch the day to 4');
+  assert.notStrictEqual(em.baseConflicts(mi, 2), null);
+  assert.notStrictEqual(em.baseConflicts(di, 3), null, 'break supervision is not teaching presence');
+  // Over a solve all lessons are placed and every day stays within the limit.
+  const s3 = school({ days: 3, periods: 6 });
+  const sub3 = add.subject(s3), t3 = add.teacher(s3, 'T', { maxPresenceDay: 3, presenceStrict: true });
+  for (let i = 0; i < 6; i++) add.lesson(s3, sub3, t3, [add.cls(s3, 'C' + i)], 1, 1);
+  const r = solveAll(s3);
+  assert.strictEqual(r.placed, r.total);
+  for (let d = 0; d < 3; d++) assert.ok(r.engine.presenceOf(d, r.engine.heldPeriods(t3.id, d, () => false)) <= 3, `day ${d}`);
+});
+
+check('freeDays is hard for lessons (meetings do not count); balance spreads over the remaining days', () => {
+  const s = school({ days: 5, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T', { freeDays: 2 }), u = add.teacher(s, 'U');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1] });
+  const other = add.lesson(s, subj, t, [add.cls(s, 'B')], 1, 1);
+  const e = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 1, 0, 1), pl(l, 2, 2, 0, 1)]);
+  const o = e.unitById[`${other.id}#0`].i;
+  for (const d of [0, 1, 2]) assert.notStrictEqual(e.baseConflicts(o, d * 4 + 1), null, `day ${d} is already worked`);
+  for (const d of [3, 4]) {
+    const b = e.baseConflicts(o, d * 4);
+    assert.strictEqual(b.size, 1, `day ${d}: opening it clears the lightest worked day`);
+    assert.ok([0, 1, 2].includes(e.dayOf(e.pos[[...b][0]].s)));
+  }
+  const locked = new Engine(s, [0, 1, 2].map((k) => ({ ...pl(l, k, k, 0, 1), locked: true })));
+  for (const d of [3, 4]) assert.strictEqual(locked.baseConflicts(locked.unitById[`${other.id}#0`].i, d * 4), null, `day ${d} must stay free when every worked day is locked`);
+  // Freeing a day by eviction is taken into account: the lesson on Monday is the only one there.
+  const m = add.meeting(s, 'Staff', [t, u]);
+  const em = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 1, 0, 1), pl(l, 2, 2, 0, 1)]);
+  assert.notStrictEqual(em.baseConflicts(em.unitById[`m:${m.id}#0`].i, 3 * 4), null, 'a meeting may use a lesson-free day');
+  // Balance ignores the free days: 2/1/1 over three working days is even.
+  const e2 = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1), pl(l, 2, 1, 0, 1), pl(l, 3, 2, 0, 1)]);
+  assert.strictEqual(e2.teacherBalance(t.id), 0, '2/1/1 and two empty days');
+  assert.strictEqual(new Engine(s, [0, 1, 2, 3].map((k) => pl(l, k, 0, k, 1))).teacherBalance(t.id), 4, '4/0/0 over three working days (mean 1.33): 2 above 2, 2 below 1');
+  // Over a solve: everything is placed on three days or fewer.
+  const s3 = school({ days: 5, periods: 4 });
+  const sub3 = add.subject(s3), t3 = add.teacher(s3, 'T', { freeDays: 2 });
+  for (let i = 0; i < 8; i++) add.lesson(s3, sub3, t3, [add.cls(s3, 'C' + i)], 1, 1);
+  const r = solveAll(s3);
+  assert.strictEqual(r.placed, r.total);
+  assert.ok(heldDays(r.engine, t3).filter(Boolean).length <= 3, `days held ${heldDays(r.engine, t3)}`);
+});
+
+check('noLastFirst: last period one day and first the next, soft; the annealer avoids it', () => {
+  const s = school({ days: 3, periods: 'ttltt', blocked: [] });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T', { noLastFirst: true });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1] });
+  const e = new Engine(s, [pl(l, 0, 0, 4, 1), pl(l, 1, 1, 0, 1), pl(l, 2, 1, 4, 1)]);
+  assert.strictEqual(e.teacherExclusive(t.id), 1, 'Mon last → Tue first');
+  assert.strictEqual(e.totalCost().exclusive, 1);
+  assert.strictEqual(e.teacherWeekCost(t.id) - e.W.balance * e.teacherBalance(t.id), e.W.exclusive);
+  assert.strictEqual(new Engine(s, [pl(l, 0, 0, 3, 1), pl(l, 1, 1, 0, 1), pl(l, 2, 1, 4, 1)]).teacherExclusive(t.id), 0, 'period 3 is not the last');
+  assert.strictEqual(new Engine(s, [pl(l, 0, 1, 4, 1), pl(l, 1, 0, 0, 1)]).teacherExclusive(t.id), 0, 'first one day then last the next day is allowed');
+  const off = new Engine({ ...s, teachers: [{ ...t, noLastFirst: false }] }, e.placements());
+  assert.strictEqual(off.totalCost().exclusive, 0, 'rule off');
+  // Over a solve (forced onto the ends when the weight is 0, avoided when it is high).
+  const s2 = school({ days: 3, periods: 3 }); s2.settings.weights = { exclusive: 10, late: 0, balance: 0 };
+  const sub2 = add.subject(s2), t2 = add.teacher(s2, 'T', { noLastFirst: true });
+  for (let i = 0; i < 5; i++) add.lesson(s2, sub2, t2, [add.cls(s2, 'C' + i)], 1, 1);
+  const r = solveAll(s2);
+  assert.strictEqual(r.placed, r.total);
+  assert.strictEqual(r.engine.totalCost().exclusive, 0);
+});
+
+check('teachers without week rules cost and behave as before', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1] });
+  const e = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1), pl(l, 2, 0, 2, 1)]);
+  eq(e.tRule[t.id], { maxCons: 0, presDay: 0, presWeek: 0, strict: false, free: 0, exclusive: false, day: false, week: false, hard: false });
+  const st = e.totalCost();
+  assert.strictEqual(st.consecutive + st.presence + st.exclusive, 0);
+});
+
 console.log(`\nPASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

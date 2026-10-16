@@ -7,7 +7,7 @@ No build step, no server, no dependencies — open `index.html` in a browser.
 ## Workflow
 
 1. **Week** – days and periods (with times).
-2. **Teachers / Classes / Rooms** – availability template per element with three states: available, **~ non-preferred** (soft, weighted) and **✕ prohibited** (hard). Teachers also get **max periods/day** (hard) and **min periods/day** (soft). Rooms have a type; rooms of one type form a set of alternatives.
+2. **Teachers / Classes / Rooms** – availability template per element with three states: available, **~ non-preferred** (soft, weighted) and **✕ prohibited** (hard). Teachers also get **max periods/day** (hard), **min periods/day** (soft), **max periods in a row**, **free days**, **presence/day and /week** (soft, or hard with *Strict*) and a **no last→first period** rule. Rooms have a type; rooms of one type form a set of alternatives.
 3. **Subjects** – name, short code, colour.
 4. **Lessons** – subject × teacher × class(es), sessions per week, single/double/triple, room (specific / any of a type / none), "max one per day", and **parallel group**: rows with the same group name run simultaneously (split classes, electives, setted groups), each with its own teacher and room.
 5. **Meetings & duties** – **teacher meetings** (members, sessions/week, single/double, optional room, allowed periods) and **on-call duties** (service such as library supervision, duty periods, max teachers per period, weekly hours per teacher).
@@ -18,9 +18,9 @@ Data autosaves in the browser; **Save file / Open…** keep JSON backups. Files 
 
 ## Engine (`solver.js`)
 
-**Hard:** no teacher/class/room double-booking; ✕ periods; teacher max/day; contiguous multi-period lessons; "1/day"; parallel-group lessons share a slot with distinct rooms; meetings only in allowed periods with all members free; duty capacity per period; locked items stay.
+**Hard:** no teacher/class/room double-booking; ✕ periods; teacher max/day; teacher free days (no lessons on them) and strict presence limits; contiguous multi-period lessons; "1/day"; parallel-group lessons share a slot with distinct rooms; meetings only in allowed periods with all members free; duty capacity per period; locked items stay.
 
-**Soft (weights editable in the UI):** class gaps, teacher gaps, same lesson twice a day, non-preferred periods, teacher below min/day, late periods, uncovered duty periods, uneven teacher week (periods above/below an even spread over the days the teacher can work).
+**Soft (weights editable in the UI):** class gaps, teacher gaps, same lesson twice a day, non-preferred periods, teacher below min/day, late periods, uncovered duty periods, uneven teacher week (periods above/below an even spread over the days the teacher can work), too many periods in a row, presence over its limit, last period followed by the first of the next day.
 
 Meetings and duties are placed by the same engine (most-constrained first); they may displace a lesson, which is then re-placed elsewhere, but at three times the price of the reverse, so lessons keep priority when something has to give.
 

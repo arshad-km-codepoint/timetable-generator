@@ -2,7 +2,7 @@
 // (state shape, migration, slot arithmetic, validation) lives in model.js as window.Model; every
 // Model function takes the state it works on. `state` is autosaved to localStorage.
 const {
-  uid, esc, PALETTE, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
+  uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
   newLesson, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
@@ -135,7 +135,7 @@ function entityEditor(root, { list, title, hint, cols, loadKey }) {
   p.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const x = find(list, tr.dataset.id);
-    x[e.target.dataset.f] = e.target.type === 'number' ? Number(e.target.value) : e.target.value;
+    x[e.target.dataset.f] = e.target.type === 'number' ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     changed();
   });
   p.addEventListener('click', (e) => {
@@ -170,13 +170,20 @@ function cleanupRefs() {
 }
 
 const textCol = (label, f, ph = '') => ({ label, input: (x) => `<input data-f="${f}" value="${esc(x[f])}" placeholder="${ph}" aria-label="${label}">` });
-const numCol = (label, f, title) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="number" min="0" max="${teachingPeriods(state)}" data-f="${f}" value="${x[f] || ''}" placeholder="—" style="max-width:80px" aria-label="${label}">` });
+const numCol = (label, f, title, max = teachingPeriods(state)) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="number" min="0" max="${max}" data-f="${f}" value="${x[f] || ''}" placeholder="—" style="max-width:80px" aria-label="${label}">` });
+const boolCol = (label, f, title) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="checkbox" data-f="${f}" ${x[f] ? 'checked' : ''} aria-label="${label}">` });
 
 function renderTeachers(root) {
   const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'e.g. ARA'),
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day'),
-    numCol('Min/day', 'minPerDay', 'Preference: on days they teach, at least this many periods')];
-  cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], maxPerDay: 0, minPerDay: 0 });
+    numCol('Min/day', 'minPerDay', 'Preference: on days they teach, at least this many periods'),
+    numCol('Max in a row', 'maxConsecutive', 'Preference: no more than this many teaching periods back to back (a break or lunch ends the run)'),
+    numCol('Free days', 'freeDays', 'Hard limit: this many working days with no lessons at all (meetings and duties may still use them)', state.settings.days.length),
+    numCol('Presence/day', 'maxPresenceDay', 'Time at school in a day, first to last period including free periods. Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state)),
+    numCol('Presence/week', 'maxPresenceWeek', 'Time at school in the week (sum of the daily presence). Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state) * state.settings.days.length),
+    boolCol('Strict', 'presenceStrict', 'Make the presence limits hard rules instead of preferences'),
+    boolCol('No last→first', 'noLastFirst', 'Preference: not the last period of one day and the first period of the next')];
+  cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], ...teacherDefaults() });
   entityEditor(root, { list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and teaching-period duties (break supervision is counted against break periods instead); red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
 }
 
@@ -671,6 +678,9 @@ function renderStats(box) {
     ${s.roomPref ? `<div class="stat"><b>${s.roomPref}</b><span>lessons not in their preferred room</span></div>` : ''}
     ${s.roomSame ? `<div class="stat"><b>${s.roomSame}</b><span>room changes within one lesson</span></div>` : ''}
     ${s.consecutiveDays ? `<div class="stat"><b>${s.consecutiveDays}</b><span>sessions on consecutive days</span></div>` : ''}
+    ${s.consecutive ? `<div class="stat"><b>${s.consecutive}</b><span>teacher periods over their max in a row</span></div>` : ''}
+    ${s.presence ? `<div class="stat"><b>${s.presence}</b><span>teacher presence periods over the limit</span></div>` : ''}
+    ${s.exclusive ? `<div class="stat"><b>${s.exclusive}</b><span>teacher last→first period pairs</span></div>` : ''}
     ${s.balance ? `<div class="stat"><b>${s.balance}</b><span>teacher periods off an even week</span></div>` : ''}
     <div class="stat"><b>${s.cost}</b><span>weighted score (lower is better)</span></div>
   </div>

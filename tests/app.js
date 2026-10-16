@@ -71,6 +71,7 @@ check('(a) migrate() of a pre-1.2 file adds every default and keeps the rest', (
   eq(s.teachers[0].unavailable, ['0-1']);
   eq(s.teachers[0].dispreferred, []);
   assert.strictEqual(s.teachers[0].maxPerDay, 4);
+  eq([s.teachers[0].maxConsecutive, s.teachers[0].freeDays, s.teachers[0].maxPresenceDay, s.teachers[0].maxPresenceWeek, s.teachers[0].presenceStrict, s.teachers[0].noLastFirst], [0, 0, 0, 0, false, false], 'week rules default to off');
   eq(s.classes[0].unavailable, []);
   eq(s.rooms[0].dispreferred, []);
   assert.strictEqual(s.lessons[0].allowBreakInside, false);
@@ -347,6 +348,30 @@ check('(f) validate: same-room and alternative-room warnings', () => {
   assert.ok(hasMsg(s, /warn: .*alternative rooms but no room — treated as “Any Lab”/), msgs(s).join('\n'));
   l.room = 'r2';
   assert.ok(!hasMsg(s, /warn/), msgs(s).join('\n'));
+});
+check('(g) validate: teacher week rules', () => {
+  const s = school('ttttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  add.lesson(s, subj, t, [c], 10, 1, { maxOnePerDay: false });
+  assert.ok(!hasMsg(s, /err/), msgs(s).join('\n'));
+  t.freeDays = 1; t.maxPerDay = 0;
+  assert.ok(!hasMsg(s, /err/), 'ten periods fit in four days');
+  t.freeDays = 3;
+  assert.ok(!hasMsg(s, /err/), 'ten periods exactly fit two days');
+  t.freeDays = 4;
+  assert.ok(hasMsg(s, /err: .*teaches 10 periods but 1 working day\(s\) hold only 5/), msgs(s).join('\n'));
+  t.freeDays = 5;
+  assert.ok(hasMsg(s, /err: .*must have 5 free day\(s\) but can only work 5/), msgs(s).join('\n'));
+  t.freeDays = 1; t.maxPerDay = 2;
+  assert.ok(hasMsg(s, /err: .*with 1 free day\(s\) and max 2\/day only 8 fit/), msgs(s).join('\n'));
+  t.freeDays = 0; t.maxPerDay = 0; t.presenceStrict = true; t.maxPresenceWeek = 8;
+  assert.ok(hasMsg(s, /err: .*strict weekly presence limit is 8/), msgs(s).join('\n'));
+  t.maxPresenceWeek = 0; t.maxPresenceDay = 1;
+  assert.ok(hasMsg(s, /err: .*presence 1\/day over 5 day\(s\) allows only 5/), msgs(s).join('\n'));
+  t.presenceStrict = false;
+  assert.ok(!hasMsg(s, /err/), 'soft limits never block');
+  t.maxPresenceDay = 6; t.maxPresenceWeek = 3;
+  assert.ok(hasMsg(s, /warn: .*presence\/day is above presence\/week/), msgs(s).join('\n'));
 });
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();

@@ -92,6 +92,12 @@ function scenarioA() {
     id: id('d'), name: 'Substitution on-call', maxPerSlot: 2, allowed: slotsWhere(s, (d) => d < 5),
     assignments: [...engT, ...sstT, ...hinT, ...freT, ...sanT, ...csT, ...peT].map((t) => ({ teacherId: t.id, hours: 2 })),
   });
+  // Week rules by load: the lightest teachers get a day off, the heaviest a rest rule and a presence cap.
+  const load = {}; for (const l of s.lessons) load[l.teacherId] = (load[l.teacherId] || 0) + (l.lengths || []).reduce((x, y) => x + y, 0) + (l.lengths ? 0 : l.sessions * l.length);
+  const byLoad = s.teachers.slice().sort((x, y) => (load[x.id] || 0) - (load[y.id] || 0)).filter((t) => load[t.id]);
+  byLoad.slice(0, 6).forEach((t) => { t.freeDays = 1; });
+  byLoad.slice(-6).forEach((t) => { t.maxConsecutive = 4; t.noLastFirst = true; });
+  byLoad.slice(-12, -6).forEach((t) => { t.maxPresenceWeek = 40; t.presenceStrict = true; });
   return s;
 }
 
@@ -185,6 +191,8 @@ function scenarioC() {
   const spec = (n, code, extra) => add.teacher(s, n, code, { maxPerDay: 7, ...extra });
   const ara = [spec('Arabic 1', 'AR1'), spec('Arabic 2', 'AR2')]; const pe = [spec('PE 1', 'PE1'), spec('PE 2', 'PE2')];
   const mus = spec('Music', 'MUS'), art = spec('Art', 'ART', { unavailable: ['4-5', '4-6'] }), ict = spec('ICT', 'ICT'), mor = spec('Moral Ed.', 'MOR'), lib = spec('Librarian', 'LIB');
+  // Week rules on the specialists: a day off (the librarian), a rest rule, a strict presence cap, an overnight rule.
+  lib.freeDays = 2; pe[0].maxConsecutive = 3; lib.maxPresenceDay = 6; lib.presenceStrict = true; mor.noLastFirst = true;
   cls.forEach((c, i) => {
     const t = ct[i]; const grade = Math.floor(i / 3) + 1;
     // homeroom: the class teacher's own room
@@ -347,6 +355,25 @@ function audit(s, placements, chosen = {}) {
     if (n > 1) { overlaps++; err(`OVERLAP ${k}: ${[...grid[k]].join(', ')}`); }
   }
   for (const k in tTeach) { const [t] = k.split(':'); if (T[t].maxPerDay && tTeach[k] > T[t].maxPerDay) err(`max/day exceeded ${T[t].name}`); }
+  // Teacher week rules, read straight from the placements: lesson days off (hard) and strict presence (lessons only).
+  for (const t of s.teachers) {
+    const worked = new Set(Object.keys(tTeach).filter((k) => k.startsWith(t.id + ':')).map((k) => Number(k.split(':')[1])));
+    if (t.freeDays) {
+      const open = [...Array(D).keys()].filter((d) => [...Array(P).keys()].some((p) => ptype(p) === 'teaching' && !general.has(`${d}-${p}`) && !t.unavailable.includes(`${d}-${p}`)));
+      if (worked.size > Math.max(0, open.length - t.freeDays)) err(`${t.name} works ${worked.size} of ${open.length} days but needs ${t.freeDays} free`);
+    }
+    if (t.presenceStrict && (t.maxPresenceDay || t.maxPresenceWeek)) {
+      let week = 0;
+      for (let d = 0; d < D; d++) {
+        const held = [...Array(P).keys()].filter((p) => ptype(p) === 'teaching' && grid[`T${t.id}@${d}-${p}`]);
+        if (!held.length) continue;
+        let pres = 0; for (let p = held[0]; p <= held[held.length - 1]; p++) if (ptype(p) === 'teaching') pres++;
+        week += pres;
+        if (t.maxPresenceDay && pres > t.maxPresenceDay) err(`${t.name} is present ${pres} periods on day ${d}, limit ${t.maxPresenceDay}`);
+      }
+      if (t.maxPresenceWeek && week > t.maxPresenceWeek) err(`${t.name} is present ${week} periods in the week, limit ${t.maxPresenceWeek}`);
+    }
+  }
   // Lengths: the placed multiset never exceeds the row's lengths; flexible rows stay within total.
   for (const lid in placedLens) {
     const l = L[lid]; const lens = lensOf(l); const got = placedLens[lid];
@@ -457,7 +484,7 @@ for (const [key, s] of scenarios) {
   console.log(`\n=== ${s.settings.name}`);
   console.log(`  size: ${s.classes.length} classes, ${s.teachers.length} teachers, ${s.rooms.length} rooms, ${s.lessons.length} lesson rows, ${e0.units.length} units to place (${e0.problems.length} data problems)`);
   console.log(`  result: ${best.placed}/${best.total} placed in ${secs}s (2 attempts) · lesson sessions ${a.placedLessons}/${a.expectedLessons} (periods ${a.placedPeriods}/${a.expectedPeriods}) · unplaced by kind ${JSON.stringify(unplacedKinds)}`);
-  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}`);
+  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}, over-long runs ${best.cost.consecutive}, presence over ${best.cost.presence}, last→first ${best.cost.exclusive}`);
   console.log(`  AUDIT: ${a.overlaps} overlaps, ${a.errs.length} rule violations across ${a.cellsChecked} entity-periods${a.errs.length ? '\n   ' + [...new Set(a.errs)].slice(0, 8).join('\n   ') : ''}`);
   if (a.errs.length) allClean = false;
   if (unplaced.length) console.log(`  not placed: ${[...new Set(unplaced.map((u) => u.key))].slice(0, 6).map((k) => {

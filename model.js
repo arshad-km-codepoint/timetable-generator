@@ -12,12 +12,15 @@
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
-    balance: 'Teacher load uneven across days (per period off)',
+    balance: 'Teacher load uneven across days (per period off)', consecutive: 'Teacher over their max periods in a row (per period)',
+    presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s last period then first period next day',
   };
   const RELATION_TYPES = {
     differentDays: 'On different days', notSameTime: 'Not at the same time', nonConsecutive: 'Not in consecutive periods',
     consecutive: 'In consecutive periods (same day)', daysApart: 'Days apart (min–max)',
   };
+  // Week rules a teacher can carry (0 / false = none).
+  const teacherDefaults = () => ({ maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
   // ---------- State ----------
@@ -56,7 +59,7 @@
       fre: subj('French', 'FRE', 9), spa: subj('Spanish', 'SPA', 10),
     };
     s.subjects = Object.values(S);
-    const t = (name, code, extra = {}) => ({ id: uid(), name, code, unavailable: [], dispreferred: [], maxPerDay: 6, minPerDay: 0, ...extra });
+    const t = (name, code, extra = {}) => ({ id: uid(), name, code, unavailable: [], dispreferred: [], ...teacherDefaults(), maxPerDay: 6, ...extra });
     const T = {
       m1: t('Anita Rao', 'ARA'), m2: t('Brian Ochieng', 'BOC', { unavailable: ['4-7', '4-8'] }),
       e1: t('Chloe Martin', 'CMA'), e2: t('Daniel Kim', 'DKI', { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
@@ -218,6 +221,11 @@
     s.settings.blocked = Array.isArray(s.settings.blocked) ? s.settings.blocked : [];
     s.settings.options = { ...base.settings.options, ...(s.settings.options || {}) };
     ['teachers', 'classes', 'rooms'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; }); });
+    s.teachers.forEach((t) => {
+      for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
+      t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
+      for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
+    });
     s.subjects = s.subjects || [];
     s.lessons = s.lessons || [];
     s.lessons.forEach((l) => migrateLesson(l));
@@ -365,6 +373,16 @@
       const nl = w.tl[t.id] || 0;
       if (t.maxPerDay && nl > t.maxPerDay * D) issues.push({ lvl: 'err', msg: `${t.name} teaches ${nl} periods but max ${t.maxPerDay}/day allows only ${t.maxPerDay * D}.` });
       if (t.maxPerDay && t.minPerDay > t.maxPerDay) issues.push({ lvl: 'warn', msg: `${t.name}: min/day is above max/day.` });
+      const workDays = e.balDays[t.id].length;
+      if (t.freeDays) {
+        const usable = Math.max(0, workDays - t.freeDays);
+        if (!usable && nl) issues.push({ lvl: 'err', msg: `${t.name} must have ${t.freeDays} free day(s) but can only work ${workDays}, so no lesson fits.` });
+        else if (t.maxPerDay && nl > usable * t.maxPerDay) issues.push({ lvl: 'err', msg: `${t.name} teaches ${nl} periods; with ${t.freeDays} free day(s) and max ${t.maxPerDay}/day only ${usable * t.maxPerDay} fit.` });
+        else if (nl > usable * teachingPeriods(s)) issues.push({ lvl: 'err', msg: `${t.name} teaches ${nl} periods but ${usable} working day(s) hold only ${usable * teachingPeriods(s)}.` });
+      }
+      if (t.presenceStrict && t.maxPresenceWeek && n > t.maxPresenceWeek) issues.push({ lvl: 'err', msg: `${t.name} has ${n} periods but the strict weekly presence limit is ${t.maxPresenceWeek}.` });
+      if (t.maxPresenceDay && t.maxPresenceWeek && t.maxPresenceDay > t.maxPresenceWeek) issues.push({ lvl: 'warn', msg: `${t.name}: presence/day is above presence/week.` });
+      if (t.presenceStrict && t.maxPresenceDay && n > t.maxPresenceDay * workDays) issues.push({ lvl: 'err', msg: `${t.name} has ${n} periods but presence ${t.maxPresenceDay}/day over ${workDays} day(s) allows only ${t.maxPresenceDay * workDays}.` });
     });
     s.classes.forEach((c) => {
       const n = w.c[c.id] || 0;
@@ -433,7 +451,7 @@
   }
 
   window.Model = {
-    uid, esc, PALETTE, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
+    uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
     lessonDefaults, newLesson, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
     dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
