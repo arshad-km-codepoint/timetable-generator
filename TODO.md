@@ -1,6 +1,27 @@
 # TODO
 
-Open tasks from the code review of the solver-hardening and scenario commits (`c6407a0`, `c8858d5`).
+Status (branch `ghc-features`): **37 of 78 items done, 41 open.** The code-review items (room-capacity validation, scenario ids) are finished; what remains is the GHC feature-gap list below.
+
+## What is left, grouped
+
+**Next, designed and small** (each is one self-contained change with its tests):
+- *Auto-calculated daily min/max* (a half-done draft was reverted unfinished): a per-teacher `Auto` flag; max = floor((load−1)/days)+2, min = floor((load−1)/days)−1 from the weekly lesson load and the days the teacher can work, a typed value overriding its half, plus a “Fill min/max from load” button. Needs the engine to apply it after the units exist, model helpers, UI placeholders and tests.
+- *Teacher priority* (a multiplier on one teacher's soft costs), *duties at the ends of the day*, *followed by the same group*.
+- Meetings and duties: per-period teacher count for a duty, “no teaching on both sides of a break duty”, discard unplaceable duty hours, meetings 1–5 times a week on distinct days with a task type, teacher-by-duty-position view.
+- *Tasks / activity types* assignable to lessons, meetings, duties and activities, with their own availability template; separate weights for non-preferred positions in subject, task and lesson templates; priority warnings minimised before the global weight.
+- Engine controls: partial run (subset of classes), debugging run that drops hard rules, conflict analyser, engine caution messages, projecting a whole result back as pins.
+
+**Larger** (need design or a structural change first):
+- *Different schedule per weekday* (period types and times per day; the engine reads one period list for the whole week).
+- *Elective subject sets* and the elective-overlap criterion: a class's cells would have to hold several units at once, which touches every class check in the engine.
+- *Interchangeable teachers* (the engine would choose between two teachers for a row during generation).
+- Editor: free-teacher / free-room views, junction and general views, undo/redo with cut/copy/paste and search/replace, changing a teacher across all units, creating items inside the editor, header labels, copying a weekly timetable, break supervision on the timetable, recombination wizard.
+- Output: Excel/PDF export, print selections and page setup, independent table documents, reports, CSV import, merging files, backup recovery, notes, per-department preference capture.
+- Parallel attempts in Web Workers.
+
+**Not planned** (not realistic for a local, dependency-free web app, or a different product): overlapping time frames, fractional periods, multiple weeks, the group assistant, individual students and subgroups, XML-GHC exchange and school-management import, absences and substitutions, assessment-board planning, and the cloud file platform.
+
+The sections below keep the full item list with notes on what each tick covers.
 
 ## Room-capacity validation (`app.js`, `validate()`)
 
@@ -91,7 +112,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Non-preferred positions in subject/task templates and in lesson templates (separate weights).
 - [ ] Consecutive days; non-preferred room; same room; first/last-period concentration; afternoon coincidence; same-hour coincidence; elective overlap. *Done:* all but elective overlap (`consecutiveDays`, `roomPref`, `roomSame`, `ends`, `afternoon`, `sameHour`, `afterBreak`). *Open:* elective overlap (needs elective subject sets).
 - [x] Teacher balanced week (engine `W.balance`: periods above/below an even spread over the days the teacher can work; counts lessons, meetings and duties like min/day).
-- [ ] Teacher: exclusive periods, continuous hours, presence, followed by the same group, duties at the ends of the day, priority order. *Done:* exclusive periods (last→first), continuous hours (`consecutive`), presence. *Open:* followed by the same group, duties at the ends of the day, priority order.
+- [ ] Teacher: exclusive periods, continuous hours, presence, followed by the same group, duties at the ends of the day, priority order. *Done:* exclusive periods (all variants), continuous hours (`consecutive`), presence, balanced week, concentrate-in-few-days, free half-days, associated timetables. *Open:* followed by the same group, duties at the ends of the day, priority order.
 - [ ] Priority warnings (e.g. class gaps) minimised before the global weight.
 
 ### Engine controls
