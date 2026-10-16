@@ -221,6 +221,8 @@ function audit(s, placements) {
   const book = (ent, d, p, unit) => { const k = `${ent}@${d}-${p}`; (grid[k] ||= new Set()).add(unit); };
   const seenUnits = new Set();
   const placedPerLesson = {}, perDay = {}, tTeach = {};
+  const straddleBreaks = new Set(); // 'teacher@d-p' break periods held inside a straddling lesson
+  const breakDuties = []; // [teacherId, d, p, unitId]
   const parallelSlot = {}; // tag|session -> slot
   // Period classes and the general template (settings.blocked), read straight from the data.
   const ptype = (p) => (s.settings.periods[p] && s.settings.periods[p].type) || 'teaching';
@@ -260,7 +262,7 @@ function audit(s, placements) {
       const [d, p] = [pl.day, pl.period];
       if (pl.len !== 1) err(`duty ${svc.name} longer than one period`);
       if (svc.allowed.length && !svc.allowed.includes(`${d}-${p}`)) err('duty outside duty periods');
-      if (svc.kind === 'break') { if (ptype(p) !== 'break') err(`break duty ${svc.name} on ${ptype(p)} period ${d}-${p}`); }
+      if (svc.kind === 'break') { if (ptype(p) !== 'break') err(`break duty ${svc.name} on ${ptype(p)} period ${d}-${p}`); breakDuties.push([tid, d, p, pl.unitId]); }
       else checkTeachingCells([[d, p]], `duty ${svc.name}`);
       book('T' + tid, d, p, pl.unitId); book('S' + did, d, p, pl.unitId);
       if (T[tid].unavailable.includes(`${d}-${p}`)) err('duty teacher prohibited');
@@ -275,6 +277,14 @@ function audit(s, placements) {
       // A lesson that may not straddle a break must occupy consecutive teaching periods.
       const cells = cellsOf(pl, !!l.allowBreakInside);
       checkTeachingCells(cells, `lesson ${lid}`);
+      // A break skipped inside a straddling lesson still holds the teacher, the classes and the
+      // room (hard rule: no break duty inside one's own double), so book it like a cell.
+      for (let p = cells[0][1] + 1; p < cells[cells.length - 1][1]; p++) {
+        if (cells.some(([, q]) => q === p)) continue;
+        book('T' + l.teacherId, pl.day, p, pl.unitId); straddleBreaks.add(`${l.teacherId}@${pl.day}-${p}`);
+        for (const c of l.classIds) book('C' + c, pl.day, p, pl.unitId);
+        if (pl.rooms[k]) book('R' + pl.rooms[k], pl.day, p, pl.unitId);
+      }
       placedPerLesson[lid] = (placedPerLesson[lid] || 0) + 1;
       if (l.parallel) {
         const key = `${l.parallel}|${session}`;
@@ -299,6 +309,7 @@ function audit(s, placements) {
       }
     });
   }
+  for (const [tid, d, p, unit] of breakDuties) if (straddleBreaks.has(`${tid}@${d}-${p}`)) err(`break duty ${unit} inside the teacher's own straddling lesson at ${d}-${p}`);
   // overlaps: any teacher/class/room with two different units in one period; duty capacity
   let overlaps = 0;
   for (const k in grid) {

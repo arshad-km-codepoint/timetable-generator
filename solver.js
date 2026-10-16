@@ -15,10 +15,12 @@ class Engine {
     this.D = D; this.P = P; this.N = D * P;
     this.W = { ...DEFAULT_WEIGHTS, ...(data.settings.weights || {}) };
 
-    const slots = (keys) => new Set((keys || []).map((k) => {
-      const [d, p] = k.split('-').map(Number);
-      return d * P + p;
-    }));
+    // 'd-p' keys → slot numbers; malformed or out-of-range keys are ignored.
+    const slots = (keys) => new Set((keys || []).map((k) => String(k).split('-'))
+      .filter((parts) => parts.length === 2 && parts.every((x) => /^\d+$/.test(x)))
+      .map(([d, p]) => [Number(d), Number(p)])
+      .filter(([d, p]) => d < D && p < P)
+      .map(([d, p]) => d * P + p));
     // Period classes: lessons/meetings/teaching duties use teaching periods only; break
     // duties use break periods; lunch is never scheduled. The general template
     // (settings.blocked) removes slots from everything except break duties.
@@ -129,7 +131,7 @@ class Engine {
       const u = this.unitById[pl.unitId];
       if (!u || u.len !== pl.len) continue;
       const s = pl.day * P + pl.period;
-      if (!u.cells.has(s)) continue;
+      if (!this.cellsAt(u.i, s)) continue;
       const base = this.baseConflicts(u.i, s);
       if (base === null || base.size) continue;
       let rooms = Array.isArray(pl.rooms) && pl.rooms.length === u.parts.length ? pl.rooms : null;
@@ -143,9 +145,11 @@ class Engine {
   addUnits(gkey, kind, parts, len, sessions, maxOne, allowed, service = null, allowBreak = false) {
     const teachers = [...new Set(parts.map((p) => p.teacher))];
     const classes = [...new Set(parts.flatMap((p) => p.classes))];
-    // Legal starts and the cells each occupies. Non-duty units need every cell to be a
-    // teaching period outside the general template; duties get a pre-filtered `allowed`.
-    const starts = []; const cells = new Map();
+    // Legal starts, the teaching cells each occupies and the full span it holds (cells plus any
+    // break skipped inside a straddling unit: teacher, classes and rooms stay busy during it).
+    // Non-duty units need every cell to be a teaching period outside the general template;
+    // duties get a pre-filtered `allowed`.
+    const starts = []; const cells = new Map(); const span = new Map();
     for (let s = 0; s < this.N; s++) {
       const cs = this.spanCells(kind, len, allowBreak, s);
       if (!cs) continue;
@@ -157,12 +161,15 @@ class Engine {
         for (const k of classes) if (this.blocked['c' + k].has(c)) ok = false;
         if (!ok) break;
       }
-      if (ok) { starts.push(s); cells.set(s, cs); }
+      if (!ok) continue;
+      starts.push(s); cells.set(s, cs);
+      const last = cs[cs.length - 1];
+      span.set(s, last - s + 1 === cs.length ? cs : Array.from({ length: last - s + 1 }, (_, q) => s + q));
     }
     const idxs = [];
     for (let k = 0; k < sessions; k++) {
       idxs.push(this.units.length);
-      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, kind, service, len, parts, teachers, classes, maxOne, allowBreak, starts, cells });
+      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, kind, service, len, parts, teachers, classes, maxOne, allowBreak, starts, cells, span });
     }
     this.groupUnits[gkey] = idxs;
   }
@@ -183,8 +190,10 @@ class Engine {
     return out.length === len ? out : null;
   }
 
-  // Cells of unit ui when it starts at s; null when s is not a legal start.
+  // Teaching cells of unit ui when it starts at s; null when s is not a legal start.
   cellsAt(ui, s) { return this.units[ui].cells.get(s) || null; }
+  // Every slot unit ui holds when it starts at s (cells plus breaks skipped inside it).
+  spanAt(ui, s) { return this.units[ui].span.get(s) || null; }
 
   // null = lesson needs no room; [] = needs a room but none qualify.
   roomCandidates(spec, rooms) {
@@ -201,10 +210,10 @@ class Engine {
   // Units that must leave for unit ui to start at s (rooms aside), or null if impossible.
   baseConflicts(ui, s) {
     const u = this.units[ui];
-    const cells = u.cells.get(s);
-    if (!cells) return null;
+    const span = this.spanAt(ui, s);
+    if (!span) return null;
     const out = new Set();
-    for (const k of cells) {
+    for (const k of span) {
       for (const t of u.teachers) { const o = this.occ['t' + t][k]; if (o >= 0 && o !== ui) out.add(o); }
       for (const c of u.classes) { const o = this.occ['c' + c][k]; if (o >= 0 && o !== ui) out.add(o); }
     }
@@ -230,7 +239,9 @@ class Engine {
       const occ = this.occ['t' + t];
       const onDay = new Map();
       for (let p = 0; p < this.P; p++) {
-        const o = occ[d * this.P + p];
+        const k = d * this.P + p;
+        if (!this.teach[k]) continue; // a break held inside a straddling double is not a period
+        const o = occ[k];
         if (o >= 0 && o !== ui && !out.has(o) && this.units[o].kind === 'lesson') onDay.set(o, (onDay.get(o) || 0) + 1);
       }
       let load = [...onDay.values()].reduce((a, b) => a + b, 0) + u.len;
@@ -252,21 +263,22 @@ class Engine {
       if (!part.roomCands) { if (r) return false; continue; }
       if (!part.roomCands.includes(r) || used.has(r)) return false;
       used.add(r);
-      for (const k of u.cells.get(s) || []) if (this.blocked['r' + r].has(k)) return false;
+      for (const c of this.cellsAt(ui, s) || []) if (this.blocked['r' + r].has(c)) return false;
     }
     return true;
   }
 
   roomConflicts(ui, s, rooms) {
-    const u = this.units[ui]; const out = new Set();
-    for (const r of rooms) if (r) for (const k of u.cells.get(s) || []) { const o = this.occ['r' + r][k]; if (o >= 0 && o !== ui) out.add(o); }
+    const out = new Set();
+    for (const r of rooms) if (r) for (const k of this.spanAt(ui, s) || []) { const o = this.occ['r' + r][k]; if (o >= 0 && o !== ui) out.add(o); }
     return out;
   }
 
-  // Greedy room choice per part: distinct rooms, fewest extra evictions. null if no valid rooms.
+  // Greedy room choice per part: distinct rooms, fewest extra evictions, then fewest
+  // non-preferred cells. null if no valid rooms.
   bestRooms(ui, s, base) {
     const u = this.units[ui];
-    const cells = u.cells.get(s);
+    const cells = this.cellsAt(ui, s), span = this.spanAt(ui, s);
     if (!cells) return null;
     const conf = new Set(base); const rooms = []; const used = new Set();
     for (const part of u.parts) {
@@ -275,12 +287,11 @@ class Engine {
       for (const r of part.roomCands) {
         if (used.has(r)) continue;
         let ok = true; const extra = new Set();
-        for (const k of cells) {
-          if (this.blocked['r' + r].has(k)) { ok = false; break; }
-          const o = this.occ['r' + r][k]; if (o >= 0 && o !== ui && !conf.has(o)) extra.add(o);
-        }
+        for (const k of cells) if (this.blocked['r' + r].has(k)) { ok = false; break; }
         if (!ok) continue;
-        const score = extra.size * 10 + (this.soft['r' + r].has(s) ? 1 : 0);
+        for (const k of span) { const o = this.occ['r' + r][k]; if (o >= 0 && o !== ui && !conf.has(o)) extra.add(o); }
+        let soft = 0; for (const k of cells) if (this.soft['r' + r].has(k)) soft++;
+        const score = extra.size * 10 + soft;
         if (!best || score < best.score) best = { r, extra, score };
         if (score === 0) break;
       }
@@ -290,35 +301,39 @@ class Engine {
     return { rooms, conf };
   }
 
+  // Teacher, classes and rooms are held for the whole span (a break skipped inside a
+  // straddling double included); the service rota only for the duty's own cell.
   place(ui, s, rooms) {
     const u = this.units[ui];
-    const cells = u.cells.get(s);
-    for (const k of cells) {
+    const cells = this.cellsAt(ui, s), span = this.spanAt(ui, s);
+    for (const k of span) {
       for (const t of u.teachers) this.occ['t' + t][k] = ui;
       for (const c of u.classes) this.occ['c' + c][k] = ui;
       for (const r of rooms) if (r) this.occ['r' + r][k] = ui;
-      if (u.service) this.services[u.service].occ[k].add(ui);
     }
-    this.pos[ui] = { s, rooms, cells };
+    if (u.service) for (const k of cells) this.services[u.service].occ[k].add(ui);
+    this.pos[ui] = { s, rooms, cells, span };
   }
 
   remove(ui) {
     const u = this.units[ui]; const p = this.pos[ui];
     if (!p) return;
-    for (const k of p.cells) {
+    for (const k of p.span) {
       for (const t of u.teachers) this.occ['t' + t][k] = -1;
       for (const c of u.classes) this.occ['c' + c][k] = -1;
       for (const r of p.rooms) if (r) this.occ['r' + r][k] = -1;
-      if (u.service) this.services[u.service].occ[k].delete(ui);
     }
+    if (u.service) for (const k of p.cells) this.services[u.service].occ[k].delete(ui);
     this.pos[ui] = null;
   }
 
-  // n = occupied slots on day d; gaps = free slots between the first and last occupied
-  // slot of each segment (breaks never count; lunch only with countMiddayGap).
+  // n = occupied teaching slots on day d (lessons, meetings and teaching duties alike — duty
+  // periods count toward min/day deliberately; Task 3.4 countLoad will refine this); gaps =
+  // free slots between the first and last occupied slot of each segment (breaks never count;
+  // lunch only with countMiddayGap).
   dayStats(occ, d) {
     let n = 0, gaps = 0;
-    for (let p = 0; p < this.P; p++) if (occ[d * this.P + p] >= 0) n++;
+    for (let p = 0; p < this.P; p++) { const k = d * this.P + p; if (this.teach[k] && occ[k] >= 0) n++; }
     for (const seg of this.segments[d]) {
       let first = -1, last = -1, m = 0;
       for (let i = 0; i < seg.length; i++) if (occ[seg[i]] >= 0) { if (first < 0) first = i; last = i; m++; }
@@ -421,7 +436,7 @@ class Engine {
     return this.units.flatMap((u, i) => {
       const p = this.pos[i];
       if (!p) return [];
-      return [{ unitId: u.id, day: this.dayOf(p.s), period: p.cells[0] % this.P, len: u.len, rooms: p.rooms, locked: this.locked[i] }];
+      return [{ unitId: u.id, day: this.dayOf(p.s), period: p.s % this.P, len: u.len, rooms: p.rooms, locked: this.locked[i] }];
     });
   }
 }

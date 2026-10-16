@@ -58,8 +58,9 @@ function cellsOf(s, pl, allowBreak) {
 }
 
 // ---------- harness ----------
-// Engine objects come from another vm realm, so compare by value (JSON) rather than by prototype.
-const eq = (a, b, msg) => assert.deepStrictEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)), msg);
+// Engine objects come from another vm realm; structuredClone re-creates them in this realm so
+// deepStrictEqual compares values (Sets, Maps and typed arrays included) rather than prototypes.
+const eq = (a, b, msg) => assert.deepStrictEqual(structuredClone(a), structuredClone(b), msg);
 let pass = 0, fail = 0;
 function check(name, fn) {
   try { fn(); pass++; console.log(`  ok   ${name}`); }
@@ -94,9 +95,11 @@ check('(b) a double with allowBreakInside straddles the break and skips it', () 
   assert.strictEqual(placed, 1);
   eq(placements.map((p) => [p.unitId, p.day, p.period, p.len]), [[`${l.id}#0`, 0, 2, 2]]);
   eq(engine.pos[0].cells, [2, 4]);
+  eq(engine.pos[0].span, [2, 3, 4], 'the skipped break is held');
   const occ = engine.occ['t' + t.id];
-  assert.strictEqual(occ[2], 0); assert.strictEqual(occ[3], -1); assert.strictEqual(occ[4], 0);
-  assert.strictEqual(engine.occ['c' + c.id][3], -1);
+  assert.strictEqual(occ[2], 0); assert.strictEqual(occ[3], 0); assert.strictEqual(occ[4], 0);
+  assert.strictEqual(engine.occ['c' + c.id][3], 0);
+  eq(engine.dayStats(occ, 0), { gaps: 0, n: 2 }, 'the held break is not a period');
 });
 
 check('(b2) without allowBreakInside the same double is impossible', () => {
@@ -245,6 +248,103 @@ check('(f) placements() round-trips through new Engine(data, placements), includ
   });
   for (const key in engine.occ) eq([...e2.occ[key]], [...engine.occ[key]], `occupancy ${key}`);
   eq(e2.totalCost(), engine.totalCost());
+});
+
+check('(g) teacher, class and room stay busy during the break inside a straddling double', () => {
+  const s = school({ days: 1, periods: 'ttttbt' }); // break at 4; the double sits at 3 and 5
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T'), r = add.room(s, 'Lab', 'Lab');
+  const l = add.lesson(s, subj, t, [c], 1, 2, { allowBreakInside: true, room: 'type:Lab' });
+  const bd = add.duty(s, 'Playground', [[t, 1]], { kind: 'break' });
+  const lessonPl = { unitId: `${l.id}#0`, day: 0, period: 3, len: 2, rooms: [r.id], locked: false };
+  const dutyPl = { unitId: `d:${bd.id}:${t.id}#0`, day: 0, period: 4, len: 1, rooms: [null], locked: false };
+  const e = new Engine(s, [lessonPl]);
+  const li = e.unitById[lessonPl.unitId].i, di = e.unitById[dutyPl.unitId].i;
+  eq(e.pos[li].cells, [3, 5]); eq(e.pos[li].span, [3, 4, 5]);
+  eq(e.cellsAt(li, 3), [3, 5]); eq(e.spanAt(li, 3), [3, 4, 5]); eq(e.spanAt(li, 0), [0, 1]);
+  for (const key of ['t' + t.id, 'c' + c.id, 'r' + r.id]) assert.strictEqual(e.occ[key][4], li, `${key} held at the break`);
+  eq([...e.baseConflicts(di, 4)], [li], 'the break duty must evict the lesson');
+  e.locked[li] = true;
+  assert.ok([...e.baseConflicts(di, 4)].some((o) => e.locked[o]), 'a locked lesson blocks the duty (Solver/UI refuse locked conflicts)');
+  e.remove(li);
+  for (const key of ['t' + t.id, 'c' + c.id, 'r' + r.id]) assert.strictEqual(e.occ[key][4], -1, `${key} freed at the break`);
+  // The other way round: the duty is there first, so the straddling double must evict it.
+  const e2 = new Engine(s, [dutyPl]);
+  assert.strictEqual(e2.pos[di].s, 4);
+  eq([...e2.baseConflicts(li, 3)], [di]);
+  eq([...e2.baseConflicts(li, 0)], [], 'a non-straddling start does not touch the duty');
+  // The solver never produces the combination: both doubles are forced to straddle, so the
+  // teacher's break duty has no free break left and one unit stays unplaced.
+  const s3 = school({ days: 2, periods: 'tttbtt' });
+  const subj3 = add.subject(s3), t3 = add.teacher(s3, 'T');
+  const c3 = add.cls(s3, 'C', { unavailable: keys(s3, (d, p) => p !== 2 && p !== 4) });
+  add.lesson(s3, subj3, t3, [c3], 2, 2, { allowBreakInside: true, maxOnePerDay: true });
+  add.duty(s3, 'Playground', [[t3, 1]], { kind: 'break' });
+  const { placements, placed, total } = solveAll(s3);
+  assert.strictEqual(total, 3); assert.strictEqual(placed, 2);
+  const lessonDays = placements.filter((pl) => pl.len === 2).map((pl) => (assert.strictEqual(pl.period, 2), pl.day));
+  for (const pl of placements.filter((pl) => pl.unitId.startsWith('d:'))) assert.ok(!lessonDays.includes(pl.day), 'break duty inside the straddling double');
+});
+
+check('(h) a straddling double counts as two periods for n and max/day, not three', () => {
+  const s = school({ days: 1, periods: 'ttttbt' }); // break at 4; the double sits at 3 and 5
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T', { maxPerDay: 3, minPerDay: 3 });
+  const dbl = add.lesson(s, subj, t, [c], 1, 2, { allowBreakInside: true });
+  const single = add.lesson(s, subj, t, [c], 1, 1);
+  const pl = [{ unitId: `${dbl.id}#0`, day: 0, period: 3, len: 2, rooms: [null], locked: false }];
+  const e = new Engine(s, pl);
+  const di = e.unitById[`${dbl.id}#0`].i, si = e.unitById[`${single.id}#0`].i;
+  eq(e.dayStats(e.occ['t' + t.id], 0), { gaps: 0, n: 2 });
+  eq(e.dayStats(e.occ['c' + c.id], 0), { gaps: 0, n: 2 });
+  assert.strictEqual(e.totalCost().teacherMin, 1, 'n=2 is below min/day 3');
+  eq([...e.baseConflicts(si, 0)], [], 'load 2 + 1 fits max/day 3');
+  e.place(si, 0, [null]);
+  eq(e.dayStats(e.occ['t' + t.id], 0), { gaps: 2, n: 3 });
+  assert.strictEqual(e.totalCost().teacherMin, 0);
+  t.maxPerDay = 2;
+  const e2 = new Engine(s, pl);
+  eq([...e2.baseConflicts(si, 0)], [di], 'with max/day 2 the double must leave');
+  eq([...e2.baseConflicts(si, 5)], [di], 'a cell of the double is just as busy');
+});
+
+check('parallel group where only one row allows a break inside never straddles', () => {
+  const s = school({ days: 1, periods: 'tttbtt' });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  add.lesson(s, subj, t1, [c1], 1, 2, { parallel: 'opt', allowBreakInside: true });
+  add.lesson(s, subj, t2, [c2], 1, 2, { parallel: 'opt' });
+  const e = new Engine(s, []);
+  assert.strictEqual(e.units.length, 1);
+  assert.strictEqual(e.units[0].allowBreak, false);
+  eq(e.units[0].starts, [0, 1, 4]);
+});
+
+check('a lesson longer than the longest teaching run has no starts and is reported impossible', () => {
+  const s = school({ days: 1, periods: 'ttbt' });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  add.lesson(s, subj, t, [c], 1, 3);
+  const e = new Engine(s, []);
+  eq(e.units[0].starts, []);
+  const sv = new Solver(s, []);
+  eq(sv.impossible, [0]);
+  const { placed } = solveAll(s);
+  assert.strictEqual(placed, 0);
+});
+
+check('a meeting whose allowed keys are all break/lunch has no starts', () => {
+  const s = school({ days: 1, periods: 'ttbl' });
+  const t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  add.meeting(s, 'Staff', [t1, t2], { allowed: ['0-2', '0-3'] });
+  const e = new Engine(s, []);
+  eq(e.units[0].starts, []);
+  add.meeting(s, 'Staff 2', [t1, t2], { allowed: ['0-1', '0-2'] });
+  eq(new Engine(s, []).units[1].starts, [1], 'teaching keys among them still count');
+});
+
+check('slots() ignores malformed or out-of-range keys', () => {
+  const s = school({ days: 1, periods: 4, blocked: ['0-1', 'x-y', '', '3-0', '0-9', '0-1-1'] });
+  const t = add.teacher(s, 'T', { unavailable: ['0-2', undefined, 'bad', '-1-0'] });
+  const e = new Engine(s, []);
+  eq([...e.general], [1]);
+  eq([...e.blocked['t' + t.id]], [2]);
 });
 
 check('legacy data (no period types, no blocked, no kinds) behaves as all-teaching', () => {
