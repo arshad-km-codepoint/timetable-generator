@@ -66,8 +66,9 @@ function scenarioA() {
   const hinT = team('Hindi', 2), freT = team('French', 2), sanT = team('Sanskrit', 2);
   const csT = team('Computer', 2), peT = team('PE', 2), artT = T('Art 1', 'AR1'), musT = T('Music 1', 'MU1'), libT = T('Librarian', 'LIB');
   all.forEach((c, i) => {
-    add.lesson(s, S.math, mathT[Math.floor(i / 4)], [c], 7, 1, 'type:Classroom', '', false);
-    add.lesson(s, S.eng, engT[Math.floor(i / 4)], [c], 6, 1, 'type:Classroom');
+    // Maths: at most two periods a day and never back to back; English: a day's two sessions side by side.
+    Object.assign(add.lesson(s, S.math, mathT[Math.floor(i / 4)], [c], 7, 1, 'type:Classroom', '', false), { dayMax: 2, dayBlocks: 'apart' });
+    Object.assign(add.lesson(s, S.eng, engT[Math.floor(i / 4)], [c], 6, 1, 'type:Classroom'), { dayBlocks: 'together', maxOnePerDay: false });
     add.lesson(s, S.sci, sciT[Math.floor(i / 4)], [c], 4, 1, 'type:Classroom');
     add.lesson(s, S.sci, sciT[Math.floor(i / 4)], [c], 1, 2, 'type:ScienceLab');
     add.lesson(s, S.sst, sstT[i % 4], [c], 5, 1, 'type:Classroom');
@@ -232,6 +233,7 @@ function scenarioC() {
     const artl = add.lesson(s, S.art, art, [c], 2, 1, 'type:Art');
     artl.relations = [{ type: 'nonConsecutive', lessonId: musl.id }]; // no Art straight after Music or vice versa
     const ictl = add.lesson(s, S.ict, ict, [c], 2, 1, 'type:ICT');
+    ictl.alternatives = [[1, 1], [2]];   // two singles or one double, the engine's choice
     pel.relations = [{ type: 'differentDays', lessonId: ictl.id }]; // PE and ICT never on the same day
     const morl = add.lesson(s, S.mor, mor, [c], 2, 1, home);
     add.lesson(s, S.lib, lib, [c], 1, 1, 'type:Library');
@@ -278,7 +280,8 @@ function audit(s, placements, chosen = {}, checkPins = true) {
   const placedPerLesson = {}, perDay = {}, tTeach = {};
   const actPlaced = {}, tActLoad = {}; // activityId -> [{ day, period }]; teacher:day -> periods of countLoad activities
   // Session lengths a row allows: its lengths list, or (legacy) sessions × length; null = flexible.
-  const lensOf = (l) => (l.flexible ? null : Array.isArray(l.lengths) ? l.lengths : Array.from({ length: l.sessions }, () => l.length));
+  const altsOf = (l) => (!l.flexible && Array.isArray(l.alternatives) && l.alternatives.length >= 2 ? l.alternatives : null);
+  const lensOf = (l) => (l.flexible || altsOf(l) ? null : Array.isArray(l.lengths) ? l.lengths : Array.from({ length: l.sessions }, () => l.length));
   const placedLens = {};   // lessonId -> [len]
   const roomsUsed = {};    // lessonId -> Set(roomId)
   const sessionsOf = {};   // lessonId -> [{ k, day, first, last }] teaching cells, for relations
@@ -347,7 +350,7 @@ function audit(s, placements, chosen = {}, checkPins = true) {
     ids.forEach((lid, k) => {
       const l = L[lid]; if (!l) { err('unknown lesson'); return; }
       const lens = lensOf(l);
-      if (lens ? !lens.includes(pl.len) : !(pl.len >= l.flexible.min && pl.len <= l.flexible.max)) err(`wrong length ${pl.len} for ${lid}`);
+      if (lens ? !lens.includes(pl.len) : altsOf(l) ? !altsOf(l).flat().includes(pl.len) : !(pl.len >= l.flexible.min && pl.len <= l.flexible.max)) err(`wrong length ${pl.len} for ${lid}`);
       (placedLens[lid] ||= []).push(pl.len);
       // A lesson that may not straddle a break must occupy consecutive teaching periods.
       const cells = cellsOf(pl, !!l.allowBreakInside);
@@ -425,6 +428,20 @@ function audit(s, placements, chosen = {}, checkPins = true) {
     const n = [...Array(P).keys()].filter((p) => ptype(p) === 'teaching' && grid[`C${c.id}@${d}-${p}`]).length;
     if (n > c.maxPerDay) err(`class ${c.name} has ${n} periods on day ${d}, max ${c.maxPerDay}`);
   }
+  // Row-level daily limits: periods of a row per day (max), and sessions of one row on a day next to / apart from each other.
+  for (const l of s.lessons) {
+    if (!l.dayMax && l.dayBlocks !== 'apart' && l.dayBlocks !== 'together') continue;
+    const sess = sessionsOf[l.id] || [];
+    for (let d = 0; d < D; d++) {
+      const day = sess.filter((x) => x.day === d).sort((a, b) => a.first - b.first);
+      const periods = day.reduce((a, x) => a + (x.last - x.first + 1), 0);
+      if (l.dayMax && periods > l.dayMax) err(`row ${l.id} has ${periods} periods on day ${d}, max ${l.dayMax}`);
+      const adjacentPair = (a, b) => nextTeach(a.last) === b.first;
+      if (l.dayBlocks === 'apart') for (let i = 1; i < day.length; i++) if (adjacentPair(day[i - 1], day[i])) err(`row ${l.id}: sessions next to each other on day ${d}`);
+      if (l.dayBlocks === 'together' && day.length > 2) err(`row ${l.id}: ${day.length} sessions on day ${d}, at most two when together`);
+      if (l.dayBlocks === 'together' && day.length === 2 && !adjacentPair(day[0], day[1])) err(`row ${l.id}: the two sessions of day ${d} are not side by side`);
+    }
+  }
   // Pins: every pinned session is placed exactly where the planner fixed it.
   if (checkPins) for (const pn of s.pins || []) {
     const hit = placements.find((pl) => {
@@ -461,6 +478,10 @@ function audit(s, placements, chosen = {}, checkPins = true) {
     if (lens) {
       const left = lens.slice();
       for (const n of got) { const i = left.indexOf(n); if (i < 0) err(`too many sessions of length ${n} for ${lid}`); else left.splice(i, 1); }
+    } else if (altsOf(l)) {
+      // The placed sessions must fit inside one single alternative.
+      const fits = altsOf(l).some((alt) => { const left = alt.slice(); return got.every((n) => { const i = left.indexOf(n); if (i < 0) return false; left.splice(i, 1); return true; }); });
+      if (!fits) err(`row ${lid}: placed sessions ${got.join(',')} are not within any one alternative`);
     } else if (got.reduce((a, b) => a + b, 0) > l.flexible.total) err(`flexible row ${lid} exceeds its total`);
   }
   for (const lid in roomsUsed) if (L[lid].sameRoom && roomsUsed[lid].size > 1) err(`sameRoom row ${lid} uses ${roomsUsed[lid].size} rooms`);
@@ -496,7 +517,7 @@ function audit(s, placements, chosen = {}, checkPins = true) {
   // coverage summary: sessions (flexible rows by the engine's chosen distribution) and periods
   const expectedLessons = s.lessons.reduce((a, l) => a + (lensOf(l) ? lensOf(l).length : (chosen[l.id] || placedLens[l.id] || []).length), 0);
   const placedLessons = Object.values(placedPerLesson).reduce((a, b) => a + b, 0);
-  const expectedPeriods = s.lessons.reduce((a, l) => a + (lensOf(l) ? lensOf(l).reduce((x, y) => x + y, 0) : l.flexible.total), 0);
+  const expectedPeriods = s.lessons.reduce((a, l) => a + (lensOf(l) ? lensOf(l).reduce((x, y) => x + y, 0) : altsOf(l) ? (chosen[l.id] || []).reduce((x, y) => x + y, 0) : l.flexible.total), 0);
   const placedPeriods = Object.values(placedLens).reduce((a, ls) => a + ls.reduce((x, y) => x + y, 0), 0);
   return { errs, overlaps, expectedLessons, placedLessons, expectedPeriods, placedPeriods, cellsChecked: Object.keys(grid).length };
 }

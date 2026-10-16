@@ -156,17 +156,21 @@ class Engine {
         const roomCands = home && !home.room ? null : this.roomCandidates(spec, data.rooms, l.roomAlt);
         const flex = l.flexible && typeof l.flexible === 'object' ? { total: Number(l.flexible.total), min: Number(l.flexible.min), max: Number(l.flexible.max) } : null;
         if (flex) this.flexRows.add(l.id);
-        const lengths = flex ? null : Array.isArray(l.lengths) ? l.lengths.map(Number) : Array.from({ length: Math.max(0, Number(l.sessions) || 0) }, () => Math.max(1, Math.min(P, Number(l.length) || 1)));
+        // Explicit alternative distributions (2–4): the engine picks one per attempt, like a flexible split.
+        const alts = !flex && Array.isArray(l.alternatives) && l.alternatives.length >= 2 ? l.alternatives.slice(0, 4).map((a) => (Array.isArray(a) ? a.map(Number) : [])) : null;
+        if (alts) this.flexRows.add(l.id);
+        const lengths = flex || alts ? null : Array.isArray(l.lengths) ? l.lengths.map(Number) : Array.from({ length: Math.max(0, Number(l.sessions) || 0) }, () => Math.max(1, Math.min(P, Number(l.length) || 1)));
         const bad = !this.subjects[l.subjectId] ? 'has no subject' : !this.teachers[l.teacherId] ? 'has no teacher'
           : !classes.length ? 'has no class' : home && home.why ? home.why : roomCands && !roomCands.length ? 'needs a room type that has no rooms'
             : lengths && lengths.some((n) => !Number.isInteger(n) || n < 1 || n > P) ? `has a session length outside 1–${P}`
-              : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
+              : alts && alts.some((a) => !a.length || a.some((n) => !Number.isInteger(n) || n < 1 || n > P)) ? 'has an invalid alternative distribution'
+                : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
         if (bad) { this.problems.push({ lessonIds: [l.id], msg: bad }); continue; }
         // A preferred room is one named room; an anonymous group (count > 1) has no favourite instance.
         const prefRoom = spec && !String(spec).startsWith('type:') && this.rooms[spec] && data.rooms.filter((r) => (r.base || r.id) === spec).length === 1 ? spec : null;
         const size = Math.round(classes.reduce((a, c) => a + (Number(this.classes[c].size) || 0) / (sharing[c] || 1), 0));
         parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, subject: l.subjectId, teacher: l.teacherId, classes, size, roomCands, prefRoom, sameRoom: !!l.sameRoom });
-        rows.push({ l, lengths, flex });
+        rows.push({ l, lengths, flex, alts });
       }
       if (!parts.length) continue;
       const gkey = parts.map((p) => p.lessonId).join('+');
@@ -175,6 +179,12 @@ class Engine {
       // row's choice) when they fit the spec, otherwise choose a distribution of their own.
       let ref = (rows.find((r) => r.lengths) || {}).lengths || null;
       for (const r of rows) {
+        if (r.alts) {
+          const key = (a) => a.slice().sort((x, y) => x - y).join(',');
+          r.lengths = (ref && r.alts.some((a) => key(a) === key(ref)) ? ref.slice() : null) || this.pickAlt(r.alts, placedLens.get(gkey));
+          if (!ref) ref = r.lengths;
+          continue;
+        }
         if (!r.flex) continue;
         r.lengths = ref && this.fitsFlex(ref, r.flex) ? ref.slice() : this.flexLengths(r.flex, placedLens.get(gkey));
         if (!r.lengths) { this.problems.push({ lessonIds: [r.l.id], msg: `has a flexible distribution that cannot be split into blocks of ${r.flex.min}–${r.flex.max} periods` }); continue; }
@@ -192,9 +202,12 @@ class Engine {
         continue;
       }
       const lengths = rows[0].lengths.slice();
+      const dayMaxes = rows.map((r) => Math.max(0, Math.floor(Number(r.l.dayMax)) || 0)).filter(Boolean);
       // A parallel unit may straddle a break only when every lesson in it allows that.
       this.addUnits(gkey, 'lesson', parts, lengths, {
         maxOne: rows.some((r) => r.l.maxOnePerDay), allowBreak: rows.every((r) => r.l.allowBreakInside),
+        maxDay: dayMaxes.length ? Math.min(...dayMaxes) : 0,
+        minDay: Math.max(0, ...rows.map((r) => Math.max(0, Math.floor(Number(r.l.dayMin)) || 0))), nonAdj: rows.some((r) => r.l.dayBlocks === 'apart'), together: rows.some((r) => r.l.dayBlocks === 'together'),
         ends: rows.some((r) => r.l.penalizeEnds), avoidAdj: rows.some((r) => r.l.avoidConsecutiveDays) && lengths.length >= 2 && lengths.length <= 3,
       });
       this.groupLengths[gkey] = lengths;
@@ -302,7 +315,7 @@ class Engine {
   // allowBreak, ends (penalise first/last period of a day), avoidAdj (penalise adjacent days), and for
   // activities maxDay (hard cap per day), minDay (soft floor on used days), nonAdj (no two adjacent
   // periods on one day) and countLoad (counts toward the teacher's max periods/day).
-  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false, maxDay = 0, minDay = 0, nonAdj = false, countLoad = false } = {}) {
+  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false, maxDay = 0, minDay = 0, nonAdj = false, together = false, countLoad = false } = {}) {
     const teachers = [...new Set(parts.map((p) => p.teacher))];
     const classes = [...new Set(parts.flatMap((p) => p.classes))];
     const subjects = [...new Set(parts.map((p) => p.subject).filter(Boolean))]; // subject templates apply to lessons
@@ -338,7 +351,7 @@ class Engine {
     const idxs = [];
     lengths.forEach((len, k) => {
       idxs.push(this.units.length);
-      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, subjects, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, countLoad, ...geometry(len) });
+      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, subjects, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, together, countLoad, ...geometry(len) });
     });
     this.groupUnits[gkey] = idxs;
   }
@@ -346,6 +359,14 @@ class Engine {
   // True when `lengths` is a legal distribution for a flexible spec.
   fitsFlex(lengths, flex) {
     return lengths.length > 0 && lengths.reduce((a, b) => a + b, 0) === flex.total && lengths.every((n) => n >= flex.min && n <= flex.max);
+  }
+
+  // One of a row's alternative distributions: the one that agrees with the placed sessions being
+  // restored (session k keeps its length), else a random one.
+  pickAlt(alts, placed) {
+    const fit = placed && placed.size ? alts.filter((a) => [...placed].every(([k, len]) => a[k] === len)) : [];
+    const pool = fit.length ? fit : alts;
+    return pool[Math.floor(Math.random() * pool.length)].slice();
   }
 
   // Lengths for a flexible row. Placed units (k → len) keep their length and index when the rest
@@ -473,19 +494,28 @@ class Engine {
     if (u.maxOne) {
       for (const vi of this.groupUnits[u.key]) if (vi !== ui && this.pos[vi] && this.dayOf(this.pos[vi].s) === d) out.add(vi);
     }
-    // Activities: at most maxDay periods a day and (nonAdj) none next to another of the same activity.
-    if (u.maxDay || u.nonAdj) {
+    // Same-day limits of an activity or lesson row: at most maxDay periods a day, none next to
+    // another of the same row (nonAdj), or — together — at most two sessions a day, side by side.
+    if (u.maxDay || u.nonAdj || u.together) {
       const cl = this.cellsAt(ui, s);
       const same = this.groupUnits[u.key].filter((vi) => vi !== ui && this.pos[vi] && !out.has(vi) && this.dayOf(this.pos[vi].s) === d);
+      if (u.maxDay && u.len > u.maxDay) return null;
       for (const vi of same) if (u.nonAdj && this.adjacent(cl, this.pos[vi].cells)) { if (this.locked[vi]) return null; out.add(vi); }
       if (u.maxDay) {
         const stay = same.filter((vi) => !out.has(vi));
-        const need = stay.length - u.maxDay + 1;
-        if (need > 0) {
-          const movable = stay.filter((vi) => !this.locked[vi]);
-          if (movable.length < need) return null;
-          movable.slice(0, need).forEach((vi) => out.add(vi));
+        let load = stay.reduce((a, vi) => a + this.units[vi].len, 0) + u.len;
+        if (load > u.maxDay) {
+          for (const vi of stay.filter((x) => !this.locked[x]).sort((a, b) => this.units[a].len - this.units[b].len)) {
+            if (load <= u.maxDay) break;
+            out.add(vi); load -= this.units[vi].len;
+          }
+          if (load > u.maxDay) return null;
         }
+      }
+      if (u.together) {
+        // At most two sessions a day, side by side (a rule that stays true whichever unit leaves).
+        const rest = same.filter((vi) => !out.has(vi));
+        if (rest.length > 1 || (rest.length === 1 && !this.adjacent(cl, this.pos[rest[0]].cells))) return null;
       }
     }
     // Relations with other rows: every placed unit of the related group that the start would
@@ -933,9 +963,9 @@ class Engine {
   groupStats(key) {
     const uis = this.groupUnits[key]; const u = this.units[uis[0]];
     let roomSame = 0, consecutiveDays = 0, activityMin = 0;
-    if (u && u.kind === 'activity' && u.minDay) {
+    if (u && u.minDay) {
       const perDay = {};
-      for (const vi of uis) if (this.pos[vi]) { const d = this.dayOf(this.pos[vi].s); perDay[d] = (perDay[d] || 0) + 1; }
+      for (const vi of uis) if (this.pos[vi]) { const d = this.dayOf(this.pos[vi].s); perDay[d] = (perDay[d] || 0) + this.units[vi].len; }
       for (const d in perDay) if (perDay[d] < u.minDay) activityMin += u.minDay - perDay[d];
     }
     if (!u || u.kind !== 'lesson') return { roomSame, consecutiveDays, activityMin };

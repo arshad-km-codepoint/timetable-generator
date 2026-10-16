@@ -11,7 +11,7 @@
     dispreferred: 'Lesson in a non-preferred period (~)', dispreferred2: 'Lesson in a strongly non-preferred period (~~)', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
-    activityMin: 'Activity day with fewer periods than its minimum (per period short)',
+    activityMin: 'Day below the minimum periods of an activity or lesson row (per period short)',
     roomSize: 'Lesson in a room that seats fewer than the class', classGapStrict: 'Free gap in the day of a “no gaps” class',
     tutorDaily: 'Class day without a lesson from its tutor', tutorEnds: 'Class day whose first / last lesson is not the tutor’s',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
@@ -186,7 +186,7 @@
   // ---------- Lessons ----------
   // Every field a lesson row carries besides its identity and references.
   function lessonDefaults() {
-    return { room: '', roomAlt: '', sameRoom: false, lengths: [1], flexible: null, maxOnePerDay: true, parallel: '', allowBreakInside: false, penalizeEnds: false, avoidConsecutiveDays: false, relations: [] };
+    return { room: '', roomAlt: '', sameRoom: false, lengths: [1], flexible: null, alternatives: [], dayMax: 0, dayMin: 0, dayBlocks: '', maxOnePerDay: true, parallel: '', allowBreakInside: false, penalizeEnds: false, avoidConsecutiveDays: false, relations: [] };
   }
   // A new row for one class that has a homeroom starts in it (pass the state `s` to enable that).
   function newLesson(subjectId, classIds = [], s = null) {
@@ -254,6 +254,12 @@
     delete l.sessions; delete l.length;
     l.flexible = flexibleOf(l.flexible);
     if (l.flexible && periodsOf(l) !== l.flexible.total) l.lengths = partition(l.flexible.total, l.flexible.min, l.flexible.max);
+    // Up to four explicit alternative distributions (the engine picks one); `lengths` mirrors the first.
+    l.alternatives = l.flexible ? [] : (Array.isArray(l.alternatives) ? l.alternatives : []).map((a) => (Array.isArray(a) ? a.map(Number) : null)).filter((a) => a && isLengths(a)).slice(0, 4);
+    if (l.alternatives.length < 2) l.alternatives = [];
+    if (l.alternatives.length) l.lengths = l.alternatives[0].slice();
+    for (const k of ['dayMax', 'dayMin']) l[k] = Math.max(0, Math.floor(Number(l[k])) || 0);
+    l.dayBlocks = l.dayBlocks === 'together' || l.dayBlocks === 'apart' ? l.dayBlocks : '';
     for (const k of ['room', 'roomAlt', 'parallel']) if (typeof l[k] !== 'string') l[k] = d[k];
     // An alternative set without a room is just "any room of that type".
     if (!l.room && l.roomAlt) { l.room = l.roomAlt; l.roomAlt = ''; }
@@ -584,7 +590,7 @@
   // How many sessions a pinnable thing has (the k range of its pins) and how long each is.
   function pinSessions(s, kind, id) {
     const x = PIN_KINDS[kind] && find(s, PIN_KINDS[kind], id); if (!x) return [];
-    if (kind === 'lesson') return x.flexible ? [] : isLengths(x.lengths) ? x.lengths.slice() : [];
+    if (kind === 'lesson') return x.flexible || (x.alternatives || []).length ? [] : isLengths(x.lengths) ? x.lengths.slice() : [];
     if (kind === 'meeting') return Array.from({ length: Math.max(0, Math.floor(Number(x.sessions)) || 0) }, () => Math.max(1, Math.floor(Number(x.length)) || 1));
     return Array.from({ length: Math.max(0, Math.floor(Number(x.periods)) || 0) }, () => 1);
   }
@@ -735,7 +741,14 @@
       if (l.maxOnePerDay && n > D) issues.push({ lvl: 'err', msg: `${who} has ${n} sessions marked “1/day” but the week has only ${D} days — untick 1/day or reduce sessions.` });
       if (l.flexible && !canPartition(l.flexible.total, l.flexible.min, l.flexible.max) && !flagged(/flexible/, [l.id])) issues.push({ lvl: 'err', msg: `${who}: ${l.flexible.total} periods cannot be split into blocks of ${l.flexible.min}–${l.flexible.max} periods.` });
       // The longest block the engine may build: the longest explicit one, or the flexible maximum.
-      const longest = Math.max(...l.lengths, l.flexible ? l.flexible.max : 0);
+      const alts = l.alternatives || [];
+      const longest = Math.max(...l.lengths, l.flexible ? l.flexible.max : 0, ...alts.flat());
+      if (alts.length && new Set(alts.map((a) => a.reduce((x, y) => x + y, 0))).size > 1) issues.push({ lvl: 'warn', msg: `${who}: the alternative distributions add up to different numbers of periods (${alts.map((a) => a.reduce((x, y) => x + y, 0)).join(' / ')}).` });
+      if (l.dayMax) {
+        if (longest > l.dayMax) issues.push({ lvl: 'err', msg: `${who} has a block of ${longest} periods but max ${l.dayMax} periods/day.` });
+        else if (periodsOf(l) > l.dayMax * D) issues.push({ lvl: 'err', msg: `${who} has ${periodsOf(l)} periods but max ${l.dayMax}/day over ${D} days holds only ${l.dayMax * D}.` });
+        if (l.dayMin && l.dayMin > l.dayMax) issues.push({ lvl: 'warn', msg: `${who}: min periods/day (${l.dayMin}) is above max (${l.dayMax}).` });
+      }
       if (longest > perDay && !flagged(/session length/, [l.id])) issues.push({ lvl: 'err', msg: `${who} has a block of ${longest} periods but a day has only ${perDay} teaching periods.` });
       else if (!l.allowBreakInside && longest > 1 && longest > maxRun) issues.push({ lvl: 'err', msg: `${who} needs ${longest} consecutive teaching periods but no day has that many in a row — tick “Break inside” or change the period types on the Week tab.` });
       const tag = (l.parallel || '').trim().toLowerCase();
@@ -747,12 +760,12 @@
         if (!o) { issues.push({ lvl: 'err', msg: `${who} has a relation (${RELATION_TYPES[r.type]}) to a lesson row that no longer exists.` }); continue; }
         if (l.id > o.id) continue; // each pair once
         const pair = `${who} and ${describeLesson(s, o.id)}`; const m = sessionsOf(o);
-        if (r.type === 'consecutive' && !l.flexible && !o.flexible && n !== m && !flagged(/consecutive/, [l.id, o.id])) issues.push({ lvl: 'err', msg: `${pair} must be in consecutive periods but have ${n} and ${m} sessions — consecutive rows need the same number of sessions.` });
+        if (r.type === 'consecutive' && !l.flexible && !o.flexible && !(l.alternatives || []).length && !(o.alternatives || []).length && n !== m && !flagged(/consecutive/, [l.id, o.id])) issues.push({ lvl: 'err', msg: `${pair} must be in consecutive periods but have ${n} and ${m} sessions — consecutive rows need the same number of sessions.` });
         if ((r.type === 'differentDays' || (r.type === 'daysApart' && r.min >= 1)) && n + m > D) issues.push({ lvl: 'err', msg: `${pair} must be on different days but have ${n} + ${m} sessions and the week has only ${D} days.` });
         if (r.type === 'daysApart' && r.max && r.max < r.min) issues.push({ lvl: 'err', msg: `${pair}: days apart max (${r.max}) is below min (${r.min}).` });
       }
     });
-    const signature = (l) => (l.flexible ? `flexible ${l.flexible.total} (${l.flexible.min}–${l.flexible.max})` : lengthsText([...l.lengths].sort((a, b) => b - a)));
+    const signature = (l) => (l.flexible ? `flexible ${l.flexible.total} (${l.flexible.min}–${l.flexible.max})` : (l.alternatives || []).length ? `one of ${l.alternatives.map((a) => lengthsText([...a].sort((x, y) => y - x))).sort().join(' | ')}` : lengthsText([...l.lengths].sort((a, b) => b - a)));
     for (const tag in byTag) {
       const rows = byTag[tag];
       if (new Set(rows.map(signature)).size > 1 && !flagged(/length|distribution/, rows.map((l) => l.id))) issues.push({ lvl: 'err', msg: `${rows.map((l) => describeLesson(s, l.id)).join(' & ')} are in parallel group “${byTag[tag][0].parallel.trim()}” but have different distributions (${rows.map(signature).join(' vs ')}).` });

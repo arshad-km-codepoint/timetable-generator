@@ -385,6 +385,11 @@ const ROW_OPTIONS = [
 // The distribution cell of a row: the session lengths, or — for a flexible row — the engine's
 // current choice when a timetable exists, else the flexible spec. `eng` is null without a timetable.
 function distributionCell(l, eng) {
+  if ((l.alternatives || []).length) {
+    const chosen = eng && eng.groupLengths && eng.lessonGroup && eng.groupLengths[eng.lessonGroup[l.id]];
+    const list = l.alternatives.map(lengthsText).join(' | ');
+    return `<input value="${esc(chosen ? `${lengthsText(chosen)} (one of ${list})` : `one of: ${list}`)}" readonly class="dist flex" aria-label="Distribution" title="The engine picks one of these distributions for each attempt">`;
+  }
   if (!l.flexible) return `<input data-f="lengths" value="${esc(lengthsText(l.lengths))}" placeholder="e.g. 2 2 1" class="dist" aria-label="Distribution" title="Session lengths, e.g. “2 2 1” = two doubles and a single">`;
   const f = l.flexible;
   const chosen = eng && eng.groupLengths && eng.lessonGroup && eng.groupLengths[eng.lessonGroup[l.id]];
@@ -421,7 +426,7 @@ function renderLessons(root) {
   };
   const opt = (arr, sel, empty) => `${empty ? `<option value="">${empty}</option>` : ''}${arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
   const groups = [...new Set(state.lessons.map((l) => (l.parallel || '').trim()).filter(Boolean))];
-  const eng = state.lessons.some((l) => l.flexible) && state.timetable.placements.length ? currentEngine() : null;
+  const eng = state.lessons.some((l) => l.flexible || (l.alternatives || []).length) && state.timetable.placements.length ? currentEngine() : null;
   const nOpts = (l) => ROW_OPTIONS.filter(([k]) => l[k]).length;
   p.insertAdjacentHTML('beforeend', list.length ? `<datalist id="parallelGroups">${groups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
     <div class="table-wrap"><table class="edit lessons"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th title="Preferred room, or any room of a type">Room</th><th title="Fallback: any room of this type">Alternatives</th><th title="Length of every weekly session, e.g. 2 2 1">Distribution</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th><th></th><th></th><th></th></tr></thead><tbody>
@@ -431,7 +436,7 @@ function renderLessons(root) {
       <td><button class="ghost" data-classes>${(l.classIds || []).map((id) => `<span class="chip">${esc(find('classes', id)?.name)}</span>`).join('') || '— choose —'}</button></td>
       <td><select data-f="room" aria-label="Room">${roomOptions(l.room, l)}</select></td>
       <td><select data-f="roomAlt" aria-label="Alternative rooms" ${l.room.startsWith('type:') ? 'disabled title="Room is already any room of a type"' : ''}>${roomAltOptions(l.roomAlt)}</select></td>
-      <td><div class="row dist-cell">${distributionCell(l, eng)}<small class="hint" title="Periods per week">= ${periodsOf(l)}</small><button class="ghost small ${l.flexible ? 'on' : ''}" data-flex title="Let the engine choose the distribution">Flexible</button></div></td>
+      <td><div class="row dist-cell">${distributionCell(l, eng)}<small class="hint" title="Periods per week">= ${periodsOf(l)}</small><button class="ghost small ${l.flexible || (l.alternatives || []).length ? 'on' : ''}" data-flex title="Let the engine choose the distribution: any split into blocks, or one of up to four alternatives">Flexible</button></div></td>
       <td><input data-f="parallel" list="parallelGroups" value="${esc(l.parallel || '')}" placeholder="—" style="max-width:140px" aria-label="Parallel group"></td>
       <td><button class="ghost small" data-options>Options${nOpts(l) ? ` (${nOpts(l)})` : ''}</button></td>
       <td><button class="ghost small" data-relations>Relations (${(l.relations || []).length})</button></td>
@@ -480,46 +485,81 @@ function renderLessons(root) {
   });
 }
 
-// Flexible distribution: the engine chooses blocks of min..max periods adding up to total.
+// Distribution modes of a lesson row: fixed (the “Distribution” text), flexible (the engine splits a
+// total into blocks of min..max periods) or one of up to four alternative distributions.
 function editFlexible(l) {
   const max = teachingPeriods(state);
   const f = l.flexible || { total: periodsOf(l), min: Math.min(...l.lengths), max: Math.max(...l.lengths) };
-  openModal(`Flexible distribution — ${describeLesson(state, l.id)}`, `
-    <label class="row" style="gap:6px;margin-bottom:10px"><input type="checkbox" id="flexOn" ${l.flexible ? 'checked' : ''}> Let the engine choose the distribution</label>
+  const alts = (l.alternatives || []).map(lengthsText);
+  while (alts.length < 4) alts.push('');
+  const mode0 = l.flexible ? 'flex' : (l.alternatives || []).length ? 'alts' : 'fixed';
+  openModal(`Distribution — ${describeLesson(state, l.id)}`, `
+    <div class="opts">
+      <label><input type="radio" name="distMode" value="fixed" ${mode0 === 'fixed' ? 'checked' : ''}> <span>Fixed<small class="hint">The sessions are exactly the lengths typed in the Distribution column.</small></span></label>
+      <label><input type="radio" name="distMode" value="flex" ${mode0 === 'flex' ? 'checked' : ''}> <span>Engine chooses the split<small class="hint">A total number of periods split into blocks of a minimum to a maximum length.</small></span></label>
+      <label><input type="radio" name="distMode" value="alts" ${mode0 === 'alts' ? 'checked' : ''}> <span>One of these distributions<small class="hint">Two to four alternatives, e.g. “2 2” or “3 1”; the engine picks one for each attempt.</small></span></label>
+    </div>
     <div class="form-grid" id="flexFields">
       <label>Periods per week <input type="number" id="flexTotal" min="1" max="${max * D()}" value="${f.total}"></label>
       <label>Shortest block <input type="number" id="flexMin" min="1" max="${max}" value="${f.min}"></label>
       <label>Longest block <input type="number" id="flexMax" min="1" max="${max}" value="${f.max}"></label>
     </div>
+    <div class="form-grid" id="altFields">${alts.map((a, i) => `<label>Alternative ${i + 1} <input id="alt${i}" value="${esc(a)}" placeholder="${i < 2 ? 'e.g. 2 2' : 'optional'}" aria-label="Alternative ${i + 1}"></label>`).join('')}</div>
     <p class="hint" id="flexHint"></p>`, (v) => {
     if (v !== 'save') return;
-    const on = $('#flexOn').checked;
-    if (!on) { l.flexible = null; changed(); render(); return; }
-    const spec = { total: Number($('#flexTotal').value), min: Number($('#flexMin').value), max: Number($('#flexMax').value) };
-    l.flexible = spec;
-    // Keep `lengths` as one valid split so session and period counts stay meaningful.
-    l.lengths = partition(spec.total, spec.min, spec.max);
+    const mode = $('input[name="distMode"]:checked').value;
+    if (mode === 'fixed') { l.flexible = null; l.alternatives = []; }
+    else if (mode === 'flex') {
+      const spec = { total: Number($('#flexTotal').value), min: Number($('#flexMin').value), max: Number($('#flexMax').value) };
+      l.flexible = spec; l.alternatives = [];
+      // Keep `lengths` as one valid split so session and period counts stay meaningful.
+      l.lengths = partition(spec.total, spec.min, spec.max);
+    } else {
+      l.alternatives = parseAlts(); l.flexible = null; l.lengths = l.alternatives[0].slice();
+    }
     changed(); render();
   }, '<button value="cancel" class="ghost">Cancel</button><button value="save">Save</button>');
+  const parseAlts = () => [0, 1, 2, 3].map((i) => $(`#alt${i}`).value.trim()).filter(Boolean).map((t) => parseLengths(t, max));
   const refresh = () => {
-    const on = $('#flexOn').checked;
-    $('#flexFields').querySelectorAll('input').forEach((i) => { i.disabled = !on; });
-    const total = Number($('#flexTotal').value), mn = Number($('#flexMin').value), mx = Number($('#flexMax').value);
-    const ok = !on || (Number.isInteger(total) && Number.isInteger(mn) && Number.isInteger(mx) && mn >= 1 && mx <= max && canPartition(total, mn, mx));
-    $('#flexHint').textContent = !on ? `Off — the row keeps its distribution “${lengthsText(l.lengths)}”.`
-      : ok ? `For example ${lengthsText(partition(total, mn, mx))}; the engine may pick any split into blocks of ${mn}–${mx} periods.`
+    const mode = $('input[name="distMode"]:checked').value;
+    $('#flexFields').querySelectorAll('input').forEach((i) => { i.disabled = mode !== 'flex'; });
+    $('#altFields').querySelectorAll('input').forEach((i) => { i.disabled = mode !== 'alts'; });
+    let ok = true; let msg = '';
+    if (mode === 'fixed') msg = `The row keeps its distribution “${lengthsText(l.lengths)}”.`;
+    else if (mode === 'flex') {
+      const total = Number($('#flexTotal').value), mn = Number($('#flexMin').value), mx = Number($('#flexMax').value);
+      ok = Number.isInteger(total) && Number.isInteger(mn) && Number.isInteger(mx) && mn >= 1 && mx <= max && canPartition(total, mn, mx);
+      msg = ok ? `For example ${lengthsText(partition(total, mn, mx))}; the engine may pick any split into blocks of ${mn}–${mx} periods.`
         : `${total || 0} periods cannot be split into blocks of ${mn || '?'}–${mx || '?'} periods (blocks of 1 to ${max}).`;
-    $('#flexHint').style.color = ok ? '' : 'var(--danger)';
+    } else {
+      const raw = [0, 1, 2, 3].map((i) => $(`#alt${i}`).value.trim()).filter(Boolean); const parsed = parseAlts();
+      ok = raw.length >= 2 && parsed.every(Boolean);
+      const sums = new Set(parsed.filter(Boolean).map((a) => a.reduce((x, y) => x + y, 0)));
+      msg = raw.length < 2 ? 'Give at least two alternatives.' : !parsed.every(Boolean) ? `Each alternative lists whole-number lengths from 1 to ${max}, e.g. “2 2 1”.`
+        : sums.size > 1 ? `Note: the alternatives add up to different numbers of periods (${[...sums].join(' / ')}).` : `The engine will pick one of ${raw.length} distributions for each attempt.`;
+    }
+    $('#flexHint').textContent = msg; $('#flexHint').style.color = ok ? '' : 'var(--danger)';
     return ok;
   };
   refresh();
   $('#modalContent').onchange = refresh;
-  $('#modalForm').onsubmit = (ev) => { if (ev.submitter?.value === 'save' && !refresh()) { ev.preventDefault(); toast('Fix the flexible distribution first, or cancel.'); } };
+  $('#modalContent').oninput = refresh;
+  $('#modalForm').onsubmit = (ev) => { if (ev.submitter?.value === 'save' && !refresh()) { ev.preventDefault(); toast('Fix the distribution first, or cancel.'); } };
 }
 
 function editRowOptions(l) {
-  openModal(`Options — ${describeLesson(state, l.id)}`, `<div class="opts">${ROW_OPTIONS.map(([k, label, hint]) => `<label><input type="checkbox" data-opt="${k}" ${l[k] ? 'checked' : ''}> <span>${label}<small class="hint">${hint}</small></span></label>`).join('')}</div>`, () => {
+  const max = teachingPeriods(state);
+  openModal(`Options — ${describeLesson(state, l.id)}`, `<div class="opts">${ROW_OPTIONS.map(([k, label, hint]) => `<label><input type="checkbox" data-opt="${k}" ${l[k] ? 'checked' : ''}> <span>${label}<small class="hint">${hint}</small></span></label>`).join('')}</div>
+    <h4 style="margin:12px 0 4px">Per day</h4>
+    <div class="form-grid">
+      <label>Max periods of this row per day <input type="number" id="optDayMax" min="0" max="${max}" value="${l.dayMax || ''}" placeholder="—"></label>
+      <label>Min periods on a day it is used <input type="number" id="optDayMin" min="0" max="${max}" value="${l.dayMin || ''}" placeholder="—"></label>
+      <label>Several sessions on one day <select id="optDayBlocks"><option value="">anywhere</option><option value="together" ${l.dayBlocks === 'together' ? 'selected' : ''}>next to each other</option><option value="apart" ${l.dayBlocks === 'apart' ? 'selected' : ''}>never next to each other</option></select></label>
+    </div>
+    <p class="hint">Max is a hard limit. Min is a preference (weighted by “Day below the minimum periods…”). “Next to each other” allows at most two sessions of the row on a day and puts them side by side; “never next to each other” keeps a day’s sessions apart.</p>`, () => {
     $('#modalContent').querySelectorAll('input[data-opt]').forEach((i) => { l[i.dataset.opt] = i.checked; });
+    l.dayMax = Math.max(0, Math.floor(Number($('#optDayMax').value)) || 0); l.dayMin = Math.max(0, Math.floor(Number($('#optDayMin').value)) || 0);
+    l.dayBlocks = $('#optDayBlocks').value;
     changed(); render();
   });
 }
@@ -570,7 +610,7 @@ function editRelations(l) {
 function pinButton(kind, x) {
   const n = pinSessions(state, kind, x.id).length;
   const pinned = state.pins.filter((p) => p.kind === kind && p.id === x.id).length;
-  if (!n) return `<button class="ghost small" disabled title="${kind === 'lesson' && x.flexible ? 'Flexible rows cannot be pinned — give the row a fixed distribution first' : 'Nothing to pin'}">📌 —</button>`;
+  if (!n) return `<button class="ghost small" disabled title="${kind === 'lesson' && (x.flexible || (x.alternatives || []).length) ? 'Rows whose distribution the engine chooses cannot be pinned — give the row a fixed distribution first' : 'Nothing to pin'}">📌 —</button>`;
   return `<button class="ghost small ${pinned ? 'on' : ''}" data-pins title="Fix sessions at a day and period before generating">📌 Pins${pinned ? ` (${pinned})` : ''}</button>`;
 }
 function editPins(kind, id) {
@@ -978,7 +1018,7 @@ const pinnedHere = (e, u) => e.pos[u.i] && pinSlots(e).get(u.i) === e.pos[u.i].s
 // What a unit can be pinned as in the planner, or null (duties and flexible rows have no pins).
 function pinTarget(u) {
   const part = u.parts[0];
-  if (u.kind === 'lesson') return find('lessons', part.lessonId)?.flexible ? null : { kind: 'lesson', id: part.lessonId };
+  if (u.kind === 'lesson') { const row = find('lessons', part.lessonId); return row?.flexible || (row?.alternatives || []).length ? null : { kind: 'lesson', id: part.lessonId }; }
   if (u.kind === 'meeting') return { kind: 'meeting', id: part.ref };
   if (u.kind === 'activity') return { kind: 'activity', id: part.ref };
   return null;

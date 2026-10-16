@@ -808,6 +808,38 @@ check('(v) relations: before/after and order mirror between the rows, break-divi
   eq([rel(a), rel(b)], [[{ type: 'consecutive', lessonId: b.id, order: 'first', breaks: false }], [{ type: 'consecutive', lessonId: a.id, order: 'second', breaks: false }]], 'rows that disagree: the earlier row wins and is mirrored (order normalised, flag coerced)');
   assert.ok(M.RELATION_TYPES.before && M.RELATION_TYPES.after);
 });
+check('(w) alternatives and row day limits: migrate, pinning, validation', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  const l = add.lesson(s, subj, t, [c], 4, 1, { alternatives: [[2, 2], [3, 1], 'x', [9], [1, 1, 1, 1], [4]], dayMax: '2.9', dayMin: -1, dayBlocks: 'sideways' });
+  M.migrate(s);
+  eq(l.alternatives, [[2, 2], [3, 1], [9], [1, 1, 1, 1]], 'well-formed alternatives only (a block longer than the day is for validation), at most four');
+  eq([l.lengths, l.dayMax, l.dayMin, l.dayBlocks], [[2, 2], 2, 0, ''], 'lengths mirrors the first alternative; limits are normalised');
+  l.alternatives = [[2, 2]]; M.migrate(s);
+  eq(l.alternatives, [], 'one alternative is not a choice');
+  l.alternatives = [[2, 2], [3, 1]]; l.flexible = { total: 4, min: 1, max: 2 }; M.migrate(s);
+  eq(l.alternatives, [], 'flexible wins over alternatives');
+  l.flexible = null; l.alternatives = [[2, 2], [3, 1]]; M.migrate(s);
+  eq(M.pinSessions(s, 'lesson', l.id), [], 'rows whose distribution the engine chooses cannot be pinned');
+  l.alternatives = []; l.dayMax = 0; M.migrate(s);
+  eq(M.pinSessions(s, 'lesson', l.id), [2, 2]);
+  // Validation
+  l.alternatives = [[2, 2], [2, 1]]; l.lengths = [2, 2];
+  assert.ok(hasMsg(s, /warn: .*the alternative distributions add up to different numbers of periods \(4 \/ 3\)/), msgs(s).join('\n'));
+  l.alternatives = []; l.dayMax = 1;
+  assert.ok(hasMsg(s, /err: .*has a block of 2 periods but max 1 periods\/day/), msgs(s).join('\n'));
+  l.lengths = [1, 1, 1, 1]; l.dayMax = 0; s.settings.days = ['a', 'b']; s.settings.dayKeys = ['', ''];
+  l.dayMax = 1;
+  assert.ok(hasMsg(s, /err: .*has 4 periods but max 1\/day over 2 days holds only 2/), msgs(s).join('\n'));
+  l.dayMax = 1; l.dayMin = 3;
+  assert.ok(hasMsg(s, /warn: .*min periods\/day \(3\) is above max \(1\)/), msgs(s).join('\n'));
+  // Parallel rows with the same alternatives agree; different ones do not.
+  const a = add.lesson(s, subj, add.teacher(s, 'U'), [c], 2, 1, { parallel: 'G', alternatives: [[2], [1, 1]] }), b = add.lesson(s, subj, add.teacher(s, 'V'), [c], 2, 1, { parallel: 'G', alternatives: [[1, 1], [2]] });
+  assert.ok(!hasMsg(s, /parallel group “G” but have different distributions/));
+  b.alternatives = [[1, 1], [2, 0]]; M.migrate(s);
+  b.alternatives = [[1, 1], [1, 2]];
+  assert.ok(hasMsg(s, /parallel group “G” but have different distributions/), msgs(s).join('\n'));
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
