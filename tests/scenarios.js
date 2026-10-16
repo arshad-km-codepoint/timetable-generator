@@ -215,6 +215,7 @@ function scenarioC() {
     const t = ct[i]; const grade = Math.floor(i / 3) + 1;
     // homeroom: the class's own room, assigned once on the class
     c.homeroom = s.rooms[i].id;
+    c.tutorId = t.id; c.tutorDaily = true; c.tutorEarly = true;   // the class teacher is the tutor: with the class every day, first lesson of the day
     const home = 'home';
     // English: one double and four singles; Maths: 6 periods in blocks of 1–2, distribution chosen by the engine.
     add.lesson(s, S.eng, t, [c], 5, 1, home, '', false).lengths = [2, 1, 1, 1, 1];
@@ -558,7 +559,7 @@ for (const [key, s] of scenarios) {
   console.log(`\n=== ${s.settings.name}`);
   console.log(`  size: ${s.classes.length} classes, ${s.teachers.length} teachers, ${s.rooms.length} rooms, ${s.lessons.length} lesson rows, ${e0.units.length} units to place (${e0.problems.length} data problems)`);
   console.log(`  result: ${best.placed}/${best.total} placed in ${secs}s (2 attempts) · lesson sessions ${a.placedLessons}/${a.expectedLessons} (periods ${a.placedPeriods}/${a.expectedPeriods}) · unplaced by kind ${JSON.stringify(unplacedKinds)}`);
-  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}, over-long runs ${best.cost.consecutive}, presence over ${best.cost.presence}, last→first ${best.cost.exclusive}`);
+  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}, over-long runs ${best.cost.consecutive}, presence over ${best.cost.presence}, last→first ${best.cost.exclusive}, tutor wishes missed ${best.cost.tutor}`);
   console.log(`  AUDIT: ${a.overlaps} overlaps, ${a.errs.length} rule violations across ${a.cellsChecked} entity-periods${a.errs.length ? '\n   ' + [...new Set(a.errs)].slice(0, 8).join('\n   ') : ''}`);
   if (a.errs.length) allClean = false;
   // Room demand: a set's capacity may never be below what a real timetable already holds in it.

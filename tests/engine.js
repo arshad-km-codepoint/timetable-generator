@@ -1146,6 +1146,38 @@ check('class rules: max periods/day is hard (evicts, then refuses), strict no-ga
   assert.strictEqual(cost(), 4 * new Engine(f, []).W.dispreferred);
 });
 
+check('class tutor: daily / first / last lesson wishes are counted per class day and carried by the costs', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), tutor = add.teacher(s, 'Tutor'), other = add.teacher(s, 'Other');
+  const c = add.cls(s, 'A', { tutorId: tutor.id, tutorDaily: true, tutorEarly: true, tutorLate: true });
+  const lt = add.lesson(s, subj, tutor, [c], 0, 1, { lengths: [1, 1, 1] }), lo = add.lesson(s, subj, other, [c], 0, 1, { lengths: [1, 1, 1] });
+  // Monday: tutor first, other last → ok for daily and first, misses last. Tuesday: other only → misses all three. Wednesday: tutor first and last.
+  const e = new Engine(s, [pl(lt, 0, 0, 0, 1), pl(lo, 0, 0, 3, 1), pl(lo, 1, 1, 1, 1), pl(lt, 1, 2, 0, 1), pl(lt, 2, 2, 3, 1)]);
+  eq(e.tutorDay(c.id, 0), { daily: 0, early: 0, late: 1 });
+  eq(e.tutorDay(c.id, 1), { daily: 1, early: 1, late: 1 });
+  eq(e.tutorDay(c.id, 2), { daily: 0, early: 0, late: 0 });
+  assert.strictEqual(e.totalCost().tutor, 4);
+  const W = e.W;
+  assert.strictEqual(e.classDayCost(c.id, 1) - W.classGap * e.dayStats(e.occ['c' + c.id], 1).gaps, W.tutorDaily + 2 * W.tutorEnds);
+  // A day with no lessons at all costs nothing; wishes off cost nothing; an unknown tutor is ignored.
+  const none = new Engine(s, []);
+  eq(none.tutorDay(c.id, 0), { daily: 0, early: 0, late: 0 });
+  c.tutorDaily = c.tutorEarly = c.tutorLate = false;
+  assert.strictEqual(new Engine(s, e.placements()).totalCost().tutor, 0);
+  c.tutorDaily = true; c.tutorId = 'gone';
+  assert.strictEqual(new Engine(s, e.placements()).cRule[c.id].tutorRule, false);
+  // Parallel parts: a part taught by the tutor for the class counts.
+  c.tutorId = tutor.id;
+  // Over a solve the tutor ends up with the class every day when that is possible.
+  const s2 = school({ days: 4, periods: 4 }); s2.settings.weights = { tutorDaily: 8, late: 0 };
+  const sj = add.subject(s2), tu = add.teacher(s2, 'Tutor'), ot = add.teacher(s2, 'Other');
+  const c2 = add.cls(s2, 'A', { tutorId: tu.id, tutorDaily: true });
+  add.lesson(s2, sj, tu, [c2], 4, 1, { maxOnePerDay: false }); add.lesson(s2, sj, ot, [c2], 8, 1, { maxOnePerDay: false });
+  const r = solveAll(s2);
+  assert.strictEqual(r.placed, r.total);
+  assert.strictEqual(r.engine.totalCost().tutor, 0, 'the tutor teaches the class on each of the four days');
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

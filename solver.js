@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
@@ -73,7 +73,11 @@ class Engine {
     }
     // Class rules: daily cap (hard), strict no-gaps (heavy gap weight), free periods in ~ slots (4× cost).
     this.cRule = {};
-    for (const c of data.classes) this.cRule[c.id] = { max: Math.max(0, Math.floor(Number(c.maxPerDay)) || 0), strict: !!c.noGaps, force: !!c.forceFree };
+    for (const c of data.classes) {
+      const tutor = c.tutorId && data.teachers.some((t) => t.id === c.tutorId) ? c.tutorId : null;
+      this.cRule[c.id] = { max: Math.max(0, Math.floor(Number(c.maxPerDay)) || 0), strict: !!c.noGaps, force: !!c.forceFree, tutor, daily: !!(tutor && c.tutorDaily), early: !!(tutor && c.tutorEarly), late: !!(tutor && c.tutorLate) };
+      this.cRule[c.id].tutorRule = this.cRule[c.id].daily || this.cRule[c.id].early || this.cRule[c.id].late;
+    }
     this.tMax = {}; this.tMin = {};
     data.teachers.forEach((t) => { this.tMax[t.id] = Number(t.maxPerDay) || 0; this.tMin[t.id] = Number(t.minPerDay) || 0; });
     // Days a teacher could work (at least one teaching slot outside the general template and their
@@ -834,7 +838,28 @@ class Engine {
     return n;
   }
 
-  classDayCost(c, d) { return (this.cRule[c].strict ? this.W.classGapStrict : this.W.classGap) * this.dayStats(this.occ['c' + c], d).gaps; }
+  classDayCost(c, d) {
+    const r = this.cRule[c];
+    let cost = (r.strict ? this.W.classGapStrict : this.W.classGap) * this.dayStats(this.occ['c' + c], d).gaps;
+    if (r.tutorRule) { const t = this.tutorDay(c, d); cost += this.W.tutorDaily * t.daily + this.W.tutorEnds * (t.early + t.late); }
+    return cost;
+  }
+
+  // Tutor preferences of class c on day d (each 0 or 1): the tutor has no lesson with the class
+  // that day, does not teach its first lesson of the day, does not teach its last one.
+  tutorDay(c, d) {
+    const r = this.cRule[c]; const occ = this.occ['c' + c];
+    const by = (ui) => this.units[ui].parts.some((p) => p.teacher === r.tutor && p.classes.includes(c));
+    let first = -1, last = -1, taught = false;
+    for (let p = 0; p < this.P; p++) {
+      const k = d * this.P + p; const o = occ[k];
+      if (!this.teach[k] || o < 0) continue;
+      if (first < 0) first = o;
+      last = o; if (by(o)) taught = true;
+    }
+    if (first < 0) return { daily: 0, early: 0, late: 0 };
+    return { daily: r.daily && !taught ? 1 : 0, early: r.early && !by(first) ? 1 : 0, late: r.late && !by(last) ? 1 : 0 };
+  }
 
   sameDayCount(key, d) {
     let n = 0;
@@ -937,7 +962,7 @@ class Engine {
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
@@ -958,7 +983,10 @@ class Engine {
         st.teacherGaps += gaps;
         if (this.tMin[t] && n > 0 && n < this.tMin[t]) st.teacherMin++;
       }
-      for (const k in this.classes) { c += this.classDayCost(k, d); st.classGaps += this.dayStats(this.occ['c' + k], d).gaps; }
+      for (const k in this.classes) {
+        c += this.classDayCost(k, d); st.classGaps += this.dayStats(this.occ['c' + k], d).gaps;
+        if (this.cRule[k].tutorRule) { const t = this.tutorDay(k, d); st.tutor += t.daily + t.early + t.late; }
+      }
       for (const key in this.groupUnits) {
         const extra = Math.max(0, this.sameDayCount(key, d) - 1);
         st.sameDay += extra; c += this.W.sameDay * extra;

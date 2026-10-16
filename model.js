@@ -13,6 +13,7 @@
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
     activityMin: 'Activity day with fewer periods than its minimum (per period short)',
     roomSize: 'Lesson in a room that seats fewer than the class', classGapStrict: 'Free gap in the day of a “no gaps” class',
+    tutorDaily: 'Class day without a lesson from its tutor', tutorEnds: 'Class day whose first / last lesson is not the tutor’s',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
     balance: 'Teacher load uneven across days (per period off)', consecutive: 'Teacher over their max periods in a row (per period)',
     presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s last period then first period next day',
@@ -23,7 +24,7 @@
   };
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
-  const classDefaults = () => ({ homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false });
+  const classDefaults = () => ({ homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
   const teacherDefaults = () => ({ maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
@@ -166,7 +167,7 @@
     let n = 0;
     for (const gap of curriculumGaps(s, classId)) {
       if (gap.have) continue;
-      const l = newLesson(gap.subjectId, [classId], s);
+      const l = newLesson(gap.subjectId, [classId], s);   // the class tutor teaches it by default
       l.lengths = Array(gap.want).fill(1);
       l.maxOnePerDay = gap.want <= s.settings.days.length;
       s.lessons.push(l); n++;
@@ -183,7 +184,8 @@
   // A new row for one class that has a homeroom starts in it (pass the state `s` to enable that).
   function newLesson(subjectId, classIds = [], s = null) {
     const home = s && classIds.length === 1 ? homeroomOf(s, classIds) : '';
-    return { ...lessonDefaults(), id: uid(), subjectId, teacherId: '', classIds, room: home ? 'home' : '' };
+    const c = s && classIds.length === 1 ? find(s, 'classes', classIds[0]) : null;
+    return { ...lessonDefaults(), id: uid(), subjectId, teacherId: (c && c.tutorId) || '', classIds, room: home ? 'home' : '' };
   }
   // The room all of `classIds` share as homeroom, or '' (none set, unknown room, or they differ).
   function homeroomOf(s, classIds) {
@@ -289,6 +291,13 @@
   function removeRelation(s, aId, bId, type) {
     for (const [x, y] of [[aId, bId], [bId, aId]]) { const row = find(s, 'lessons', x); if (row) row.relations = (row.relations || []).filter((r) => !(r.type === type && r.lessonId === y)); }
   }
+  // Give the class tutor every row of the class's own that has no teacher yet. Returns how many.
+  function applyTutor(s, classId) {
+    const c = find(s, 'classes', classId); let n = 0;
+    if (!c || !c.tutorId) return 0;
+    for (const l of s.lessons) if ((l.classIds || []).length === 1 && l.classIds[0] === classId && !l.teacherId) { l.teacherId = c.tutorId; n++; }
+    return n;
+  }
   // Copy every lesson row that only `fromId` attends to class `toId`: same subject, teacher, room
   // ("Class homeroom" follows the new class), distribution and options. Relations between copied
   // rows are kept among the copies; a parallel group is renamed after the new class so the copies
@@ -335,6 +344,8 @@
       if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = '';
       for (const k of ['size', 'maxPerDay']) c[k] = Math.max(0, Math.floor(Number(c[k])) || 0);
       c.noGaps = !!c.noGaps; c.forceFree = !!c.forceFree;
+      if (!(s.teachers || []).some((t) => t.id === c.tutorId)) c.tutorId = '';
+      for (const k of ['tutorDaily', 'tutorEarly', 'tutorLate']) c[k] = !!c[k];
     });
     s.rooms.forEach((r) => { r.capacity = Math.max(0, Math.floor(Number(r.capacity)) || 0); });
     s.subjects = s.subjects || [];
@@ -616,6 +627,10 @@
       const n = w.c[c.id] || 0;
       if (n > availableSlots(s, c)) issues.push({ lvl: 'err', msg: `${c.name} has ${n} periods but only ${availableSlots(s, c)} free slots.` });
       else if (c.maxPerDay && n > c.maxPerDay * D) issues.push({ lvl: 'err', msg: `${c.name} has ${n} periods but max ${c.maxPerDay}/day allows only ${c.maxPerDay * D}.` });
+      if (c.tutorId && c.tutorDaily) {
+        const withTutor = s.lessons.filter((l) => l.teacherId === c.tutorId && (l.classIds || []).includes(c.id)).reduce((a, l) => a + periodsOf(l), 0);
+        if (withTutor < D) issues.push({ lvl: 'warn', msg: `${find(s, 'teachers', c.tutorId).name} teaches ${c.name} only ${withTutor} period(s) a week, fewer than the ${D} days — “tutor every day” cannot be met.` });
+      }
       else if (!n) issues.push({ lvl: 'warn', msg: `${c.name} has no lessons.` });
     });
     for (const r of e.roomDemand()) {
@@ -720,7 +735,7 @@
     uid, esc, PALETTE, teacherDefaults, classDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
     unitBlockReason, PIN_KINDS, pinSessions, pinName, pinAt, setPin, dropDeadPins, pinIssues,
-    copyLessons,
+    copyLessons, applyTutor,
     lessonDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, classSubjectPeriods, deriveCurriculum, curriculumGaps, curriculumSubjects, applyCurriculum, missingLessons, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
     dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
     periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,

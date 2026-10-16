@@ -670,7 +670,7 @@ check('(p) class rules migrate to numbers/booleans and a daily cap below the loa
   assert.ok(hasMsg(s, /err: A has 7 periods but max 3\/day allows only 6\./), msgs(s).join('\n'));
   c.maxPerDay = 4;
   assert.ok(!hasMsg(s, /max 4\/day/));
-  eq(Object.keys(M.classDefaults()).sort(), ['forceFree', 'gradeId', 'homeroom', 'maxPerDay', 'noGaps', 'size']);
+  eq(Object.keys(M.classDefaults()).sort(), ['forceFree', 'gradeId', 'homeroom', 'maxPerDay', 'noGaps', 'size', 'tutorDaily', 'tutorEarly', 'tutorId', 'tutorLate']);
 });
 check('(q) copyLessons clones a class’s own rows, keeps relations among the copies and renames parallel groups', () => {
   const s = school('tttt', 5);
@@ -703,6 +703,25 @@ check('(q) copyLessons clones a class’s own rows, keeps relations among the co
   eq(M.copyLessons(s, a.id, a.id), [], 'a class cannot copy to itself');
   eq(M.copyLessons(s, 'nope', c.id), [], 'unknown class');
   void g2;
+});
+check('(r) tutors: migrate, new rows and applyTutor start with the tutor, and a tutor who cannot teach every day is flagged', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), tutor = add.teacher(s, 'Tutor'), other = add.teacher(s, 'Other'); const c = add.cls(s, 'A'), d = add.cls(s, 'B');
+  c.tutorId = 'gone'; c.tutorDaily = 1;
+  M.migrate(s);
+  eq([c.tutorId, c.tutorDaily, c.tutorEarly], ['', true, false], 'unknown tutor cleared, flags normalised');
+  c.tutorId = tutor.id;
+  assert.strictEqual(M.newLesson(subj.id, [c.id], s).teacherId, tutor.id);
+  assert.strictEqual(M.newLesson(subj.id, [c.id]).teacherId, '', 'without state nothing changes');
+  assert.strictEqual(M.newLesson(subj.id, [c.id, d.id], s).teacherId, '', 'shared rows have no tutor default');
+  const blank = add.lesson(s, subj, { id: '' }, [c], 2, 1), taught = add.lesson(s, subj, other, [c], 2, 1), shared = add.lesson(s, subj, { id: '' }, [c, d], 1, 1);
+  assert.strictEqual(M.applyTutor(s, c.id), 1);
+  eq([blank.teacherId, taught.teacherId, shared.teacherId], [tutor.id, other.id, ''], 'only the class’s own rows without a teacher');
+  assert.strictEqual(M.applyTutor(s, d.id), 0, 'a class without a tutor');
+  // Tutor teaches 2 periods a week; "every day" needs five.
+  assert.ok(hasMsg(s, /warn: Tutor teaches A only 2 period\(s\) a week, fewer than the 5 days/), msgs(s).join('\n'));
+  blank.lengths = [1, 1, 1, 1, 1];
+  assert.ok(!hasMsg(s, /fewer than the 5 days/));
 });
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();

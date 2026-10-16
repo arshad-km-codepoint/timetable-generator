@@ -4,7 +4,7 @@
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
   unitBlockReason, pinSessions, pinName, pinAt, setPin, dropDeadPins,
-  classDefaults, copyLessons, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
+  classDefaults, copyLessons, applyTutor, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -166,7 +166,7 @@ function cleanupRefs() {
     l.classIds = (l.classIds || []).filter((id) => c.has(id));
     if (l.room && l.room !== 'home' && !l.room.startsWith('type:') && !r.has(l.room)) l.room = '';
   });
-  state.classes.forEach((c) => { if (c.homeroom && !r.has(c.homeroom)) c.homeroom = ''; });
+  state.classes.forEach((c) => { if (c.homeroom && !r.has(c.homeroom)) c.homeroom = ''; if (c.tutorId && !t.has(c.tutorId)) c.tutorId = ''; });
   state.grades.forEach((g) => { g.curriculum = g.curriculum.filter((e) => s.has(e.subjectId)); });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
   dropDeadRelations(state);
@@ -202,22 +202,27 @@ function renderClasses(root) {
     numCol('Size', 'size', 'Number of students. A lesson avoids rooms that seat fewer (when a room capacity is set).', 500),
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day for this class', teachingPeriods(state)),
     boolCol('No gaps', 'noGaps', 'Free periods inside this class’s day are penalised very heavily (strict no-gaps preference)'),
+    { label: '<span title="The class teacher / advisor. New lesson rows for the class start with this teacher; “Tutor lessons” fills rows that have none.">Tutor</span>',
+      input: (x) => `<select data-f="tutorId" aria-label="Tutor"><option value="">— none —</option>${state.teachers.map((t) => `<option value="${t.id}" ${x.tutorId === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` },
+    { label: '<span title="Preferences for the tutor: D = teaches the class every day, F = teaches its first lesson of the day, L = teaches its last lesson of the day">Tutor wants</span>',
+      input: (x) => `<span class="row" style="gap:6px;flex-wrap:nowrap">${[['tutorDaily', 'D', 'Tutor every day'], ['tutorEarly', 'F', 'Tutor first lesson of the day'], ['tutorLate', 'L', 'Tutor last lesson of the day']].map(([f, ch, t]) => `<label title="${t}"><input type="checkbox" data-f="${f}" ${x[f] ? 'checked' : ''} ${x.tutorId ? '' : 'disabled'} aria-label="${t}">${ch}</label>`).join('')}</span>` },
     boolCol('Free in ~', 'forceFree', 'Keep this class’s free periods in its non-preferred (~ / ~~) slots: lessons placed there cost four times as much'),
     { label: '<span title="The grade (year group) this class belongs to. Its curriculum lists the subjects and weekly periods the class should have — see the Grades tab.">Grade</span>',
       input: (x) => `<select data-f="gradeId" aria-label="Grade"><option value="">— none —</option>${state.grades.map((g) => `<option value="${g.id}" ${x.gradeId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` },
     { label: '<span title="The room this class normally sits in. Lessons set to “Class homeroom” use it, and follow it when it changes.">Homeroom</span>',
       input: (x) => `<select data-f="homeroom" aria-label="Homeroom"><option value="">— none —</option>${state.rooms.map((r) => `<option value="${r.id}" ${x.homeroom === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` }];
   cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults() });
-  cols.rerender = ['homeroom'];
+  cols.rerender = ['homeroom', 'tutorId'];
   const extra = {
     label: 'Lessons',
-    html: (x) => { const n = state.lessons.filter((l) => l.room === 'home' && (l.classIds || []).includes(x.id)).length; return `<button class="ghost small" data-home-apply ${x.homeroom ? '' : 'disabled'} title="Set the room of this class’s own lessons that have none (or ask for any room of the homeroom’s type) to “Class homeroom”">Use in lessons${n ? ` (${n} now)` : ''}</button> <button class="ghost small" data-copy-from ${state.classes.length > 1 ? '' : 'disabled'} title="Copy every lesson row of another class to this class">Copy lessons from…</button>`; },
+    html: (x) => { const n = state.lessons.filter((l) => l.room === 'home' && (l.classIds || []).includes(x.id)).length; return `<button class="ghost small" data-home-apply ${x.homeroom ? '' : 'disabled'} title="Set the room of this class’s own lessons that have none (or ask for any room of the homeroom’s type) to “Class homeroom”">Use in lessons${n ? ` (${n} now)` : ''}</button> <button class="ghost small" data-copy-from ${state.classes.length > 1 ? '' : 'disabled'} title="Copy every lesson row of another class to this class">Copy lessons from…</button> <button class="ghost small" data-tutor-apply ${x.tutorId ? '' : 'disabled'} title="Give the tutor every lesson row of this class that has no teacher">Tutor lessons</button>`; },
     acts: {
       homeApply: (x) => {
         const r = applyHomeroom(state, x.id);
         toast(r.none + r.type ? `${r.none + r.type} lesson row(s) of ${x.name} now use the homeroom${r.type ? ` (${r.type} keep “Any ${find('rooms', x.homeroom).type}” as a fallback)` : ''}.` : `No lesson row of ${x.name} needed changing.`, 4000);
         changed(); render();
       },
+      tutorApply: (x) => { const n = applyTutor(state, x.id); toast(n ? `${n} lesson row(s) of ${x.name} now taught by the tutor.` : `${x.name} has no lesson row without a teacher.`, 3500); changed(); render(); },
       copyFrom: (x) => {
         const others = state.classes.filter((c) => c.id !== x.id);
         openModal(`Copy lessons to ${x.name}`, `<p class="hint">Copies every lesson row that only the chosen class attends — subject, teacher, room, distribution and options — to ${esc(x.name)}. Teachers are copied too, so give each copy its own teacher where they would clash. Shared rows and pins are not copied.</p>
@@ -876,6 +881,7 @@ function renderStats(box) {
     <div class="stat"><b>${s.teacherMin}</b><span>teacher days below minimum</span></div>
     ${state.duties.length ? `<div class="stat"><b>${s.dutyUncovered}</b><span>duty periods uncovered</span></div>` : ''}
     ${s.ends ? `<div class="stat"><b>${s.ends}</b><span>lessons in a first/last period</span></div>` : ''}
+    ${s.tutor ? `<div class="stat"><b>${s.tutor}</b><span>class days missing a tutor wish</span></div>` : ''}
     ${s.roomTooSmall ? `<div class="stat"><b>${s.roomTooSmall}</b><span>lessons in a room that is too small</span></div>` : ''}
     ${s.roomPref ? `<div class="stat"><b>${s.roomPref}</b><span>lessons not in their preferred room</span></div>` : ''}
     ${s.roomSame ? `<div class="stat"><b>${s.roomSame}</b><span>room changes within one lesson</span></div>` : ''}
