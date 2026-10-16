@@ -82,9 +82,9 @@
     });
     s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults(), code: n, size: 26 }));
     s.rooms = [
-      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30, code: n, extKey: '' })),
+      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30, code: n, extKey: '', count: 1, dedicated: false })),
       ...[['Science Lab 1', 'Lab', 28], ['Science Lab 2', 'Lab', 28], ['Sports Hall', 'Gym', 60], ['Art Studio', 'Art', 28], ['Computer Lab', 'Computer', 28]]
-        .map(([name, type, capacity]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [], capacity, code: name, extKey: '' })),
+        .map(([name, type, capacity]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [], capacity, code: name, extKey: '', count: 1, dedicated: false })),
     ];
     const L = (subject, teacher, classes, sessions, length, room, parallel = '') => ({
       ...lessonDefaults(), id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), lengths: Array(sessions).fill(length), room, parallel,
@@ -107,7 +107,7 @@
     // Year-8 language elective: 8A+8B students split into French and Spanish at the same time.
     const y8 = s.classes.slice(4);
     s.lessons.push(L(S.fre, T.fr, y8, 2, 1, 'type:Classroom', 'Y8 languages'), L(S.spa, T.sp, y8, 2, 1, 'type:Classroom', 'Y8 languages'));
-    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: 'Staff Room', extKey: '' });
+    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: 'Staff Room', extKey: '', count: 1, dedicated: false });
     const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-7`, `${d}-8`]);
     s.meetings = [
       { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo },
@@ -353,7 +353,7 @@
       if (!(s.teachers || []).some((t) => t.id === c.tutorId)) c.tutorId = '';
       for (const k of ['tutorDaily', 'tutorEarly', 'tutorLate']) c[k] = !!c[k];
     });
-    s.rooms.forEach((r) => { r.capacity = Math.max(0, Math.floor(Number(r.capacity)) || 0); });
+    s.rooms.forEach((r) => { r.capacity = Math.max(0, Math.floor(Number(r.capacity)) || 0); r.count = Math.max(1, Math.floor(Number(r.count)) || 1); r.dedicated = !!r.dedicated; });
     s.subjects = s.subjects || [];
     s.departments = (Array.isArray(s.departments) ? s.departments : []).filter((d) => d && d.id).map((d) => ({ id: d.id, name: typeof d.name === 'string' ? d.name : 'Department' }));
     for (const list of [s.teachers, s.subjects]) for (const x of list) if (!s.departments.some((d) => d.id === x.departmentId)) x.departmentId = '';
@@ -393,6 +393,10 @@
     s.timetable.placements = (s.timetable.placements || []).map((p) => (p.rooms ? p : { ...p, rooms: [p.roomId || null] }));
     return s;
   }
+
+  // Rooms as the engine sees them: a record with count N > 1 becomes N instances (see expandRooms).
+  const roomList = (s) => TT().expandRooms(s.rooms || []);
+  const roomById = (s, id) => roomList(s).find((r) => r.id === id) || null;
 
   // ---------- Slots ----------
   const find = (s, list, id) => s[list].find((x) => x.id === id);
@@ -438,11 +442,12 @@
 
   // Plain-words name of a set of rooms: "Lab 1", "all 20 Classroom rooms", or a short list.
   function roomSetLabel(s, ids) {
-    const rooms = ids.map((id) => find(s, 'rooms', id)).filter(Boolean);
+    const all = roomList(s);
+    const rooms = ids.map((id) => all.find((r) => r.id === id)).filter(Boolean);
     if (rooms.length === 1) return { label: rooms[0].name, plural: false };
     const types = [...new Set(rooms.map((r) => r.type || ''))];
     if (types.length === 1) {
-      const ofType = s.rooms.filter((r) => (r.type || '') === types[0]).length;
+      const ofType = all.filter((r) => (r.type || '') === types[0] && !r.dedicated).length;
       const kind = types[0] || 'untyped';
       if (ofType === rooms.length) return { label: `all ${rooms.length} ${kind} rooms`, plural: true };
       const names = rooms.map((r) => r.name);
@@ -662,7 +667,7 @@
       if (!part.size || !part.roomCands || !part.roomCands.length || small.has(part.ref)) continue;
       if (part.roomCands.every((r) => e.tooSmall(part, r))) {
         small.add(part.ref);
-        const best = part.roomCands.map((r) => find(s, 'rooms', r)).sort((a, b) => b.capacity - a.capacity)[0];
+        const best = part.roomCands.map((r) => roomById(s, r)).sort((a, b) => b.capacity - a.capacity)[0];
         issues.push({ lvl: 'warn', msg: `${describeLesson(s, part.ref)} has ${part.size} students but ${part.roomCands.length > 1 ? `no room it can use seats that many (largest: ${best.name}, ${best.capacity})` : `${best.name} seats only ${best.capacity}`}.` });
       }
     }
@@ -724,7 +729,7 @@
       else if (!l.allowBreakInside && longest > 1 && longest > maxRun) issues.push({ lvl: 'err', msg: `${who} needs ${longest} consecutive teaching periods but no day has that many in a row — tick “Break inside” or change the period types on the Week tab.` });
       const tag = (l.parallel || '').trim().toLowerCase();
       if (tag) (byTag[tag] = byTag[tag] || []).push(l);
-      if (l.sameRoom && (l.room || '').startsWith('type:') && n > 1 && s.rooms.filter((r) => (r.type || '') === l.room.slice(5)).length < 2) issues.push({ lvl: 'warn', msg: `${who}: “Same room for all sessions” has no effect — there is only one ${l.room.slice(5)} room.` });
+      if (l.sameRoom && (l.room || '').startsWith('type:') && n > 1 && roomList(s).filter((r) => (r.type || '') === l.room.slice(5) && !r.dedicated).length < 2) issues.push({ lvl: 'warn', msg: `${who}: “Same room for all sessions” has no effect — there is only one ${l.room.slice(5)} room.` });
       if (l.roomAlt && !l.room) issues.push({ lvl: 'warn', msg: `${who} has alternative rooms but no room — treated as “Any ${l.roomAlt.slice(5)}”.` });
       for (const r of l.relations || []) {
         const o = find(s, 'lessons', r.lessonId);
@@ -755,6 +760,7 @@
   }
 
   window.Model = {
+    roomList, roomById,
     uid, esc, PALETTE, teacherDefaults, classDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
     unitBlockReason, PIN_KINDS, pinSessions, pinName, pinAt, setPin, dropDeadPins, pinIssues,

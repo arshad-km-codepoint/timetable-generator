@@ -1178,6 +1178,38 @@ check('class tutor: daily / first / last lesson wishes are counted per class day
   assert.strictEqual(r.engine.totalCost().tutor, 0, 'the tutor teaches the class on each of the four days');
 });
 
+check('anonymous rooms (count N) become N interchangeable instances; dedicated rooms stay out of "any <type>"', () => {
+  const s = school({ days: 1, periods: 3 });
+  const subj = add.subject(s), t1 = add.teacher(s, 'T1'), t2 = add.teacher(s, 'T2'), t3 = add.teacher(s, 'T3');
+  const gen = add.room(s, 'General', 'Classroom'); gen.count = 2; gen.capacity = 30;
+  const own = add.room(s, 'Mrs Lee’s room', 'Classroom'); own.dedicated = true;
+  eq(ctx.window.Timetable.expandRooms(s.rooms).map((r) => [r.id, r.name]), [[gen.id, 'General 1'], [`${gen.id}~2`, 'General 2'], [own.id, 'Mrs Lee’s room']]);
+  assert.strictEqual(ctx.window.Timetable.expandRooms(s.rooms)[1].capacity, 30, 'instances copy the record');
+  const l1 = add.lesson(s, subj, t1, [add.cls(s, 'A')], 1, 1, { room: 'type:Classroom' });
+  const l2 = add.lesson(s, subj, t2, [add.cls(s, 'B')], 1, 1, { room: 'type:Classroom' });
+  const l3 = add.lesson(s, subj, t3, [add.cls(s, 'C')], 1, 1, { room: 'type:Classroom' });
+  const e = new Engine(s, []);
+  eq(e.units[0].parts[0].roomCands, [gen.id, `${gen.id}~2`], 'any Classroom: the two general rooms, not the dedicated one');
+  // Three lessons at one time need three rooms; only two non-dedicated exist, so one cannot share the slot.
+  const pls = [pl(l1, 0, 0, 0, 1, [gen.id]), pl(l2, 0, 0, 0, 1, [`${gen.id}~2`]), pl(l3, 0, 0, 0, 1, [gen.id])];
+  const e2 = new Engine(s, pls);
+  assert.strictEqual(e2.pos.filter(Boolean).length, 2, 'the third booking of General 1 is refused');
+  // Naming the record asks for any instance; a pinned dedicated room is allowed by name.
+  l1.room = gen.id; l2.room = own.id;
+  const e3 = new Engine(s, []);
+  eq(e3.units[0].parts[0].roomCands, [gen.id, `${gen.id}~2`], 'the record by id = any of its instances');
+  assert.strictEqual(e3.units[0].parts[0].prefRoom, null, 'no favourite instance of an anonymous group');
+  eq(e3.units[1].parts[0].roomCands, [own.id]);
+  assert.strictEqual(e3.units[1].parts[0].prefRoom, own.id, 'a single named room is still preferred');
+  // Solving puts three simultaneous lessons into the two instances plus ... only two fit: the solver needs three slots.
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  assert.ok(new Set(r.placements.filter((p) => p.rooms[0] && p.rooms[0].startsWith(gen.id)).map((p) => `${p.day}-${p.period}-${p.rooms[0]}`)).size === r.placements.filter((p) => p.rooms[0] && p.rooms[0].startsWith(gen.id)).length, 'no instance double-booked');
+  // Demand and capacity count instances.
+  const d = new Engine(s, []).roomDemand().find((x) => x.rooms.length === 2);
+  assert.ok(d && d.capacity === 6, '2 instances × 3 periods');
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

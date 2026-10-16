@@ -128,7 +128,7 @@ function scenarioB() {
     eco: sub('Economics', 'ECO'), his: sub('History', 'HIS'), pol: sub('Political Science', 'POL'), geo: sub('Geography', 'GEO'),
     psy: sub('Psychology', 'PSY'), ped: sub('PE (elective)', 'PED'), ent: sub('Entrepreneurship', 'ENT'),
   };
-  for (let i = 1; i <= 10; i++) add.room(s, `Room ${200 + i}`, 'Classroom');
+  add.room(s, 'Classroom', 'Classroom').count = 10;   // ten identical unnamed classrooms, counted by number
   add.room(s, 'Physics Lab', 'PhysicsLab'); add.room(s, 'Chemistry Lab', 'ChemLab'); add.room(s, 'Biology Lab', 'BioLab');
   add.room(s, 'Computer Lab', 'ComputerLab'); add.room(s, 'Sports Hall', 'Sports'); add.room(s, 'Ground', 'Sports');
   const C = {};
@@ -265,7 +265,9 @@ function audit(s, placements, chosen = {}, checkPins = true) {
   const errs = []; const err = (m) => errs.push(m);
   const P = s.settings.periods.length, D = s.settings.days.length;
   const by = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
-  const L = by(s.lessons), T = by(s.teachers), C = by(s.classes), R = by(s.rooms), M = by(s.meetings), DU = by(s.duties), AC = by(s.activities || []);
+  // Rooms as instances: a record with count N stands for N identical rooms (id, id~2 … id~N), expanded here independently of the engine.
+  const R = by(s.rooms.flatMap((r) => (r.count > 1 ? Array.from({ length: r.count }, (_, i) => ({ ...r, id: i ? `${r.id}~${i + 1}` : r.id, base: r.id })) : [r])));
+  const L = by(s.lessons), T = by(s.teachers), C = by(s.classes), M = by(s.meetings), DU = by(s.duties), AC = by(s.activities || []);
   const grid = {}; // entity@slot -> Set(unitId)
   const book = (ent, d, p, unit) => { const k = `${ent}@${d}-${p}`; (grid[k] ||= new Set()).add(unit); };
   const seenUnits = new Set();
@@ -373,8 +375,8 @@ function audit(s, placements, chosen = {}, checkPins = true) {
       if (want) {
         if (!room) err(`missing room ${lid}`);
         else {
-          const prefOk = want.startsWith('type:') ? R[room]?.type === want.slice(5) : room === want;
-          const altOk = !!l.roomAlt && l.roomAlt.startsWith('type:') && R[room]?.type === l.roomAlt.slice(5);
+          const prefOk = want.startsWith('type:') ? R[room]?.type === want.slice(5) && !R[room].dedicated : (R[room]?.base || room) === want;
+          const altOk = !!l.roomAlt && l.roomAlt.startsWith('type:') && R[room]?.type === l.roomAlt.slice(5) && !R[room].dedicated;
           if (!prefOk && !altOk) err(`wrong room for ${lid}`);
           (roomsUsed[lid] ||= new Set()).add(room);
         }

@@ -4,7 +4,7 @@
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
   unitBlockReason, pinSessions, pinName, pinAt, setPin, dropDeadPins,
-  classDefaults, copyLessons, applyTutor, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
+  roomList, roomById, classDefaults, copyLessons, applyTutor, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -244,8 +244,10 @@ function renderClasses(root) {
 }
 
 function renderRooms(root) {
-  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'short'), keyCol(), textCol('Type', 'type', 'Classroom, Lab…'), numCol('Capacity', 'capacity', 'Seats. A lesson avoids a room that seats fewer than its classes have (when class sizes are set).', 999)];
-  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: '', extKey: '' });
+  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'short'), keyCol(), textCol('Type', 'type', 'Classroom, Lab…'), numCol('Capacity', 'capacity', 'Seats. A lesson avoids a room that seats fewer than its classes have (when class sizes are set).', 999),
+    numCol('Count', 'count', 'How many identical unnamed rooms this record stands for (e.g. 20 general classrooms). A lesson using the record may take any of them.', 99),
+    boolCol('Dedicated', 'dedicated', 'A dedicated room (a class’s or teacher’s own) is left out of “Any <type>”; lessons use it only when it is chosen by name or as a homeroom')];
+  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: '', extKey: '', count: 1, dedicated: false });
   entityEditor(root, { list: 'rooms', title: 'Rooms', hint: 'Rooms of the same type form a set of alternatives — a lesson asking for “Any Lab” gets whichever lab is free.', cols });
 }
 
@@ -363,7 +365,7 @@ function roomOptions(sel, lesson = null) {
   const home = lesson ? `<option value="home" ${sel === 'home' ? 'selected' : ''}>Class homeroom${homeName ? ` (${esc(homeName)})` : sel === 'home' ? ' (none set!)' : ''}</option>` : '';
   return `<option value="" ${!sel ? 'selected' : ''}>No room needed</option>${home}
     <optgroup label="Any room of type">${types.map((t) => `<option value="type:${esc(t)}" ${sel === 'type:' + t ? 'selected' : ''}>Any ${esc(t)}</option>`).join('')}</optgroup>
-    <optgroup label="Specific room">${state.rooms.map((r) => `<option value="${r.id}" ${sel === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`;
+    <optgroup label="Specific room">${state.rooms.map((r) => `<option value="${r.id}" ${sel === r.id ? 'selected' : ''}>${esc(r.name)}${r.count > 1 ? ` (any of ${r.count})` : ''}</option>`).join('')}</optgroup>`;
 }
 
 // "Any <type>" choices for the alternative room set of a lesson row.
@@ -946,6 +948,9 @@ function renderStats(box) {
 
 // ---------- Timetable views ----------
 const MODES = { class: 'classes', teacher: 'teachers', room: 'rooms', duty: 'duties' };
+// The things a timetable can be shown for: rooms are listed per instance (an anonymous room of 20 is 20 rooms).
+const entityList = (mode) => (MODES[mode] === 'rooms' ? roomList(state) : state[MODES[mode]]);
+const entityFind = (mode, id) => entityList(mode).find((x) => x.id === id);
 
 // Parts of a placed unit that belong to the viewed entity.
 function partsFor(e, u, mode, id) {
@@ -980,7 +985,7 @@ function blockHtml(e, u, mode, id) {
   const color = partInfo(parts[0]).color;
   const body = parts.map((p) => {
     const info = partInfo(p);
-    const room = p.room ? find('rooms', p.room)?.name : '';
+    const room = p.room ? roomById(state, p.room)?.name : '';
     if (p.kind !== 'lesson') {
       const meta = p.kind === 'meeting' ? [room, `${u.teachers.length} teacher(s)`] : p.kind === 'activity' ? ['Activity'] : ['On call'];
       return `<div class="s">${esc(info.title)}</div><div class="m">${meta.filter(Boolean).map(esc).join(' · ')}</div>`;
@@ -1062,7 +1067,7 @@ function gridLayout(e, mode, id) {
 
 function gridHtml(e, mode, id) {
   const st = state.settings;
-  const ent = find(MODES[mode], id);
+  const ent = entityFind(mode, id);
   const off = new Set(ent?.unavailable || []); const soft = new Set([...(ent?.dispreferred || []), ...(ent?.dispreferred2 || [])]); const gen = generalBlocked(state);
   const at = gridLayout(e, mode, id);
   let html = `<div class="table-wrap"><table class="tt"><thead><tr><th class="pcol">Period</th>${st.days.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>`;
@@ -1111,7 +1116,7 @@ function renderTimetable(root) {
   const p = panel(root, 'Timetables', 'Drag a lesson, meeting or duty to another cell to move it — the move is checked against every hard rule. Drag from the “Not placed” tray to add one back. Click it to lock it, change its room or unschedule it.');
   const e = currentEngine();
   const master = ui.ttMode === 'master';
-  const list = master ? [] : state[MODES[ui.ttMode]];
+  const list = master ? [] : entityList(ui.ttMode);
   if (!master && !list.some((x) => x.id === ui.ttEntity)) ui.ttEntity = list[0]?.id || null;
   const modes = ['class', 'teacher', 'room', ...(state.duties.length ? ['duty'] : []), 'master'];
   p.insertAdjacentHTML('beforeend', `<div class="tt-controls">
@@ -1201,7 +1206,7 @@ function lessonMenu(unitId) {
     const pref = lesson && lesson.roomAlt && lesson.room && !lesson.room.startsWith('type:') ? (lesson.room === 'home' ? homeroomOf(state, lesson.classIds) : lesson.room) : null;
     const opts = part.roomCands.map((r) => {
       const busy = e.roomConflicts(u.i, pos.s, u.parts.map((_, j) => (j === k ? r : null))).size > 0 || cells.some((c) => e.blocked['r' + r].has(c));
-      return `<option value="${r}" ${pos.rooms[k] === r ? 'selected' : ''} ${busy && pos.rooms[k] !== r ? 'disabled' : ''}>${esc(find('rooms', r)?.name)}${r === pref ? ' (preferred)' : ''}${busy && pos.rooms[k] !== r ? ' (busy)' : ''}</option>`;
+      return `<option value="${r}" ${pos.rooms[k] === r ? 'selected' : ''} ${busy && pos.rooms[k] !== r ? 'disabled' : ''}>${esc(roomById(state, r)?.name)}${r === pref ? ' (preferred)' : ''}${busy && pos.rooms[k] !== r ? ' (busy)' : ''}</option>`;
     }).join('');
     return `<label class="row" style="margin:6px 0">${esc(describePart(part))}: <select data-part="${k}">${opts}</select></label>`;
   }).join('');
@@ -1228,7 +1233,7 @@ function lessonMenu(unitId) {
 
 function exportCsv(e) {
   const st = state.settings;
-  const ent = find(MODES[ui.ttMode], ui.ttEntity); if (!ent) return;
+  const ent = entityFind(ui.ttMode, ui.ttEntity); if (!ent) return;
   const at = {};
   unitsFor(e, ui.ttMode, ent.id).forEach((u) => { for (const k of cellsOf(e, u)) at[k] = u; });
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -1238,7 +1243,7 @@ function exportCsv(e) {
     rows.push([pp.label, `${pp.start}-${pp.end}`, ...st.days.map((_, d) => {
       const u = at[d * e.P + p]; if (!u) return ty === 'teaching' ? '' : PERIOD_TYPES[ty];
       return partsFor(e, u, ui.ttMode, ent.id).map((part) => [partInfo(part).title, find('teachers', part.teacher)?.name,
-        part.classes.map((id) => find('classes', id)?.name).join('+'), part.room && find('rooms', part.room)?.name].filter(Boolean).join(' / ')).join(' | ');
+        part.classes.map((id) => find('classes', id)?.name).join('+'), part.room && roomById(state, part.room)?.name].filter(Boolean).join(' / ')).join(' | ');
     })].map(q).join(','));
   });
   download(`${ent.name}-timetable.csv`, rows.join('\r\n'), 'text/csv');
@@ -1247,14 +1252,14 @@ function exportCsv(e) {
 function allPagesHtml(e) {
   const title = esc(state.settings.name);
   if (ui.ttMode === 'master') return `<div class="print-page"><h2>${title} — all ${esc(ui.masterKind)}</h2>${masterHtml(e, ui.masterKind)}</div>`;
-  return state[MODES[ui.ttMode]].map((x) => `<div class="print-page"><h2>${title} — ${esc(x.name)}</h2>${gridFor(e, ui.ttMode, x.id)}</div>`).join('');
+  return entityList(ui.ttMode).map((x) => `<div class="print-page"><h2>${title} — ${esc(x.name)}</h2>${gridFor(e, ui.ttMode, x.id)}</div>`).join('');
 }
 
 function printGrids(ids) {
   const e = currentEngine();
   const title = esc(state.settings.name);
   $('#printArea').innerHTML = ids === null || ui.ttMode === 'master' ? allPagesHtml(e)
-    : ids.filter(Boolean).map((id) => `<div class="print-page"><h2>${title} — ${esc(find(MODES[ui.ttMode], id)?.name)}</h2>${gridFor(e, ui.ttMode, id)}</div>`).join('');
+    : ids.filter(Boolean).map((id) => `<div class="print-page"><h2>${title} — ${esc(entityFind(ui.ttMode, id)?.name)}</h2>${gridFor(e, ui.ttMode, id)}</div>`).join('');
   window.print();
 }
 

@@ -760,6 +760,31 @@ check('(t) codes and external keys: migrate defaults, days and periods carry key
   assert.ok(sample.classes.every((c) => c.code) && sample.rooms.every((r) => r.code), 'the sample has codes');
   eq(M.migrate(JSON.parse(JSON.stringify(sample))), sample);
 });
+check('(u) anonymous rooms: migrate, labels and demand count instances; dedicated rooms are not "any" rooms', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), c = add.cls(s, 'A'), d = add.cls(s, 'B'), t = add.teacher(s, 'T'), u = add.teacher(s, 'U');
+  const gen = addRoom(s, 'General'); gen.count = '3.9'; gen.dedicated = 0;
+  const own = addRoom(s, 'Own'); own.dedicated = true; delete own.count;
+  M.migrate(s);
+  eq([gen.count, gen.dedicated, own.count, own.dedicated], [3, false, 1, true]);
+  eq(M.roomList(s).map((r) => r.name), ['General 1', 'General 2', 'General 3', 'Own']);
+  assert.strictEqual(M.roomById(s, `${gen.id}~3`).name, 'General 3');
+  assert.strictEqual(M.roomById(s, 'nope'), null);
+  // "Any Classroom" = the three General instances (Own is dedicated): 3 × 20 periods = 60.
+  add.lesson(s, subj, t, [c], 20, 1, { room: 'type:Classroom', maxOnePerDay: false });
+  add.lesson(s, subj, u, [d], 17, 1, { room: 'type:Classroom', maxOnePerDay: false });
+  assert.ok(!hasMsg(s, /booked|usable/), 'the classes need 37 of 60 room-periods: ' + msgs(s).join('\n'));
+  const big = add.lesson(s, subj, add.teacher(s, 'V'), [add.cls(s, 'C')], 20, 1, { room: 'type:Classroom', maxOnePerDay: false });
+  assert.ok(hasMsg(s, /warn: All 3 Classroom rooms are 95% booked \(57 of 60 periods, 3 classes and meetings competing\)/), msgs(s).join('\n'));
+  big.lengths = Array(23).fill(1);
+  assert.ok(hasMsg(s, /warn: All 3 Classroom rooms are 100% booked \(60 of 60 periods/), msgs(s).join('\n'));
+  big.lengths = Array(24).fill(1);
+  assert.ok(hasMsg(s, /err: All 3 Classroom rooms are needed for 61 periods but have only 60 usable slots/), msgs(s).join('\n'));
+  // Naming the record asks for any instance, and a room that is only dedicated has no "any" set at all.
+  eq(M.roomList(s).filter((r) => !r.dedicated && r.type === 'Classroom').length, 3);
+  gen.dedicated = true;
+  assert.ok(hasMsg(s, /needs a room type that has no rooms/), msgs(s).join('\n'));
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

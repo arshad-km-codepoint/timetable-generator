@@ -13,8 +13,22 @@
 const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
+// A room record with count N > 1 stands for N identical unnamed rooms ("20 general classrooms"):
+// they become instances "<id>" (the first), "<id>~2" … "<id>~N", each with the template, capacity and
+// type of the record. A lesson asking for the record by id may use any instance.
+function expandRooms(rooms) {
+  const out = [];
+  for (const r of rooms || []) {
+    const n = Math.max(1, Math.floor(Number(r.count)) || 1);
+    if (n === 1) { out.push(r); continue; }
+    for (let i = 1; i <= n; i++) out.push({ ...r, id: i === 1 ? r.id : `${r.id}~${i}`, name: `${r.name} ${i}`, base: r.id, count: 1 });
+  }
+  return out;
+}
+
 class Engine {
   constructor(data, placements = []) {
+    data = { ...data, rooms: expandRooms(data.rooms) };
     const D = data.settings.days.length;
     const P = data.settings.periods.length;
     this.D = D; this.P = P; this.N = D * P;
@@ -148,7 +162,8 @@ class Engine {
             : lengths && lengths.some((n) => !Number.isInteger(n) || n < 1 || n > P) ? `has a session length outside 1–${P}`
               : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
         if (bad) { this.problems.push({ lessonIds: [l.id], msg: bad }); continue; }
-        const prefRoom = spec && !String(spec).startsWith('type:') && this.rooms[spec] ? spec : null;
+        // A preferred room is one named room; an anonymous group (count > 1) has no favourite instance.
+        const prefRoom = spec && !String(spec).startsWith('type:') && this.rooms[spec] && data.rooms.filter((r) => (r.base || r.id) === spec).length === 1 ? spec : null;
         const size = Math.round(classes.reduce((a, c) => a + (Number(this.classes[c].size) || 0) / (sharing[c] || 1), 0));
         parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, subject: l.subjectId, teacher: l.teacherId, classes, size, roomCands, prefRoom, sameRoom: !!l.sameRoom });
         rows.push({ l, lengths, flex });
@@ -268,7 +283,8 @@ class Engine {
       const base = this.baseConflicts(u.i, s);
       if (base === null || base.size) continue;
       let rooms = Array.isArray(pl.rooms) && pl.rooms.length === u.parts.length ? pl.rooms : null;
-      if (rooms && !this.roomsValid(u.i, s, rooms)) rooms = null;
+      // Saved rooms are kept only when they are valid and free; otherwise another free room is chosen.
+      if (rooms && (!this.roomsValid(u.i, s, rooms) || this.roomConflicts(u.i, s, rooms).size)) rooms = null;
       if (!rooms) { const pick = this.bestRooms(u.i, s, base); if (!pick || pick.conf.size) continue; rooms = pick.rooms; }
       this.place(u.i, s, rooms);
       this.locked[u.i] = !!pl.locked;
@@ -392,8 +408,10 @@ class Engine {
   // room (or rooms of its type) first, then the rooms of the alternative type `alt` ('type:X').
   roomCandidates(spec, rooms, alt = '') {
     if (!spec) return null;
-    const ofType = (type) => rooms.filter((r) => (r.type || '') === type).map((r) => r.id);
-    const out = spec.startsWith('type:') ? ofType(spec.slice(5)) : rooms.some((r) => r.id === spec) ? [spec] : [];
+    // Dedicated rooms (a class's or teacher's own) are left out of "any room of a type" sets; asking for one by name still works.
+    const ofType = (type) => rooms.filter((r) => (r.type || '') === type && !r.dedicated).map((r) => r.id);
+    const named = rooms.filter((r) => (r.base || r.id) === spec).map((r) => r.id);
+    const out = spec.startsWith('type:') ? ofType(spec.slice(5)) : named;
     if (alt && String(alt).startsWith('type:')) for (const r of ofType(String(alt).slice(5))) if (!out.includes(r)) out.push(r);
     return out;
   }
@@ -1199,4 +1217,4 @@ class Solver {
   }
 }
 
-window.Timetable = { Engine, Solver, DEFAULT_WEIGHTS };
+window.Timetable = { Engine, Solver, DEFAULT_WEIGHTS, expandRooms };
