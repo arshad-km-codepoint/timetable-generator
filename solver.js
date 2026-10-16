@@ -560,6 +560,39 @@ class Engine {
     return { rooms, conf };
   }
 
+  // Room demand per candidate set. Each distinct set of candidate rooms (a pinned room, "any Lab",
+  // a preferred room plus an alternative type) is checked together with every set nested inside
+  // it, because their lessons compete for the same rooms. demand = periods the contained sets ask
+  // for; capacity = room-periods in which the rooms are usable (teaching, outside the general
+  // template, room not ✕) and at least one class that uses them is available (any period when a
+  // meeting uses them); users = how many classes and meetings compete.
+  roomDemand() {
+    const sets = new Map();
+    for (const u of this.units) for (const part of u.parts) {
+      if (!part.roomCands || !part.roomCands.length) continue;
+      const rooms = [...new Set(part.roomCands)].sort(); const key = rooms.join(',');
+      if (!sets.has(key)) sets.set(key, { rooms, own: 0, users: new Set(), classes: new Set(), meeting: false });
+      const x = sets.get(key);
+      x.own += u.len;
+      for (const c of part.classes) { x.users.add('c' + c); x.classes.add(c); }
+      if (u.kind === 'meeting') { x.users.add('m' + part.ref); x.meeting = true; }
+    }
+    const all = [...sets.values()];
+    return all.map((a) => {
+      const inside = all.filter((b) => b.rooms.every((r) => a.rooms.includes(r)));
+      const users = new Set(), classes = new Set();
+      let demand = 0, meeting = false;
+      for (const b of inside) { demand += b.own; b.users.forEach((x) => users.add(x)); b.classes.forEach((c) => classes.add(c)); meeting = meeting || b.meeting; }
+      let capacity = 0;
+      for (let s = 0; s < this.N; s++) {
+        if (!this.teach[s] || this.general.has(s)) continue;
+        if (!meeting && classes.size && ![...classes].some((c) => !this.blocked['c' + c].has(s))) continue;
+        for (const r of a.rooms) if (!this.blocked['r' + r].has(s)) capacity++;
+      }
+      return { rooms: a.rooms, demand, capacity, users: users.size };
+    });
+  }
+
   // Teacher, classes and rooms are held for the whole span (a break skipped inside a
   // straddling double included); the service rota only for the duty's own cell.
   place(ui, s, rooms) {

@@ -487,6 +487,17 @@ for (const [key, s] of scenarios) {
   console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}, over-long runs ${best.cost.consecutive}, presence over ${best.cost.presence}, last→first ${best.cost.exclusive}`);
   console.log(`  AUDIT: ${a.overlaps} overlaps, ${a.errs.length} rule violations across ${a.cellsChecked} entity-periods${a.errs.length ? '\n   ' + [...new Set(a.errs)].slice(0, 8).join('\n   ') : ''}`);
   if (a.errs.length) allClean = false;
+  // Room demand: a set's capacity may never be below what a real timetable already holds in it.
+  const be = best.sv.e; const sets = be.roomDemand();
+  let tightest = null; const roomErrs = [];
+  for (const set of sets) {
+    let used = 0;
+    be.units.forEach((u, i) => { if (be.pos[i]) u.parts.forEach((part) => { if (part.roomCands && part.roomCands.length && part.roomCands.every((r) => set.rooms.includes(r))) used += u.len; }); });
+    if (used > set.capacity) roomErrs.push(`room set of ${set.rooms.length} holds ${used} placed periods but capacity says ${set.capacity}`);
+    if (set.users > 1 && set.capacity && (!tightest || set.demand / set.capacity > tightest.demand / tightest.capacity)) tightest = set;
+  }
+  console.log(`  room sets: ${sets.length}${tightest ? `, busiest ${tightest.demand}/${tightest.capacity} (${Math.round(tightest.demand / tightest.capacity * 100)}%, ${tightest.rooms.length} rooms, ${tightest.users} users)` : ''}${roomErrs.length ? '\n   ' + roomErrs.join('\n   ') : ''}`);
+  if (roomErrs.length) allClean = false;
   if (unplaced.length) console.log(`  not placed: ${[...new Set(unplaced.map((u) => u.key))].slice(0, 6).map((k) => {
     if (k.startsWith('m:')) return 'meeting ' + s.meetings.find((m) => m.id === k.slice(2)).name;
     if (k.startsWith('d:')) return 'duty hours of ' + s.teachers.find((t) => t.id === k.split(':')[2]).name;

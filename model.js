@@ -282,6 +282,22 @@
     return d.allowed.filter((k) => set.has(k)).length;
   }
 
+  // Plain-words name of a set of rooms: "Lab 1", "all 20 Classroom rooms", or a short list.
+  function roomSetLabel(s, ids) {
+    const rooms = ids.map((id) => find(s, 'rooms', id)).filter(Boolean);
+    if (rooms.length === 1) return { label: rooms[0].name, plural: false };
+    const types = [...new Set(rooms.map((r) => r.type || ''))];
+    if (types.length === 1) {
+      const ofType = s.rooms.filter((r) => (r.type || '') === types[0]).length;
+      const kind = types[0] || 'untyped';
+      if (ofType === rooms.length) return { label: `all ${rooms.length} ${kind} rooms`, plural: true };
+      const names = rooms.map((r) => r.name);
+      return { label: `${kind} rooms ${names.length > 3 ? `${names.slice(0, 3).join(', ')} … (${names.length} rooms)` : names.join(', ')}`, plural: true };
+    }
+    const names = rooms.map((r) => r.name);
+    return { label: names.length > 3 ? `${names.slice(0, 3).join(', ')} … (${names.length} rooms)` : names.join(', '), plural: true };
+  }
+
   // Per-teacher load in teaching periods (t: everything, tl: lessons only), per-class load (c),
   // and break-supervision periods (tb).
   function workload(s) {
@@ -389,15 +405,14 @@
       if (n > availableSlots(s, c)) issues.push({ lvl: 'err', msg: `${c.name} has ${n} periods but only ${availableSlots(s, c)} free slots.` });
       else if (!n) issues.push({ lvl: 'warn', msg: `${c.name} has no lessons.` });
     });
-    const need = {};
-    e.units.forEach((u) => u.parts.forEach((p) => { if (p.roomCands && p.roomCands.length) { const k = p.roomCands.join(','); need[k] = (need[k] || 0) + u.len; } }));
-    for (const k in need) {
-      const cap = k.split(',').reduce((a, id) => a + availableSlots(s, find(s, 'rooms', id)), 0);
-      const names = k.split(',').map((id) => find(s, 'rooms', id).name);
-      const label = names.length > 3 ? `${names.slice(0, 3).join(', ')} … (${names.length} rooms)` : names.join(', ');
-      if (need[k] > cap) issues.push({ lvl: 'err', msg: `Rooms ${label} are needed for ${need[k]} periods but have ${cap} slots.` });
-      // Near-full room sets leave no freedom to keep class days compact.
-      else if (need[k] > 0.9 * cap) issues.push({ lvl: 'warn', msg: `Rooms ${label} are ${Math.round(need[k] / cap * 100)}% booked (${need[k]} of ${cap} periods) — expect free periods inside class days. Add rooms or move some lessons to other room types.` });
+    for (const r of e.roomDemand()) {
+      const { label, plural } = roomSetLabel(s, r.rooms);
+      const [be, have] = plural ? ['are', 'have'] : ['is', 'has'];
+      const Label = label[0].toUpperCase() + label.slice(1);
+      if (r.demand > r.capacity) issues.push({ lvl: 'err', msg: `${Label} ${be} needed for ${r.demand} periods but ${have} only ${r.capacity} usable slots.` });
+      // Near-full room sets leave no freedom to keep class days compact — but only when several
+      // classes (or meetings) compete for them; one class filling its own homeroom is fine.
+      else if (r.users > 1 && r.demand > 0.9 * r.capacity) issues.push({ lvl: 'warn', msg: `${Label} ${be} ${Math.round(r.demand / r.capacity * 100)}% booked (${r.demand} of ${r.capacity} periods, ${r.users} classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.` });
     }
     const seen = new Set();
     e.units.forEach((u) => { if (!u.starts.length && !seen.has(u.key)) { seen.add(u.key); issues.push({ lvl: 'err', msg: `${describeUnit(s, u.id)} has no period where all its teachers and classes are available.` }); } });

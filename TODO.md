@@ -4,12 +4,12 @@ Open tasks from the code review of the solver-hardening and scenario commits (`c
 
 ## Room-capacity validation (`app.js`, `validate()`)
 
-- [ ] **Count only usable periods as room capacity.** Capacity is currently `days × periods − room.unavailable`, so periods in which no class can be scheduled (e.g. Saturday afternoon in scenario A) still count. With 12 classrooms scenario A computes 515/576 = 89% and the 90% warning never fires, although the real figure is 515/528 = 97%. Count a period only if at least one class is available in it.
-- [ ] **Count nested room sets together.** Demand is bucketed by the exact candidate-room list, so lessons pinned to "Lab 1" and lessons asking for "Any ScienceLab" (which contains Lab 1) are checked separately and an overbooked set can pass. Count a lesson against every room set that contains its candidate rooms.
-- [ ] **Only warn when several classes compete for the set.** A dedicated homeroom used 33/35 periods by one class triggers "expect free periods … add rooms" although nothing else competes for it.
-- [ ] **Name the room type in the message.** "Rooms Room 101, Room 102, Room 103 … (20 rooms)" drops the one fact needed to act; say "all 20 Classroom rooms".
-- [ ] **Move the room-demand maths into the engine** (e.g. `Engine.roomDemand()`) so `tests/scenarios.js`, which loads only `solver.js`, can assert the warning. The 89%-vs-97% bug above went unnoticed because the check has no automated test.
-- [ ] Look up each room once in that loop instead of twice (minor).
+- [x] **Count only usable periods as room capacity.** Capacity is currently `days × periods − room.unavailable`, so periods in which no class can be scheduled (e.g. Saturday afternoon in scenario A) still count. With 12 classrooms scenario A computes 515/576 = 89% and the 90% warning never fires, although the real figure is 515/528 = 97%. Count a period only if at least one class is available in it. (Done: a period counts when a class that uses the set is available, or a meeting uses it.)
+- [x] **Count nested room sets together.** Demand is bucketed by the exact candidate-room list, so lessons pinned to "Lab 1" and lessons asking for "Any ScienceLab" (which contains Lab 1) are checked separately and an overbooked set can pass. Count a lesson against every room set that contains its candidate rooms.
+- [x] **Only warn when several classes compete for the set.** A dedicated homeroom used 33/35 periods by one class triggers "expect free periods … add rooms" although nothing else competes for it.
+- [x] **Name the room type in the message.** "Rooms Room 101, Room 102, Room 103 … (20 rooms)" drops the one fact needed to act; say "all 20 Classroom rooms".
+- [x] **Move the room-demand maths into the engine** (e.g. `Engine.roomDemand()`) so `tests/scenarios.js`, which loads only `solver.js`, can assert the warning. The 89%-vs-97% bug above went unnoticed because the check has no automated test.
+- [x] Look up each room once in that loop instead of twice (minor).
 
 ## Tests (`tests/scenarios.js`)
 

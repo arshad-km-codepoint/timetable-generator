@@ -768,6 +768,31 @@ check('balance: periods off an even week over the days a teacher can work; carri
   assert.strictEqual(engine.totalCost().balance, 0, `teacher load per day ${[0, 1, 2].map((d) => engine.dayStats(engine.occ['t' + t2.id], d).n)}`);
 });
 
+check('roomDemand: nested sets, usable periods, general template, meetings and competing users', () => {
+  const s = school({ days: 2, periods: 4, blocked: ['1-3'] });
+  const subj = add.subject(s), a = add.cls(s, 'A', { unavailable: ['0-0'] }), b = add.cls(s, 'B', { unavailable: ['0-0', '1-2'] });
+  const l1 = add.room(s, 'Lab 1', 'Lab'), l2 = add.room(s, 'Lab 2', 'Lab'), hall = add.room(s, 'Hall', 'Sports');
+  l2.unavailable = ['0-1'];
+  const ta = add.teacher(s, 'TA'), tb = add.teacher(s, 'TB'), tc = add.teacher(s, 'TC');
+  add.lesson(s, subj, ta, [a], 3, 1, { room: l1.id });                   // pinned
+  add.lesson(s, subj, tb, [b], 0, 1, { room: 'type:Lab', lengths: [2, 1] }); // any Lab
+  add.lesson(s, subj, tc, [a], 2, 1, { room: hall.id });
+  const m = add.meeting(s, 'Staff', [ta, tb], { room: hall.id });
+  const r = new Engine(s, []).roomDemand();
+  assert.strictEqual(r.length, 3, 'sets {Lab 1}, {Lab 1, Lab 2}, {Hall}');
+  const one = r.find((x) => x.rooms.length === 1 && x.rooms[0] === l1.id), labs = r.find((x) => x.rooms.length === 2), h = r.find((x) => x.rooms[0] === hall.id);
+  // Lab 1 alone: its 3 periods, 1 class; usable = general-blocked 1-3 and class-A-away 0-0 removed → 6 slots.
+  eq([one.demand, one.users], [3, 1]);
+  assert.strictEqual(one.capacity, 6, '8 periods − 1-3 (template) − 0-0 (class A away) = 6');
+  // All labs: 3 + 3 nested lessons, classes A and B; Lab 2 also ✕ on 0-1 → 6 + 5; 0-0 is away for both, 1-2 only for B.
+  eq([labs.demand, labs.users], [6, 2]);
+  assert.strictEqual(labs.capacity, 6 + 5);
+  // Hall: class A's 2 periods plus the meeting (no classes): every non-template period counts, 7.
+  eq([h.demand, h.users], [2 + 1, 2]);
+  assert.strictEqual(h.capacity, 7);
+  assert.ok(m, 'meeting added');
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

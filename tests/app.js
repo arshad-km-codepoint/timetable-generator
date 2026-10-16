@@ -373,6 +373,46 @@ check('(g) validate: teacher week rules', () => {
   t.maxPresenceDay = 6; t.maxPresenceWeek = 3;
   assert.ok(hasMsg(s, /warn: .*presence\/day is above presence\/week/), msgs(s).join('\n'));
 });
+// ---------- (h) room demand ----------
+const addRoom = (s, name, type = 'Classroom') => { const x = { id: id('r'), name, type, unavailable: [], dispreferred: [] }; s.rooms.push(x); return x; };
+const rooms = (s) => msgs(s).filter((m) => /booked|usable slots/.test(m));
+check('(h) capacity counts only periods in which a class using the rooms is available', () => {
+  const s = school('tttt', 6);
+  const subj = add.subject(s), a = add.cls(s, 'A'), b = add.cls(s, 'B');
+  [a, b].forEach((c) => { c.unavailable = ['5-2', '5-3']; });   // half-day Saturday
+  addRoom(s, 'R1'); addRoom(s, 'R2');
+  for (const c of [a, b]) add.lesson(s, subj, add.teacher(s, 'T' + c.name), [c], 21, 1, { room: 'type:Classroom' });
+  // 2 rooms × (24 − 2 unused periods) = 44; 42 of 44 is 95%, but 42 of 48 would only be 88%.
+  eq(rooms(s), ['warn: All 2 Classroom rooms are 95% booked (42 of 44 periods, 2 classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.']);
+});
+check('(h) a lone class in its own dedicated room is never warned about', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), a = add.cls(s, 'A'); const r = addRoom(s, 'Home A');
+  add.lesson(s, subj, add.teacher(s, 'T'), [a], 19, 1, { room: r.id });
+  eq(rooms(s), []);
+  // ...but two classes sharing that room are.
+  const b = add.cls(s, 'B'); add.lesson(s, subj, add.teacher(s, 'U'), [b], 1, 1, { room: r.id });
+  eq(rooms(s), ['warn: Home A is 100% booked (20 of 20 periods, 2 classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.']);
+});
+check('(h) nested room sets are counted together: a pinned Lab and "any Lab" share the labs', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), a = add.cls(s, 'A'), b1 = add.cls(s, 'B1'), b2 = add.cls(s, 'B2');
+  const l1 = addRoom(s, 'Lab 1', 'Lab'); addRoom(s, 'Lab 2', 'Lab');
+  add.lesson(s, subj, add.teacher(s, 'TA'), [a], 19, 1, { room: l1.id });
+  add.lesson(s, subj, add.teacher(s, 'TB1'), [b1], 10, 1, { room: 'type:Lab' });
+  add.lesson(s, subj, add.teacher(s, 'TB2'), [b2], 9, 1, { room: 'type:Lab' });
+  // Pinned 19 + any-Lab 19 = 38 of 40 lab periods; each set looked at alone is fine (19/20, 19/40).
+  eq(rooms(s), ['warn: All 2 Lab rooms are 95% booked (38 of 40 periods, 3 classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.']);
+  s.lessons[0].lengths = Array(20).fill(1); s.lessons[1].lengths = Array(12).fill(1);
+  assert.ok(hasMsg(s, /err: All 2 Lab rooms are needed for 41 periods but have only 40 usable slots\./), rooms(s).join('\n'));
+});
+check('(h) a room set with no usable slot is an error naming the room', () => {
+  const s = school('tttt', 2);
+  const subj = add.subject(s), a = add.cls(s, 'A'); const r = addRoom(s, 'Hall', 'Sports');
+  r.unavailable = ['0-0', '0-1', '0-2', '0-3', '1-0', '1-1', '1-2', '1-3'];
+  add.lesson(s, subj, add.teacher(s, 'T'), [a], 1, 1, { room: r.id });
+  assert.ok(hasMsg(s, /err: Hall is needed for 1 periods but has only 0 usable slots\./), rooms(s).join('\n'));
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
