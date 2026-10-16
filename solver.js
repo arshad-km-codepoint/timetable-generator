@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
@@ -63,11 +63,12 @@ class Engine {
     this.classes = byId(data.classes);
     this.rooms = byId(data.rooms);
     this.subjects = byId(data.subjects);
-    this.blocked = {}; this.soft = {};
+    this.blocked = {}; this.soft = {}; this.soft2 = {}; // soft: non-preferred (~), soft2: strongly non-preferred (~~)
     for (const [kind, list] of [['t', data.teachers], ['c', data.classes], ['r', data.rooms], ['s', data.subjects]]) {
       for (const x of list) {
         this.blocked[kind + x.id] = slots(x.unavailable);
         this.soft[kind + x.id] = slots(x.dispreferred);
+        this.soft2[kind + x.id] = slots(x.dispreferred2);
       }
     }
     this.tMax = {}; this.tMin = {};
@@ -824,14 +825,14 @@ class Engine {
   unitCost(ui) {
     const u = this.units[ui]; const p = this.pos[ui];
     if (!p) return 0;
-    let soft = 0;
+    let soft = 0, soft2 = 0;
     for (const k of p.cells) {
-      for (const t of u.teachers) if (this.soft['t' + t].has(k)) soft++;
-      for (const c of u.classes) if (this.soft['c' + c].has(k)) soft++;
-      for (const sj of u.subjects) if (this.soft['s' + sj].has(k)) soft++;
-      for (const r of p.rooms) if (r && this.soft['r' + r].has(k)) soft++;
+      for (const t of u.teachers) { if (this.soft['t' + t].has(k)) soft++; if (this.soft2['t' + t].has(k)) soft2++; }
+      for (const c of u.classes) { if (this.soft['c' + c].has(k)) soft++; if (this.soft2['c' + c].has(k)) soft2++; }
+      for (const sj of u.subjects) { if (this.soft['s' + sj].has(k)) soft++; if (this.soft2['s' + sj].has(k)) soft2++; }
+      for (const r of p.rooms) if (r) { if (this.soft['r' + r].has(k)) soft++; if (this.soft2['r' + r].has(k)) soft2++; }
     }
-    return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft
+    return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft + this.W.dispreferred2 * soft2
       + this.W.roomPref * this.roomPrefCount(ui) + (u.ends && this.atDayEnd(p.cells) ? this.W.ends : 0);
   }
 
@@ -932,7 +933,8 @@ class Engine {
       st.roomPref += this.roomPrefCount(i);
       if (u.ends && this.atDayEnd(p.cells)) st.ends++;
       for (const k of p.cells) {
-        if (u.teachers.some((t) => this.soft['t' + t].has(k)) || u.classes.some((x) => this.soft['c' + x].has(k)) || u.subjects.some((x) => this.soft['s' + x].has(k)) || p.rooms.some((r) => r && this.soft['r' + r].has(k))) st.dispreferred++;
+        const any = (kind, id) => this.soft[kind + id].has(k) || this.soft2[kind + id].has(k);
+        if (u.teachers.some((t) => any('t', t)) || u.classes.some((x) => any('c', x)) || u.subjects.some((x) => any('s', x)) || p.rooms.some((r) => r && any('r', r))) st.dispreferred++;
       }
     });
     st.cost = Math.round(c * 10) / 10;

@@ -1052,6 +1052,27 @@ check('subject templates: ✕ periods are never used by the subject\'s lessons, 
   assert.ok(r.placements.filter((p) => p.unitId.startsWith(lp.id)).every((p) => p.period !== 0 && p.period !== 1), 'the annealer avoids ✕ and ~ periods when it can');
 });
 
+check('two non-preferred levels: ~~ costs W.dispreferred2 and is avoided before ~; both count once in the statistics', () => {
+  const s = school({ days: 1, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s, 'A'), t = add.teacher(s, 'T', { dispreferred: ['0-1'], dispreferred2: ['0-2'] });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1] });
+  const cost = (p) => { const e = new Engine(s, [pl(l, 0, 0, p, 1)]); return [e.unitCost(e.unitById[`${l.id}#0`].i) - e.W.late * p, e.totalCost().dispreferred]; };
+  const W = new Engine(s, []).W;
+  eq(cost(0), [0, 0]); eq(cost(1), [W.dispreferred, 1]); eq(cost(2), [W.dispreferred2, 1]);
+  assert.ok(W.dispreferred2 > W.dispreferred, 'the strong level weighs more by default');
+  // A class with ~ in the same period adds up with the teacher's ~~.
+  s.classes[0].dispreferred = ['0-2'];
+  eq(cost(2), [W.dispreferred + W.dispreferred2, 1]);
+  s.classes[0].dispreferred = [];
+  // With one free period at each level the lesson takes the plain ~ rather than ~~, and neither before free ones.
+  t.dispreferred = ['0-0', '0-1']; t.dispreferred2 = ['0-2', '0-3']; t.unavailable = [];
+  const free = solveAll(s);
+  assert.strictEqual(free.engine.totalCost().dispreferred, 1, 'the lesson sits in a ~ period, never in ~~');
+  assert.ok([0, 1].includes(free.placements[0].period));
+  t.dispreferred = ['0-0', '0-1', '0-2']; t.dispreferred2 = ['0-3'];
+  assert.ok(solveAll(s).placements[0].period !== 3);
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

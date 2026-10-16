@@ -8,7 +8,7 @@
   const PALETTE = ['#2f6fdb', '#d9534f', '#1f8a4c', '#b7791f', '#7b4fd6', '#0f8f99', '#c2417e', '#5c6f2b', '#8a5a44', '#4a6fa5', '#d0682f', '#3d8f6f'];
   const WEIGHT_LABELS = {
     classGap: 'Free gaps in a class day', teacherGap: 'Free gaps in a teacher day', sameDay: 'Same lesson twice on one day',
-    dispreferred: 'Lesson in a non-preferred period', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
+    dispreferred: 'Lesson in a non-preferred period (~)', dispreferred2: 'Lesson in a strongly non-preferred period (~~)', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
     activityMin: 'Activity day with fewer periods than its minimum (per period short)',
@@ -52,7 +52,7 @@
     // Nine periods a day: 1–3, morning break, 4–5, lunch, 6–7.
     s.settings.periods.splice(3, 0, { label: 'Break', start: '10:25', end: '10:45', type: 'break' });
     s.settings.periods.splice(6, 0, { label: 'Lunch', start: '12:20', end: '13:10', type: 'lunch' });
-    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], ...extra });
+    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], ...extra });
     const S = {
       math: subj('Mathematics', 'MAT', 0), eng: subj('English', 'ENG', 1), sci: subj('Science', 'SCI', 2),
       his: subj('History', 'HIS', 3), geo: subj('Geography', 'GEO', 4), pe: subj('Physical Ed.', 'PE', 5, { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
@@ -60,7 +60,7 @@
       fre: subj('French', 'FRE', 9), spa: subj('Spanish', 'SPA', 10),
     };
     s.subjects = Object.values(S);
-    const t = (name, code, extra = {}) => ({ id: uid(), name, code, unavailable: [], dispreferred: [], ...teacherDefaults(), maxPerDay: 6, ...extra });
+    const t = (name, code, extra = {}) => ({ id: uid(), name, code, unavailable: [], dispreferred: [], dispreferred2: [], ...teacherDefaults(), maxPerDay: 6, ...extra });
     const T = {
       m1: t('Anita Rao', 'ARA'), m2: t('Brian Ochieng', 'BOC', { unavailable: ['4-7', '4-8'] }),
       e1: t('Chloe Martin', 'CMA'), e2: t('Daniel Kim', 'DKI', { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
@@ -70,11 +70,11 @@
       fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
     };
     s.teachers = Object.values(T);
-    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], homeroom: '', gradeId: '' }));
+    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '' }));
     s.rooms = [
-      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [] })),
+      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [] })),
       ...[['Science Lab 1', 'Lab'], ['Science Lab 2', 'Lab'], ['Sports Hall', 'Gym'], ['Art Studio', 'Art'], ['Computer Lab', 'Computer']]
-        .map(([name, type]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [] })),
+        .map(([name, type]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [] })),
     ];
     const L = (subject, teacher, classes, sessions, length, room, parallel = '') => ({
       ...lessonDefaults(), id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), lengths: Array(sessions).fill(length), room, parallel,
@@ -97,7 +97,7 @@
     // Year-8 language elective: 8A+8B students split into French and Spanish at the same time.
     const y8 = s.classes.slice(4);
     s.lessons.push(L(S.fre, T.fr, y8, 2, 1, 'type:Classroom', 'Y8 languages'), L(S.spa, T.sp, y8, 2, 1, 'type:Classroom', 'Y8 languages'));
-    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [] });
+    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [] });
     const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-7`, `${d}-8`]);
     s.meetings = [
       { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo },
@@ -301,7 +301,7 @@
     (s.settings.periods || []).forEach((p) => { if (!PERIOD_TYPES[p.type]) p.type = 'teaching'; });
     s.settings.blocked = Array.isArray(s.settings.blocked) ? s.settings.blocked : [];
     s.settings.options = { ...base.settings.options, ...(s.settings.options || {}) };
-    ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; }); });
+    ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; x.dispreferred2 = x.dispreferred2 || []; }); });
     s.teachers.forEach((t) => {
       for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
@@ -451,7 +451,7 @@
     };
     const byKind = (kind) => (k) => !!slotDisabled(s, k, kind, { general: false });
     const unusable = (k) => slotDisabled(s, k, 'teaching', { general: false }) === 'Outside the week' || periodType(s, keyParts(k)[1]) === 'lunch';
-    for (const list of ['teachers', 'classes', 'rooms', 'subjects']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, unusable); x.dispreferred = keep(x.dispreferred, unusable); }
+    for (const list of ['teachers', 'classes', 'rooms', 'subjects']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, unusable); x.dispreferred = keep(x.dispreferred, unusable); x.dispreferred2 = keep(x.dispreferred2, unusable); }
     s.settings.blocked = keep(s.settings.blocked, byKind('teaching'));
     for (const m of s.meetings) m.allowed = keep(m.allowed, byKind('teaching'));
     for (const a of s.activities) a.allowed = keep(a.allowed, byKind('teaching'));

@@ -110,7 +110,7 @@ function periodTypeChanged(i) {
 
 // Changing the week shape invalidates slot indices, so availability and placements are cleared.
 function resetTimetable(reason) {
-  ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => state[k].forEach((x) => { x.unavailable = []; x.dispreferred = []; }));
+  ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => state[k].forEach((x) => { x.unavailable = []; x.dispreferred = []; x.dispreferred2 = []; }));
   state.settings.blocked = [];
   state.timetable = { placements: [], generatedAt: null, difficulty: null };
   changed();
@@ -118,8 +118,8 @@ function resetTimetable(reason) {
 }
 
 function availLabel(x) {
-  const b = (x.unavailable || []).length, s = (x.dispreferred || []).length;
-  return `Availability${b || s ? ` (${[b && `${b} ✕`, s && `${s} ~`].filter(Boolean).join(', ')})` : ''}`;
+  const b = (x.unavailable || []).length, s = (x.dispreferred || []).length, s2 = (x.dispreferred2 || []).length;
+  return `Availability${b || s || s2 ? ` (${[b && `${b} ✕`, s2 && `${s2} ~~`, s && `${s} ~`].filter(Boolean).join(', ')})` : ''}`;
 }
 
 function entityEditor(root, { list, title, hint, cols, loadKey, extra }) {
@@ -193,7 +193,7 @@ function renderTeachers(root) {
     numCol('Presence/week', 'maxPresenceWeek', 'Time at school in the week (sum of the daily presence). Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state) * state.settings.days.length),
     boolCol('Strict', 'presenceStrict', 'Make the presence limits hard rules instead of preferences'),
     boolCol('No last→first', 'noLastFirst', 'Preference: not the last period of one day and the first period of the next')];
-  cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], ...teacherDefaults() });
+  cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], dispreferred2: [], ...teacherDefaults() });
   entityEditor(root, { list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and teaching-period duties (break supervision is counted against break periods instead); red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
 }
 
@@ -203,7 +203,7 @@ function renderClasses(root) {
       input: (x) => `<select data-f="gradeId" aria-label="Grade"><option value="">— none —</option>${state.grades.map((g) => `<option value="${g.id}" ${x.gradeId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` },
     { label: '<span title="The room this class normally sits in. Lessons set to “Class homeroom” use it, and follow it when it changes.">Homeroom</span>',
       input: (x) => `<select data-f="homeroom" aria-label="Homeroom"><option value="">— none —</option>${state.rooms.map((r) => `<option value="${r.id}" ${x.homeroom === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` }];
-  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], homeroom: '', gradeId: '' });
+  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '' });
   cols.rerender = ['homeroom'];
   const extra = {
     label: 'Lessons', act: 'homeApply',
@@ -219,7 +219,7 @@ function renderClasses(root) {
 
 function renderRooms(root) {
   const cols = [textCol('Name', 'name'), textCol('Type', 'type', 'Classroom, Lab…')];
-  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [] });
+  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [] });
   entityEditor(root, { list: 'rooms', title: 'Rooms', hint: 'Rooms of the same type form a set of alternatives — a lesson asking for “Any Lab” gets whichever lab is free.', cols });
 }
 
@@ -235,7 +235,7 @@ function renderSubjects(root) {
   });
   p.addEventListener('click', (e) => {
     if (e.target.dataset.add !== undefined) {
-      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [] });
+      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [] });
       changed(); render();
     } else if (e.target.dataset.avail !== undefined) {
       const sj = find('subjects', e.target.closest('tr').dataset.id); editAvailability(sj, `Subject: ${sj.name}`);
@@ -571,17 +571,19 @@ function bindTemplate(redraw, disabled, apply) {
   };
 }
 
-// Three-state template like GHC: available → non-preferred (~) → prohibited (✕).
+// Template like GHC, with two non-preferred levels: available → ~ non-preferred → ~~ strongly
+// non-preferred (higher weight) → ✕ prohibited.
 function editAvailability(ent, title) {
   const off = new Set(ent.unavailable || []);
   const soft = new Set(ent.dispreferred || []);
-  const stateOf = (k) => (off.has(k) ? 2 : soft.has(k) ? 1 : 0);
-  const setState = (k, v) => { off.delete(k); soft.delete(k); if (v === 2) off.add(k); if (v === 1) soft.add(k); };
+  const soft2 = new Set(ent.dispreferred2 || []);
+  const stateOf = (k) => (off.has(k) ? 3 : soft2.has(k) ? 2 : soft.has(k) ? 1 : 0);
+  const setState = (k, v) => { off.delete(k); soft.delete(k); soft2.delete(k); if (v === 3) off.add(k); if (v === 2) soft2.add(k); if (v === 1) soft.add(k); };
   const disabled = (k) => slotDisabled(state, k, 'teaching');
-  const grid = () => templateGrid('Click to cycle: available → <b>~ non-preferred</b> → <b>✕ prohibited</b>. Click a day or period header to set the whole column/row.',
-    (k) => { const v = stateOf(k); return { cls: ['', 'pref', 'off'][v], text: ['', '~', '✕'][v] }; }, disabled);
-  openModal(title, grid(), () => { ent.unavailable = [...off]; ent.dispreferred = [...soft]; changed(); render(); });
-  bindTemplate(grid, disabled, (keys) => { const next = (stateOf(keys[0]) + 1) % 3; keys.forEach((k) => setState(k, next)); });
+  const grid = () => templateGrid('Click to cycle: available → <b>~ non-preferred</b> → <b>~~ strongly non-preferred</b> → <b>✕ prohibited</b>. Click a day or period header to set the whole column/row.',
+    (k) => { const v = stateOf(k); return { cls: ['', 'pref', 'pref2', 'off'][v], text: ['', '~', '~~', '✕'][v] }; }, disabled);
+  openModal(title, grid(), () => { ent.unavailable = [...off]; ent.dispreferred = [...soft]; ent.dispreferred2 = [...soft2]; changed(); render(); });
+  bindTemplate(grid, disabled, (keys) => { const next = (stateOf(keys[0]) + 1) % 4; keys.forEach((k) => setState(k, next)); });
 }
 
 // General template: periods when nobody at all is scheduled (✕ only). Stored in settings.blocked.
@@ -997,7 +999,7 @@ function gridLayout(e, mode, id) {
 function gridHtml(e, mode, id) {
   const st = state.settings;
   const ent = find(MODES[mode], id);
-  const off = new Set(ent?.unavailable || []); const soft = new Set(ent?.dispreferred || []); const gen = generalBlocked(state);
+  const off = new Set(ent?.unavailable || []); const soft = new Set([...(ent?.dispreferred || []), ...(ent?.dispreferred2 || [])]); const gen = generalBlocked(state);
   const at = gridLayout(e, mode, id);
   let html = `<div class="table-wrap"><table class="tt"><thead><tr><th class="pcol">Period</th>${st.days.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>`;
   st.periods.forEach((pp, p) => {

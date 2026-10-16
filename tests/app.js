@@ -635,6 +635,16 @@ check('(m) migrate gives subjects availability lists; pruneDeadKeys and validati
   subj.unavailable = s.settings.days.flatMap((_, d) => [0, 1, 3].map((p) => `${d}-${p}`));
   assert.ok(hasMsg(s, /err: .*has no period where all its teachers and classes are available/), msgs(s).join('\n'));
 });
+check('(n) strongly non-preferred lists migrate, count in slot arithmetic and are pruned like the others', () => {
+  const s = school('ttlt', 2);
+  const t = add.teacher(s); delete t.dispreferred2; t.dispreferred2 = undefined;
+  M.migrate(s);
+  eq(t.dispreferred2, []);
+  t.dispreferred2 = ['0-0', '0-2', '1-9'];
+  M.pruneDeadKeys(s);
+  eq(t.dispreferred2, ['0-0'], 'lunch and out-of-week keys are dropped from ~~ too');
+  assert.strictEqual(typeof M.WEIGHT_LABELS.dispreferred2, 'string');
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

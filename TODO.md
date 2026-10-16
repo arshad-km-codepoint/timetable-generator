@@ -62,7 +62,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Interchangeable teachers (teachers P and Q may swap between rows A and B).
 - [ ] Per-row soft options: penalise concentration in first/last periods, after the break, in the afternoon; avoid or promote same-hour coincidence; no break inside a double; penalise consecutive days for 2–3 session subjects. *Done:* first/last period of the day, break inside a double (off by default), consecutive days. *Open:* after the break, afternoon, same-hour coincidence.
 - [x] Preset positions before generation (pin a session to a slot in the planner, shown with a thumbtack); today locking only exists on an already generated timetable. Lesson rows, meetings and activities (per session) can be pinned from a Pins button; pinned sessions are placed first, shown with 📌 in the timetables, and a pin that cannot be honoured is listed in the data validation with the reason. Not built: pinning duty hours, pinning flexible rows (they have no fixed sessions).
-- [ ] Two non-preferred levels (lower and higher weight) in all templates.
+- [x] Two non-preferred levels (lower and higher weight) in all templates. Templates cycle available → ~ → ~~ → ✕; `~~` is weighted by `dispreferred2` (default 6, against 2 for `~`). Applies to teachers, classes, rooms and subjects.
 - [ ] Copy all lessons from one class to another.
 
 ### Teachers
