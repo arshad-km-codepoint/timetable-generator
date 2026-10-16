@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>School Timetable Generator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">▦</span>
+      <input id="schoolName" class="school-name" aria-label="School name">
+    </div>
+    <div class="top-actions">
+      <button data-action="sample" class="ghost">Load sample school</button>
+      <button data-action="new" class="ghost">New</button>
+      <button data-action="import" class="ghost">Open…</button>
+      <button data-action="export">Save file</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="setup">1 · Week</button>
+    <button role="tab" data-tab="teachers">2 · Teachers</button>
+    <button role="tab" data-tab="classes">3 · Classes</button>
+    <button role="tab" data-tab="rooms">4 · Rooms</button>
+    <button role="tab" data-tab="subjects">5 · Subjects</button>
+    <button role="tab" data-tab="lessons">6 · Lessons</button>
+    <button role="tab" data-tab="staff">7 · Meetings &amp; duties</button>
+    <button role="tab" data-tab="generate">8 · Generate</button>
+    <button role="tab" data-tab="timetable">9 · Timetables</button>
+  </nav>
+
+  <main id="main"></main>
+
+  <dialog id="modal">
+    <form method="dialog" class="modal-body">
+      <h3 id="modalTitle"></h3>
+      <div id="modalContent"></div>
+      <div class="modal-actions" id="modalActions"><button value="close">Done</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="printArea"></div>
+
+  <script src="solver.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
