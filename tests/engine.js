@@ -362,5 +362,377 @@ check('legacy data (no period types, no blocked, no kinds) behaves as all-teachi
   assert.strictEqual(placed, total);
 });
 
+// ---------- Phase 2: lengths, flexible distributions, rooms, relations, row options ----------
+const pl = (l, k, day, period, len, rooms = [null]) => ({ unitId: `${l.id}#${k}`, day, period, len, rooms, locked: false });
+const unitsOf = (e, l) => e.groupUnits[e.lessonGroup[l.id]].map((i) => e.units[i]);
+const placedOf = (placements, l) => placements.filter((p) => p.unitId.split('#')[0].split('+').includes(l.id));
+
+check('lengths: one unit per entry, ids in entry order, legacy sessions/length still derived', () => {
+  const s = school({ days: 2, periods: 6 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [2, 2, 1] });
+  const legacy = add.lesson(s, subj, t, [c], 3, 2);
+  const e = new Engine(s, []);
+  eq(e.problems, []);
+  eq(unitsOf(e, l).map((u) => [u.id, u.len, u.k]), [[`${l.id}#0`, 2, 0], [`${l.id}#1`, 2, 1], [`${l.id}#2`, 1, 2]]);
+  eq(e.groupLengths[l.id], [2, 2, 1]);
+  eq(unitsOf(e, legacy).map((u) => u.len), [2, 2, 2], 'no lengths → sessions × length');
+  const single = unitsOf(e, l)[2], dbl = unitsOf(e, l)[0];
+  assert.strictEqual(single.starts.length, 12); assert.strictEqual(dbl.starts.length, 10);
+  const { placed, total } = solveAll(s);
+  assert.strictEqual(total, 6); assert.strictEqual(placed, total);
+  s.lessons[0].lengths = [2, 0];
+  assert.ok(new Engine(s, []).problems.some((p) => p.lessonIds[0] === l.id && /length/.test(p.msg)), 'a 0 length is a data problem');
+  s.lessons[0].lengths = [7];
+  assert.ok(new Engine(s, []).problems.some((p) => /length outside 1–6/.test(p.msg)), 'longer than the day is a data problem');
+});
+
+check('empty rows (0 sessions, lengths [], 0-session meeting) and a deleted preferred room stay harmless', () => {
+  const s = school({ days: 1, periods: 3 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T'), r = add.room(s, 'R', 'Classroom');
+  add.lesson(s, subj, t, [c], 0, 1);
+  add.lesson(s, subj, t, [c], 0, 1, { lengths: [] });
+  const gone = add.lesson(s, subj, t, [c], 1, 1, { room: 'deleted-room', roomAlt: 'type:Classroom' });
+  add.meeting(s, 'Never', [t], { sessions: 0 });
+  const e = new Engine(s, []);
+  eq(e.problems, []);
+  assert.strictEqual(e.units.length, 1);
+  assert.strictEqual(e.units[0].parts[0].prefRoom, null, 'a missing preferred room is not a preference');
+  eq(e.units[0].parts[0].roomCands, [r.id]);
+  const { placed, engine } = solveAll(s);
+  assert.strictEqual(placed, 1);
+  const st = engine.totalCost();
+  assert.strictEqual(st.roomPref, 0); assert.strictEqual(st.roomSame, 0);
+  void gone;
+});
+
+check('lengths: parallel rows need the same multiset; order does not matter', () => {
+  const s = school({ days: 2, periods: 5 });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const a = add.lesson(s, subj, t1, [c1], 0, 1, { parallel: 'opt', lengths: [2, 1] });
+  const b = add.lesson(s, subj, t2, [c2], 0, 1, { parallel: 'opt', lengths: [1, 2] });
+  const e = new Engine(s, []);
+  eq(e.problems, []);
+  assert.strictEqual(e.units.length, 2);
+  eq(e.units.map((u) => u.len), [2, 1]);
+  b.lengths = [1, 1, 1];
+  const e2 = new Engine(s, []);
+  assert.strictEqual(e2.units.length, 0);
+  eq(e2.problems.map((p) => p.lessonIds), [[a.id, b.id]]);
+  assert.ok(/different session lengths/.test(e2.problems[0].msg));
+});
+
+check('flexible: a valid partition is chosen, exposed, and varies between attempts', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { flexible: { total: 5, min: 1, max: 2 } });
+  const seen = new Set();
+  for (let i = 0; i < 40; i++) {
+    const e = new Engine(s, []);
+    eq(e.problems, []);
+    const lens = e.groupLengths[l.id];
+    assert.strictEqual(lens.reduce((a, b) => a + b, 0), 5);
+    assert.ok(lens.every((n) => n >= 1 && n <= 2), `blocks within 1..2: ${lens}`);
+    eq(unitsOf(e, l).map((u) => u.len), lens);
+    seen.add(lens.join(','));
+  }
+  assert.ok(seen.size > 1, `attempts differ: ${[...seen]}`);
+  assert.ok([...seen].some((k) => k.split(',').length === 3), 'three blocks (the fewest) is among the choices');
+  const { placed, total, engine } = solveAll(s);
+  assert.strictEqual(placed, total);
+  assert.strictEqual(engine.placements().reduce((a, p) => a + p.len, 0), 5);
+});
+
+check('flexible: placements restore the distribution; a bad remainder restarts; an impossible total is reported', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { flexible: { total: 6, min: 1, max: 3 } });
+  const keep = [pl(l, 0, 0, 0, 3), pl(l, 2, 1, 0, 2)];
+  for (let i = 0; i < 20; i++) {
+    const e = new Engine(s, keep);
+    const lens = e.groupLengths[l.id];
+    assert.strictEqual(lens[0], 3); assert.strictEqual(lens[2], 2); assert.strictEqual(lens[1], 1);
+    eq(lens, [3, 1, 2]);
+    eq(e.placements().map((p) => [p.unitId, p.day, p.period, p.len]), [[`${l.id}#0`, 0, 0, 3], [`${l.id}#2`, 1, 0, 2]], 'both kept placements are restored');
+  }
+  const full = solveAll(s).placements;
+  const e2 = new Engine(s, full);
+  eq(e2.placements().slice().sort((a, b) => a.unitId.localeCompare(b.unitId)), full.slice().sort((a, b) => a.unitId.localeCompare(b.unitId)));
+  // Placed lengths exceeding the total cannot be completed: partition from scratch, nothing restored.
+  const e3 = new Engine(s, [pl(l, 0, 0, 0, 3), pl(l, 1, 1, 0, 3), pl(l, 2, 2, 0, 3)]);
+  assert.strictEqual(e3.groupLengths[l.id].reduce((a, b) => a + b, 0), 6);
+  assert.ok(e3.placements().length < 3);
+  // A kept unit with a high index: the remainder takes enough blocks for that index to exist.
+  for (let i = 0; i < 20; i++) {
+    const e6 = new Engine(s, [pl(l, 5, 2, 1, 1)]);
+    eq(e6.groupLengths[l.id], [1, 1, 1, 1, 1, 1]);
+    eq(e6.placements().map((p) => p.unitId), [`${l.id}#5`]);
+    const e7 = new Engine(s, [pl(l, 3, 2, 1, 1)]);
+    assert.strictEqual(e7.groupLengths[l.id][3], 1);
+    assert.ok(e7.groupLengths[l.id].length >= 4 && e7.groupLengths[l.id].length <= 6);
+    eq(e7.placements().map((p) => p.unitId), [`${l.id}#3`]);
+  }
+  // A remainder that cannot be split (total 6, one block of 1 placed, blocks must be 3): from scratch.
+  l.flexible = { total: 6, min: 3, max: 3 };
+  const e4 = new Engine(s, [pl(l, 0, 0, 0, 1)]);
+  eq(e4.groupLengths[l.id], [3, 3]); eq(e4.placements(), []);
+  l.flexible = { total: 5, min: 3, max: 4 };
+  const e5 = new Engine(s, []);
+  assert.strictEqual(e5.units.length, 0);
+  assert.ok(e5.problems.some((p) => p.lessonIds[0] === l.id && /cannot be split/.test(p.msg)));
+  l.flexible = { total: 4, min: 2, max: 1 };
+  assert.ok(new Engine(s, []).problems.some((p) => /invalid flexible/.test(p.msg)));
+});
+
+check('flexible rows in a parallel group follow the fixed row (or each other)', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B'), t3 = add.teacher(s, 'C');
+  add.lesson(s, subj, t1, [c1], 0, 1, { parallel: 'g', lengths: [2, 1, 1] });
+  add.lesson(s, subj, t2, [c2], 0, 1, { parallel: 'g', flexible: { total: 4, min: 1, max: 2 } });
+  const e = new Engine(s, []);
+  eq(e.problems, []); assert.strictEqual(e.units.length, 3);
+  eq(e.units.map((u) => u.len), [2, 1, 1]);
+  const s2 = school({ days: 3, periods: 4 });
+  add.lesson(s2, subj, t1, [c1], 0, 1, { parallel: 'g', flexible: { total: 4, min: 1, max: 2 } });
+  add.lesson(s2, subj, t3, [c2], 0, 1, { parallel: 'g', flexible: { total: 4, min: 1, max: 2 } });
+  s2.subjects.push(subj); s2.classes.push(c1, c2); s2.teachers.push(t1, t3);
+  for (let i = 0; i < 10; i++) { const e2 = new Engine(s2, []); eq(e2.problems, []); assert.ok(e2.units.length >= 2); }
+});
+
+check('rooms: the preferred room is used when free, the alternative set when busy, roomPref counted', () => {
+  const s = school({ days: 1, periods: 2 });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const r1 = add.room(s, 'R1', 'Classroom'), r2 = add.room(s, 'R2', 'Classroom'), r3 = add.room(s, 'R3', 'Lab');
+  const a = add.lesson(s, subj, t1, [c1], 1, 1, { room: r1.id, roomAlt: 'type:Classroom' });
+  const b = add.lesson(s, subj, t2, [c2], 1, 1, { room: r1.id });
+  const e = new Engine(s, []);
+  eq(e.roomCandidates(r1.id, s.rooms, 'type:Classroom'), [r1.id, r2.id], 'preferred first, then the rest of the type');
+  eq(e.roomCandidates('type:Lab', s.rooms, 'type:Classroom'), [r3.id, r1.id, r2.id]);
+  eq(e.roomCandidates(r1.id, s.rooms, ''), [r1.id]);
+  const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
+  eq(e.bestRooms(ai, 0, new Set()).rooms, [r1.id], 'free → preferred');
+  e.place(bi, 0, [r1.id]);
+  const pick = e.bestRooms(ai, 0, new Set());
+  eq(pick.rooms, [r2.id]); assert.strictEqual(pick.conf.size, 0, 'the alternative is taken rather than evicting');
+  e.place(ai, 0, pick.rooms);
+  assert.strictEqual(e.unitCost(ai), e.W.roomPref);
+  assert.strictEqual(e.unitCost(bi), 0);
+  assert.strictEqual(e.totalCost().roomPref, 1);
+  e.remove(ai);
+  eq(e.bestRooms(ai, 1, new Set()).rooms, [r1.id], 'at another time the preferred room wins again');
+  assert.ok(e.roomsValid(ai, 0, [r2.id]) && !e.roomsValid(ai, 0, [r3.id]));
+  const { placements, placed } = solveAll(s);
+  assert.strictEqual(placed, 2);
+  assert.strictEqual(placedOf(placements, a)[0].rooms[0], r1.id, 'with two periods free, both rows get R1');
+});
+
+check('sameRoom: hard over a full solve (and in roomsValid/bestRooms); roomSame soft count', () => {
+  const s = school({ days: 2, periods: 3 });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const l1 = add.room(s, 'Lab 1', 'Lab'), l2 = add.room(s, 'Lab 2', 'Lab');
+  const a = add.lesson(s, subj, t1, [c1], 4, 1, { room: 'type:Lab', sameRoom: true });
+  const b = add.lesson(s, subj, t2, [c2], 4, 1, { room: 'type:Lab' });
+  for (let i = 0; i < 5; i++) {
+    const { placements, placed, total, engine } = solveAll(s);
+    assert.strictEqual(placed, total);
+    assert.strictEqual(new Set(placedOf(placements, a).map((p) => p.rooms[0])).size, 1, 'all four sessions in one lab');
+    assert.strictEqual(engine.groupStats(a.id).roomSame, 0);
+  }
+  const e = new Engine(s, [pl(a, 0, 0, 0, 1, [l1.id])]);
+  const a1 = e.unitById[`${a.id}#1`].i;
+  assert.ok(e.roomsValid(a1, 1, [l1.id]) && !e.roomsValid(a1, 1, [l2.id]));
+  eq(e.bestRooms(a1, 1, new Set()).rooms, [l1.id]);
+  e.place(e.unitById[`${b.id}#0`].i, 1, [l1.id]);
+  const pick = e.bestRooms(a1, 1, new Set());
+  eq(pick.rooms, [l1.id]); assert.strictEqual(pick.conf.size, 1, 'the only candidate is the group room, even if that means evicting');
+  // Soft: a row without sameRoom still pays per extra room.
+  const e2 = new Engine(s, [pl(b, 0, 0, 0, 1, [l1.id]), pl(b, 1, 0, 1, 1, [l2.id]), pl(b, 2, 1, 0, 1, [l1.id])]);
+  assert.strictEqual(e2.placements().length, 3);
+  assert.strictEqual(e2.totalCost().roomSame, 1);
+  assert.strictEqual(e2.groupCost(b.id), e2.W.roomSame);
+  assert.strictEqual(e2.areaCost([e2.unitById[`${b.id}#0`].i], [0]) - e2.localCost(e2.unitById[`${b.id}#0`].i, [0]), 0);
+  const b3 = e2.unitById[`${b.id}#3`].i;
+  eq(e2.bestRooms(b3, 4, new Set()).rooms, [l1.id], 'bestRooms prefers a room the group already uses');
+  e2.place(b3, 4, [l2.id]);
+  assert.strictEqual(e2.totalCost().roomSame, 1, 'distinct rooms − 1, not per unit');
+});
+
+check('relation differentDays holds after solveAll; baseConflicts names the violator', () => {
+  const s = school({ days: 2, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const a = add.lesson(s, subj, t1, [c], 2, 1);
+  const b = add.lesson(s, subj, t2, [c], 2, 1, { relations: [{ type: 'differentDays', lessonId: a.id }] });
+  for (let i = 0; i < 5; i++) {
+    const { placements, placed } = solveAll(s);
+    assert.strictEqual(placed, 4);
+    const da = new Set(placedOf(placements, a).map((p) => p.day)), db = placedOf(placements, b).map((p) => p.day);
+    assert.ok(db.every((d) => !da.has(d)), `A days ${[...da]} vs B days ${db}`);
+  }
+  const e = new Engine(s, [pl(a, 0, 0, 0, 1)]);
+  eq(e.rel[a.id], [{ type: 'differentDays', other: b.id, min: 0, max: null }], 'stored on the row that did not declare it');
+  const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
+  eq([...e.baseConflicts(bi, 1)], [ai]);
+  eq([...e.baseConflicts(bi, 5)], []);
+  e.locked[ai] = true;
+  assert.strictEqual(e.baseConflicts(bi, 1), null, 'a locked violator makes the start impossible');
+});
+
+check('relation notSameTime: overlapping spans are refused', () => {
+  const s = school({ days: 1, periods: 3 });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const a = add.lesson(s, subj, t1, [c1], 1, 2, { relations: [{ type: 'notSameTime', lessonId: 'nope' }] });
+  const b = add.lesson(s, subj, t2, [c2], 1, 1, { relations: [{ type: 'notSameTime', lessonId: a.id }] });
+  b.relations.push({ type: 'notSameTime', lessonId: b.id }, { type: 'bogus', lessonId: a.id });
+  for (let i = 0; i < 5; i++) {
+    const { placements, placed } = solveAll(s);
+    assert.strictEqual(placed, 2);
+    const pa = placedOf(placements, a)[0], pb = placedOf(placements, b)[0];
+    assert.ok(pb.period < pa.period || pb.period >= pa.period + 2, `double at ${pa.period}, single at ${pb.period}`);
+  }
+  const e = new Engine(s, [pl(a, 0, 0, 0, 2)]);
+  assert.strictEqual(e.rel[b.id].length, 1, 'unknown ids and self-relations are ignored');
+  const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
+  eq([...e.baseConflicts(bi, 0)], [ai]); eq([...e.baseConflicts(bi, 1)], [ai]); eq([...e.baseConflicts(bi, 2)], []);
+});
+
+check('relation nonConsecutive: adjacent in teaching order (breaks skipped, lunch separates)', () => {
+  const s = school({ days: 1, periods: 'tbtt' });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const a = add.lesson(s, subj, t, [c], 1, 1);
+  const b = add.lesson(s, subj, t, [c], 1, 1, { relations: [{ type: 'nonConsecutive', lessonId: a.id }] });
+  for (let i = 0; i < 5; i++) {
+    const { placements, placed } = solveAll(s);
+    assert.strictEqual(placed, 2);
+    eq(placements.map((p) => p.period).sort(), [0, 3], 'periods 0 and 2 are adjacent across the break; only 0 and 3 are not');
+  }
+  const e = new Engine(s, [pl(a, 0, 0, 0, 1)]);
+  const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
+  eq([...e.baseConflicts(bi, 2)], [ai]); eq([...e.baseConflicts(bi, 3)], []);
+  eq([...e.baseConflicts(ai, 3)], [], 'the unit itself is never its own violator');
+  const s2 = school({ days: 1, periods: 'tlt' });
+  s2.subjects.push(subj); s2.classes.push(c); s2.teachers.push(t);
+  const a2 = add.lesson(s2, subj, t, [c], 1, 1, { relations: [{ type: 'nonConsecutive', lessonId: 'later' }] });
+  const b2 = add.lesson(s2, subj, t, [c], 1, 1); a2.relations[0].lessonId = b2.id;
+  const e2 = new Engine(s2, [pl(a2, 0, 0, 0, 1)]);
+  eq([...e2.baseConflicts(e2.unitById[`${b2.id}#0`].i, 2)], [], 'lunch between them: not consecutive');
+  assert.strictEqual(solveAll(s2).placed, 2);
+});
+
+check('relation consecutive: unit #k of each row sits next to the other (same day, teaching order)', () => {
+  const s = school({ days: 2, periods: 'ttbtt' });
+  const subj = add.subject(s), c = add.cls(s), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const a = add.lesson(s, subj, t1, [c], 2, 1, { maxOnePerDay: true });
+  const b = add.lesson(s, subj, t2, [c], 2, 1, { relations: [{ type: 'consecutive', lessonId: a.id }] });
+  const filler = add.lesson(s, subj, t1, [c], 2, 1); // competes for the slots so adjacency is not automatic
+  for (let i = 0; i < 5; i++) {
+    const { placements, placed, engine } = solveAll(s);
+    assert.strictEqual(placed, 6, 'everything fits');
+    for (let k = 0; k < 2; k++) {
+      const pa = placements.find((p) => p.unitId === `${a.id}#${k}`), pb = placements.find((p) => p.unitId === `${b.id}#${k}`);
+      assert.strictEqual(pa.day, pb.day);
+      const ca = pa.day * 5 + pa.period, cb = pb.day * 5 + pb.period;
+      assert.ok(engine.nextTeach[ca] === cb || engine.nextTeach[cb] === ca, `A#${k} at ${pa.period} and B#${k} at ${pb.period} on day ${pa.day}`);
+    }
+  }
+  const e = new Engine(s, [pl(a, 0, 0, 1, 1)]);
+  const a0 = e.unitById[`${a.id}#0`].i, b0 = e.unitById[`${b.id}#0`].i, b1 = e.unitById[`${b.id}#1`].i;
+  eq([...e.baseConflicts(b0, 3)], [], 'period 3 follows period 1 across the break');
+  eq([...e.baseConflicts(b0, 0)], []);
+  eq([...e.baseConflicts(b0, 4)], [a0]); eq([...e.baseConflicts(b0, 6)], [a0], 'another day is a violation too');
+  eq([...e.baseConflicts(b1, 4)], [], 'B#1 is tied to A#1, not A#0');
+  e.locked[a0] = true;
+  assert.strictEqual(e.baseConflicts(b0, 4), null);
+  b.lengths = [1, 1, 1];
+  const e2 = new Engine(s, []);
+  assert.ok(e2.problems.some((p) => /consecutively/.test(p.msg) && p.lessonIds.includes(a.id) && p.lessonIds.includes(b.id)));
+  eq(e2.rel[a.id], []); eq(e2.rel[b.id], []);
+  assert.strictEqual(e2.units.length, 7, 'the rows still produce units');
+  void filler;
+});
+
+check('relation daysApart: min and max distance in days', () => {
+  const s = school({ days: 5, periods: 1 });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const a = add.lesson(s, subj, t, [c], 1, 1, { relations: [{ type: 'daysApart', lessonId: '', min: 2, max: 3 }] });
+  const b = add.lesson(s, subj, t, [c], 1, 1, { relations: [{ type: 'daysApart', lessonId: a.id, min: 2, max: 3 }] });
+  a.relations[0].lessonId = b.id; // declared on both sides with the same bounds → one relation
+  for (let i = 0; i < 8; i++) {
+    const { placements, placed } = solveAll(s);
+    assert.strictEqual(placed, 2);
+    const diff = Math.abs(placedOf(placements, a)[0].day - placedOf(placements, b)[0].day);
+    assert.ok(diff >= 2 && diff <= 3, `days apart ${diff}`);
+  }
+  const e = new Engine(s, [pl(a, 0, 0, 0, 1)]);
+  assert.strictEqual(e.rel[a.id].length, 1); assert.strictEqual(e.rel[b.id].length, 1);
+  eq(e.rel[b.id], [{ type: 'daysApart', other: a.id, min: 2, max: 3 }]);
+  const ai = e.unitById[`${a.id}#0`].i, bi = e.unitById[`${b.id}#0`].i;
+  eq([...e.baseConflicts(bi, 1)], [ai]); eq([...e.baseConflicts(bi, 2)], []); eq([...e.baseConflicts(bi, 3)], []); eq([...e.baseConflicts(bi, 4)], [ai]);
+  b.relations = [{ type: 'daysApart', lessonId: a.id, min: 0, max: '' }];
+  a.relations = [];
+  eq(new Engine(s, []).rel[a.id], [], 'no bounds → no relation');
+  b.relations = [{ type: 'daysApart', lessonId: a.id, min: 1 }];
+  const e3 = new Engine(s, [pl(a, 0, 0, 0, 1)]);
+  eq([...e3.baseConflicts(e3.unitById[`${b.id}#0`].i, 0)], [e3.unitById[`${a.id}#0`].i]);
+  eq([...e3.baseConflicts(e3.unitById[`${b.id}#0`].i, 4)], []);
+});
+
+check('ends: first/last teaching period of the day by segments; consecutiveDays per adjacent-day pair', () => {
+  const s = school({ days: 5, periods: 'ttltt', blocked: ['0-0'] });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1], penalizeEnds: true, avoidConsecutiveDays: true });
+  const plain = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1], avoidConsecutiveDays: true });
+  const e = new Engine(s, []);
+  const u0 = e.unitById[`${l.id}#0`].i;
+  const endsAt = (day, period) => { e.remove(u0); e.place(u0, day * 5 + period, [null]); const r = e.unitCost(u0) - e.W.late * period; e.remove(u0); return Math.round(r * 1e6) / 1e6; };
+  assert.strictEqual(endsAt(0, 1), e.W.ends, 'Monday period 0 is template-blocked, so period 1 opens the day');
+  assert.strictEqual(endsAt(1, 0), e.W.ends);
+  assert.strictEqual(endsAt(1, 1), 0, 'the end of the morning segment is not the end of the day');
+  assert.strictEqual(endsAt(1, 3), 0);
+  assert.strictEqual(endsAt(1, 4), e.W.ends);
+  assert.strictEqual(e.unitById[`${plain.id}#0`] && e.units[e.unitById[`${plain.id}#0`].i].avoidAdj, false, 'the flag only applies to rows with 2–3 units');
+  assert.strictEqual(e.units[u0].avoidAdj, true);
+  const at = (days) => new Engine(s, days.map((d, k) => pl(l, k, d, 1, 1)));
+  assert.strictEqual(at([0, 1, 3]).groupStats(l.id).consecutiveDays, 1);
+  assert.strictEqual(at([0, 2, 4]).totalCost().consecutiveDays, 0);
+  const e3 = at([1, 2, 3]);
+  assert.strictEqual(e3.totalCost().consecutiveDays, 2);
+  assert.strictEqual(e3.totalCost().ends, 0, 'period 1 ends the morning, not the day');
+  assert.strictEqual(new Engine(s, [1, 2, 3].map((d, k) => pl(l, k, d, 4, 1))).totalCost().ends, 3);
+  assert.strictEqual(e3.groupCost(l.id), 2 * e3.W.consecutiveDays);
+  const ui = e3.unitById[`${l.id}#1`].i;
+  assert.strictEqual(e3.localCost(ui, [2]) - e3.unitCost(ui) - e3.teacherDayCost(t.id, 2) - e3.classDayCost(c.id, 2), 2 * e3.W.consecutiveDays, 'localCost carries the group cost');
+  const e4 = new Engine(s, [0, 1, 2, 3].map((d, k) => pl(plain, k, d, 1, 1)));
+  assert.strictEqual(e4.totalCost().consecutiveDays, 0, '4 units: ignored');
+  // Over a solve, the annealer avoids both ends and adjacent days when it can.
+  const s2 = school({ days: 5, periods: 3 });
+  const subj2 = add.subject(s2), c2 = add.cls(s2), t2 = add.teacher(s2, 'T');
+  const l2 = add.lesson(s2, subj2, t2, [c2], 2, 1, { penalizeEnds: true, avoidConsecutiveDays: true, maxOnePerDay: true });
+  const { placements, engine } = solveAll(s2);
+  const st = engine.totalCost();
+  assert.strictEqual(st.ends + st.consecutiveDays, 0, `ends ${st.ends}, consecutive days ${st.consecutiveDays}: ${placements.map((p) => `${p.day}/${p.period}`)}`);
+  void l2;
+});
+
+check('placements round-trip with mixed and flexible lengths', () => {
+  const s = school({ days: 4, periods: 'tttbtt' });
+  const subj = add.subject(s), c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2'), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  const r1 = add.room(s, 'R1', 'Classroom'), r2 = add.room(s, 'R2', 'Classroom');
+  const a = add.lesson(s, subj, t1, [c1], 0, 1, { lengths: [3, 2, 1, 1], room: r1.id, roomAlt: 'type:Classroom', sameRoom: true });
+  const b = add.lesson(s, subj, t2, [c2], 0, 1, { flexible: { total: 7, min: 1, max: 3 }, room: 'type:Classroom', relations: [{ type: 'notSameTime', lessonId: a.id }] });
+  const c = add.lesson(s, subj, t2, [c1], 2, 1, { relations: [{ type: 'differentDays', lessonId: a.id }] });
+  const { engine, placements, placed, total } = solveAll(s);
+  assert.strictEqual(placed, total, `all ${total} units placed`);
+  eq(placedOf(placements, a).map((p) => p.len).sort(), [1, 1, 2, 3]);
+  assert.strictEqual(placedOf(placements, b).reduce((x, p) => x + p.len, 0), 7);
+  const e2 = new Engine(s, placements);
+  eq(e2.groupLengths[b.id], engine.groupLengths[b.id]);
+  const sort = (ps) => ps.slice().sort((x, y) => x.unitId.localeCompare(y.unitId));
+  eq(sort(e2.placements()), sort(placements));
+  for (const key in engine.occ) eq([...e2.occ[key]], [...engine.occ[key]], `occupancy ${key}`);
+  eq(e2.totalCost(), engine.totalCost());
+  assert.strictEqual(e2.totalCost().roomSame, 0);
+  void r2; void c;
+});
+
 console.log(`\nPASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

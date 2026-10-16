@@ -147,11 +147,17 @@ function scenarioB() {
     add.lesson(s, S.psy, t.psy, [c.com, c.hum], 4, 1, 'type:Classroom', `G${g} Block S`);
     add.lesson(s, S.ped, g === 11 ? t.pe2 : t.pe1, all, 4, 1, 'type:Sports', `G${g} Block S`);
     // Practicals (double periods in specialist labs); physics practicals may run across the break
-    add.lesson(s, S.phy, t.phy, [c.sciA], 1, 2, 'type:PhysicsLab').allowBreakInside = true;
-    add.lesson(s, S.phy, t.phy, [c.sciB], 1, 2, 'type:PhysicsLab').allowBreakInside = true;
+    // and never on a day with physics theory (daysApart ≥ 1 from the Block P physics row).
+    const phyTheory = s.lessons.find((l) => l.subjectId === S.phy.id && l.parallel === `G${g} Block P`);
+    for (const x of [c.sciA, c.sciB]) {
+      const pr = add.lesson(s, S.phy, t.phy, [x], 1, 2, 'type:PhysicsLab');
+      pr.allowBreakInside = true;
+      pr.relations = [{ type: 'daysApart', lessonId: phyTheory.id, min: 1 }];
+    }
     add.lesson(s, S.che, t.che, [c.sciA], 1, 2, 'type:ChemLab'); add.lesson(s, S.che, t.che, [c.sciB], 1, 2, 'type:ChemLab');
     add.lesson(s, S.bio, t.bio, [c.sciB], 1, 2, 'type:BioLab');
-    add.lesson(s, S.ent, t.ent, [c.com], 3, 1, 'type:Classroom');
+    // Entrepreneurship prefers Room 201 (both grades, so one of them sometimes takes another classroom).
+    add.lesson(s, S.ent, t.ent, [c.com], 3, 1, s.rooms[0].id).roomAlt = 'type:Classroom';
   });
   s.meetings.push({ id: id('m'), name: 'Senior-school team', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: '', allowed: slotsWhere(s, (d, p) => p >= 8) });
   s.duties.push({ id: id('d'), name: 'Lab safety supervision', maxPerSlot: 1, allowed: slotsWhere(s, (d, p) => p >= 8), assignments: [t.cs, t.psy, t.ent, t.geo, t.acc].map((x) => ({ teacherId: x.id, hours: 2 })) });
@@ -180,19 +186,27 @@ function scenarioC() {
   const ara = [spec('Arabic 1', 'AR1'), spec('Arabic 2', 'AR2')]; const pe = [spec('PE 1', 'PE1'), spec('PE 2', 'PE2')];
   const mus = spec('Music', 'MUS'), art = spec('Art', 'ART', { unavailable: ['4-5', '4-6'] }), ict = spec('ICT', 'ICT'), mor = spec('Moral Ed.', 'MOR'), lib = spec('Librarian', 'LIB');
   cls.forEach((c, i) => {
-    const t = ct[i];
+    const t = ct[i]; const grade = Math.floor(i / 3) + 1;
     // homeroom: the class teacher's own room
     const home = s.rooms[i].id;
-    add.lesson(s, S.eng, t, [c], 6, 1, home, '', false);
-    add.lesson(s, S.mat, t, [c], 6, 1, home, '', false);
-    add.lesson(s, S.evs, t, [c], 5, 1, home);
+    // English: one double and four singles; Maths: 6 periods in blocks of 1–2, distribution chosen by the engine.
+    add.lesson(s, S.eng, t, [c], 5, 1, home, '', false).lengths = [2, 1, 1, 1, 1];
+    add.lesson(s, S.mat, t, [c], 6, 1, home, '', false).flexible = { total: 6, min: 1, max: 2 };
+    const evs = add.lesson(s, S.evs, t, [c], 5, 1, home);
     add.lesson(s, S.ara, ara[i % 2], [c], 4, 1, home);
-    add.lesson(s, S.pe, pe[i % 2], [c], 3, 1, 'type:Sports');
-    add.lesson(s, S.mus, mus, [c], 2, 1, 'type:Music');
-    add.lesson(s, S.art, art, [c], 2, 1, 'type:Art');
-    add.lesson(s, S.ict, ict, [c], 2, 1, 'type:ICT');
-    add.lesson(s, S.mor, mor, [c], 2, 1, home);
+    const pel = add.lesson(s, S.pe, pe[i % 2], [c], 3, 1, 'type:Sports');
+    pel.sameRoom = true; // all PE of a class in the same hall/ground
+    const musl = add.lesson(s, S.mus, mus, [c], 2, 1, 'type:Music');
+    const artl = add.lesson(s, S.art, art, [c], 2, 1, 'type:Art');
+    artl.relations = [{ type: 'nonConsecutive', lessonId: musl.id }]; // no Art straight after Music or vice versa
+    const ictl = add.lesson(s, S.ict, ict, [c], 2, 1, 'type:ICT');
+    pel.relations = [{ type: 'differentDays', lessonId: ictl.id }]; // PE and ICT never on the same day
+    const morl = add.lesson(s, S.mor, mor, [c], 2, 1, home);
     add.lesson(s, S.lib, lib, [c], 1, 1, 'type:Library');
+    if (grade === 3) { // Grade 3: EVS not first/last period, and Moral Ed. (2 sessions) spread over non-adjacent days
+      evs.penalizeEnds = true; evs.avoidConsecutiveDays = true;
+      morl.avoidConsecutiveDays = true;
+    }
   });
   // Grade-level planning: the 3 class teachers of a grade together — only possible when all 3 divisions are with specialists.
   for (let g = 0; g < 5; g++) s.meetings.push({ id: id('m'), name: `Grade ${g + 1} planning`, teacherIds: ct.slice(g * 3, g * 3 + 3).map((x) => x.id), sessions: 1, length: 1, room: '', allowed: [] });
@@ -212,7 +226,8 @@ function scenarioD() {
 }
 
 // ---------- independent auditor (does not use the engine) ----------
-function audit(s, placements) {
+// `chosen` (lessonId → lengths) is only used to count the expected sessions of flexible rows.
+function audit(s, placements, chosen = {}) {
   const errs = []; const err = (m) => errs.push(m);
   const P = s.settings.periods.length, D = s.settings.days.length;
   const by = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
@@ -221,6 +236,11 @@ function audit(s, placements) {
   const book = (ent, d, p, unit) => { const k = `${ent}@${d}-${p}`; (grid[k] ||= new Set()).add(unit); };
   const seenUnits = new Set();
   const placedPerLesson = {}, perDay = {}, tTeach = {};
+  // Session lengths a row allows: its lengths list, or (legacy) sessions × length; null = flexible.
+  const lensOf = (l) => (l.flexible ? null : Array.isArray(l.lengths) ? l.lengths : Array.from({ length: l.sessions }, () => l.length));
+  const placedLens = {};   // lessonId -> [len]
+  const roomsUsed = {};    // lessonId -> Set(roomId)
+  const sessionsOf = {};   // lessonId -> [{ k, day, first, last }] teaching cells, for relations
   const straddleBreaks = new Set(); // 'teacher@d-p' break periods held inside a straddling lesson
   const breakDuties = []; // [teacherId, d, p, unitId]
   const parallelSlot = {}; // tag|session -> slot
@@ -273,9 +293,12 @@ function audit(s, placements) {
     const unitRooms = new Set(); const unitTeachers = new Set();
     ids.forEach((lid, k) => {
       const l = L[lid]; if (!l) { err('unknown lesson'); return; }
-      if (pl.len !== l.length) err(`wrong length ${lid}`);
+      const lens = lensOf(l);
+      if (lens ? !lens.includes(pl.len) : !(pl.len >= l.flexible.min && pl.len <= l.flexible.max)) err(`wrong length ${pl.len} for ${lid}`);
+      (placedLens[lid] ||= []).push(pl.len);
       // A lesson that may not straddle a break must occupy consecutive teaching periods.
       const cells = cellsOf(pl, !!l.allowBreakInside);
+      if (!cells.length) return; // already reported as out of bounds
       checkTeachingCells(cells, `lesson ${lid}`);
       // A break skipped inside a straddling lesson still holds the teacher, the classes and the
       // room (hard rule: no break duty inside one's own double), so book it like a cell.
@@ -295,9 +318,15 @@ function audit(s, placements) {
       const room = pl.rooms[k];
       if (l.room) {
         if (!room) err(`missing room ${lid}`);
-        else if (l.room.startsWith('type:') ? R[room]?.type !== l.room.slice(5) : room !== l.room) err(`wrong room for ${lid}`);
+        else {
+          const prefOk = l.room.startsWith('type:') ? R[room]?.type === l.room.slice(5) : room === l.room;
+          const altOk = !!l.roomAlt && l.roomAlt.startsWith('type:') && R[room]?.type === l.roomAlt.slice(5);
+          if (!prefOk && !altOk) err(`wrong room for ${lid}`);
+          (roomsUsed[lid] ||= new Set()).add(room);
+        }
         if (unitRooms.has(room)) err('same room twice in one parallel unit'); unitRooms.add(room);
       }
+      (sessionsOf[lid] ||= []).push({ k: Number(session), day: pl.day, first: cells[0][1], last: cells[cells.length - 1][1] });
       const dk = `${lid}:${pl.day}`; perDay[dk] = (perDay[dk] || 0) + 1;
       if (l.maxOnePerDay && perDay[dk] > 1) err(`1/day broken for ${lid}`);
       for (const [d, p] of cells) {
@@ -318,11 +347,41 @@ function audit(s, placements) {
     if (n > 1) { overlaps++; err(`OVERLAP ${k}: ${[...grid[k]].join(', ')}`); }
   }
   for (const k in tTeach) { const [t] = k.split(':'); if (T[t].maxPerDay && tTeach[k] > T[t].maxPerDay) err(`max/day exceeded ${T[t].name}`); }
-  for (const lid in placedPerLesson) if (placedPerLesson[lid] > L[lid].sessions) err(`too many sessions ${lid}`);
-  // coverage summary
-  const expectedLessons = s.lessons.reduce((a, l) => a + l.sessions, 0);
+  // Lengths: the placed multiset never exceeds the row's lengths; flexible rows stay within total.
+  for (const lid in placedLens) {
+    const l = L[lid]; const lens = lensOf(l); const got = placedLens[lid];
+    if (lens) {
+      const left = lens.slice();
+      for (const n of got) { const i = left.indexOf(n); if (i < 0) err(`too many sessions of length ${n} for ${lid}`); else left.splice(i, 1); }
+    } else if (got.reduce((a, b) => a + b, 0) > l.flexible.total) err(`flexible row ${lid} exceeds its total`);
+  }
+  for (const lid in roomsUsed) if (L[lid].sameRoom && roomsUsed[lid].size > 1) err(`sameRoom row ${lid} uses ${roomsUsed[lid].size} rooms`);
+  // Relations, checked from both rows' point of view. Teaching order skips breaks, not lunch.
+  const nextTeaching = (p) => { let q = p + 1; while (q < P && ptype(q) === 'break') q++; return q < P && ptype(q) === 'teaching' ? q : -1; };
+  const adjacent = (a, b) => a.day === b.day && (nextTeaching(a.last) === b.first || nextTeaching(b.last) === a.first);
+  for (const l of s.lessons) {
+    for (const r of l.relations || []) {
+      const o = L[r.lessonId]; if (!o || o === l) continue;
+      for (const a of sessionsOf[l.id] || []) for (const b of sessionsOf[o.id] || []) {
+        const what = `${r.type} ${l.id}#${a.k}/${o.id}#${b.k}`;
+        if (r.type === 'differentDays' && a.day === b.day) err(`relation broken: ${what} on day ${a.day}`);
+        if (r.type === 'notSameTime' && a.day === b.day && a.first <= b.last && b.first <= a.last) err(`relation broken: ${what} overlap`);
+        if (r.type === 'nonConsecutive' && adjacent(a, b)) err(`relation broken: ${what} adjacent`);
+        if (r.type === 'consecutive' && a.k === b.k && !adjacent(a, b)) err(`relation broken: ${what} not adjacent`);
+        if (r.type === 'daysApart') {
+          const diff = Math.abs(a.day - b.day);
+          if (Number(r.min) > 0 && diff < Number(r.min)) err(`relation broken: ${what} only ${diff} days apart`);
+          if (r.max !== '' && r.max !== null && r.max !== undefined && Number.isFinite(Number(r.max)) && diff > Number(r.max)) err(`relation broken: ${what} ${diff} days apart`);
+        }
+      }
+    }
+  }
+  // coverage summary: sessions (flexible rows by the engine's chosen distribution) and periods
+  const expectedLessons = s.lessons.reduce((a, l) => a + (lensOf(l) ? lensOf(l).length : (chosen[l.id] || placedLens[l.id] || []).length), 0);
   const placedLessons = Object.values(placedPerLesson).reduce((a, b) => a + b, 0);
-  return { errs, overlaps, expectedLessons, placedLessons, cellsChecked: Object.keys(grid).length };
+  const expectedPeriods = s.lessons.reduce((a, l) => a + (lensOf(l) ? lensOf(l).reduce((x, y) => x + y, 0) : l.flexible.total), 0);
+  const placedPeriods = Object.values(placedLens).reduce((a, ls) => a + ls.reduce((x, y) => x + y, 0), 0);
+  return { errs, overlaps, expectedLessons, placedLessons, expectedPeriods, placedPeriods, cellsChecked: Object.keys(grid).length };
 }
 
 // Gaps in class days (soft) — to show quality, not correctness. Free teaching periods between
@@ -391,13 +450,14 @@ for (const [key, s] of scenarios) {
   const t0 = Date.now();
   const best = solve(s);
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  const a = audit(s, best.placements);
+  const chosenOf = (e) => Object.fromEntries(s.lessons.filter((l) => e.lessonGroup[l.id]).map((l) => [l.id, e.groupLengths[e.lessonGroup[l.id]]]));
+  const a = audit(s, best.placements, chosenOf(best.sv.e));
   const unplaced = best.sv.e.units.filter((u, i) => !best.sv.e.pos[i]);
   const unplacedKinds = unplaced.reduce((m, u) => { m[u.kind] = (m[u.kind] || 0) + 1; return m; }, {});
   console.log(`\n=== ${s.settings.name}`);
   console.log(`  size: ${s.classes.length} classes, ${s.teachers.length} teachers, ${s.rooms.length} rooms, ${s.lessons.length} lesson rows, ${e0.units.length} units to place (${e0.problems.length} data problems)`);
-  console.log(`  result: ${best.placed}/${best.total} placed in ${secs}s (2 attempts) · lesson sessions ${a.placedLessons}/${a.expectedLessons} · unplaced by kind ${JSON.stringify(unplacedKinds)}`);
-  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}`);
+  console.log(`  result: ${best.placed}/${best.total} placed in ${secs}s (2 attempts) · lesson sessions ${a.placedLessons}/${a.expectedLessons} (periods ${a.placedPeriods}/${a.expectedPeriods}) · unplaced by kind ${JSON.stringify(unplacedKinds)}`);
+  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}`);
   console.log(`  AUDIT: ${a.overlaps} overlaps, ${a.errs.length} rule violations across ${a.cellsChecked} entity-periods${a.errs.length ? '\n   ' + [...new Set(a.errs)].slice(0, 8).join('\n   ') : ''}`);
   if (a.errs.length) allClean = false;
   if (unplaced.length) console.log(`  not placed: ${[...new Set(unplaced.map((u) => u.key))].slice(0, 6).map((k) => {
@@ -410,9 +470,9 @@ for (const [key, s] of scenarios) {
   const locked = best.placements.filter((_, i) => i % 7 === 0).map((p) => ({ ...p, locked: true }));
   const re = solve(s, locked, 1);
   const lockKept = locked.every((l) => re.placements.some((p) => p.unitId === l.unitId && p.day === l.day && p.period === l.period));
-  const a2 = audit(s, re.placements);
+  const a2 = audit(s, re.placements, chosenOf(re.sv.e));
   const fz = fuzzMoves(s, best.placements);
-  const a3 = audit(s, fz.placements);
+  const a3 = audit(s, fz.placements, chosenOf(best.sv.e));
   console.log(`  regenerate with ${locked.length} locked: locks kept=${lockKept}, placed ${re.placed}/${re.total}, audit ${a2.overlaps} overlaps/${a2.errs.length} violations`);
   console.log(`  editor fuzz: ${fz.accepted} moves accepted, ${fz.refused} refused → audit ${a3.overlaps} overlaps/${a3.errs.length} violations`);
   if (!lockKept || a2.errs.length || a3.errs.length) allClean = false;

@@ -5,8 +5,12 @@
 // A "unit" is one session to place. Lessons that share a parallel-group tag are
 // merged into one unit with several parts (e.g. a class split across two teachers
 // and rooms at the same time); each part keeps its own teacher, classes and room.
+// A lesson row yields one unit per entry of its `lengths` (or a distribution the engine
+// chooses for a `flexible` row); rows may be tied by relations (different days, not at the
+// same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1 };
+const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
   constructor(data, placements = []) {
@@ -42,6 +46,17 @@ class Engine {
       if (cur.length) segs.push(cur);
       this.segments.push(segs);
     }
+    // Teaching order: the next teaching period on the same day with only break periods in
+    // between (lunch separates). Used by the consecutive/nonConsecutive relations.
+    this.nextTeach = new Int32Array(this.N).fill(-1);
+    for (let d = 0; d < D; d++) {
+      let last = -1;
+      for (let p = 0; p < P; p++) {
+        const s = d * P + p; const ty = this.periodTypes[p];
+        if (ty === 'teaching') { if (last >= 0) this.nextTeach[last] = s; last = s; }
+        else if (ty === 'lunch') last = -1;
+      }
+    }
     const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
     this.teachers = byId(data.teachers);
     this.classes = byId(data.classes);
@@ -67,20 +82,50 @@ class Engine {
 
     this.units = [];
     this.groupUnits = {};
+    this.groupLengths = {}; // gkey → lengths actually used (flexible rows: the chosen distribution)
+    this.lessonGroup = {};  // lessonId → gkey, for lessons that became units
+    this.rel = {};          // gkey → [{ type, other, min, max }], stored on both groups
+    // Session lengths of the placements being restored, so a flexible row keeps its distribution.
+    const placedLens = new Map();
+    for (const pl of placements) {
+      const m = /^(.*)#(\d+)$/.exec(String(pl && pl.unitId || ''));
+      if (!m || !(Number(pl.len) >= 1)) continue;
+      if (!placedLens.has(m[1])) placedLens.set(m[1], new Map());
+      placedLens.get(m[1]).set(Number(m[2]), Number(pl.len));
+    }
+    const specs = []; // [gkey, lesson rows] for relations, resolved once every group exists
     for (const [key, lessons] of groups) {
-      const parts = [];
+      const parts = []; const rows = [];
       for (const l of lessons) {
         const classes = (l.classIds || []).filter((id) => this.classes[id]);
-        const roomCands = this.roomCandidates(l.room, data.rooms);
+        const roomCands = this.roomCandidates(l.room, data.rooms, l.roomAlt);
+        const flex = l.flexible && typeof l.flexible === 'object' ? { total: Number(l.flexible.total), min: Number(l.flexible.min), max: Number(l.flexible.max) } : null;
+        const lengths = flex ? null : Array.isArray(l.lengths) ? l.lengths.map(Number) : Array.from({ length: Math.max(0, Number(l.sessions) || 0) }, () => Math.max(1, Math.min(P, Number(l.length) || 1)));
         const bad = !this.subjects[l.subjectId] ? 'has no subject' : !this.teachers[l.teacherId] ? 'has no teacher'
-          : !classes.length ? 'has no class' : roomCands && !roomCands.length ? 'needs a room type that has no rooms' : null;
+          : !classes.length ? 'has no class' : roomCands && !roomCands.length ? 'needs a room type that has no rooms'
+            : lengths && lengths.some((n) => !Number.isInteger(n) || n < 1 || n > P) ? `has a session length outside 1–${P}`
+              : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
         if (bad) { this.problems.push({ lessonIds: [l.id], msg: bad }); continue; }
-        parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, teacher: l.teacherId, classes, roomCands, sessions: Number(l.sessions) || 0, len: Math.max(1, Math.min(P, Number(l.length) || 1)), maxOne: !!l.maxOnePerDay, allowBreak: !!l.allowBreakInside });
+        const prefRoom = l.room && !String(l.room).startsWith('type:') && this.rooms[l.room] ? l.room : null;
+        parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, teacher: l.teacherId, classes, roomCands, prefRoom, sameRoom: !!l.sameRoom });
+        rows.push({ l, lengths, flex });
       }
       if (!parts.length) continue;
+      const gkey = parts.map((p) => p.lessonId).join('+');
       const tag = key.startsWith('p:') ? lessons[0].parallel.trim() : null;
-      if (parts.some((p) => p.sessions !== parts[0].sessions || p.len !== parts[0].len)) {
-        this.problems.push({ lessonIds: parts.map((p) => p.lessonId), msg: `are in parallel group “${tag}” but have different sessions/length` });
+      // Flexible rows: adopt the group's reference lengths (a fixed row, or the first flexible
+      // row's choice) when they fit the spec, otherwise choose a distribution of their own.
+      let ref = (rows.find((r) => r.lengths) || {}).lengths || null;
+      for (const r of rows) {
+        if (!r.flex) continue;
+        r.lengths = ref && this.fitsFlex(ref, r.flex) ? ref.slice() : this.flexLengths(r.flex, placedLens.get(gkey));
+        if (!r.lengths) { this.problems.push({ lessonIds: [r.l.id], msg: `has a flexible distribution that cannot be split into blocks of ${r.flex.min}–${r.flex.max} periods` }); continue; }
+        if (!ref) ref = r.lengths;
+      }
+      if (rows.some((r) => !r.lengths)) continue;
+      const sortedLens = (ls) => ls.slice().sort((a, b) => a - b).join(',');
+      if (rows.some((r) => sortedLens(r.lengths) !== sortedLens(rows[0].lengths))) {
+        this.problems.push({ lessonIds: parts.map((p) => p.lessonId), msg: `are in parallel group “${tag}” but have different session lengths` });
         continue;
       }
       const teachers = [...new Set(parts.map((p) => p.teacher))];
@@ -88,8 +133,39 @@ class Engine {
         this.problems.push({ lessonIds: parts.map((p) => p.lessonId), msg: `are in parallel group “${tag}” but share a teacher` });
         continue;
       }
+      const lengths = rows[0].lengths.slice();
       // A parallel unit may straddle a break only when every lesson in it allows that.
-      this.addUnits(parts.map((p) => p.lessonId).join('+'), 'lesson', parts, parts[0].len, parts[0].sessions, parts.some((p) => p.maxOne), null, null, parts.every((p) => p.allowBreak));
+      this.addUnits(gkey, 'lesson', parts, lengths, {
+        maxOne: rows.some((r) => r.l.maxOnePerDay), allowBreak: rows.every((r) => r.l.allowBreakInside),
+        ends: rows.some((r) => r.l.penalizeEnds), avoidAdj: rows.some((r) => r.l.avoidConsecutiveDays) && lengths.length >= 2 && lengths.length <= 3,
+      });
+      this.groupLengths[gkey] = lengths;
+      for (const p of parts) this.lessonGroup[p.lessonId] = gkey;
+      this.rel[gkey] = [];
+      specs.push([gkey, rows.map((r) => r.l)]);
+    }
+    // Relations between lesson rows, kept on both groups; declared on either side, deduplicated.
+    const seenRel = new Set();
+    for (const [gkey, rows] of specs) {
+      for (const l of rows) {
+        for (const r of Array.isArray(l.relations) ? l.relations : []) {
+          const other = r && this.lessonGroup[r.lessonId];
+          const type = r && String(r.type);
+          if (!other || other === gkey || !RELATION_TYPES.has(type)) continue;
+          const min = type === 'daysApart' && Number(r.min) > 0 ? Math.floor(Number(r.min)) : 0;
+          const max = type === 'daysApart' && r.max !== '' && r.max !== null && r.max !== undefined && Number.isFinite(Number(r.max)) ? Math.floor(Number(r.max)) : null;
+          if (type === 'daysApart' && !min && max === null) continue;
+          const sig = `${type}|${[gkey, other].sort().join('|')}|${min}|${max}`;
+          if (seenRel.has(sig)) continue;
+          seenRel.add(sig);
+          if (type === 'consecutive' && this.groupUnits[gkey].length !== this.groupUnits[other].length) {
+            this.problems.push({ lessonIds: [...gkey.split('+'), ...other.split('+')], msg: 'must run consecutively but have different numbers of sessions' });
+            continue;
+          }
+          this.rel[gkey].push({ type, other, min, max });
+          this.rel[other].push({ type, other: gkey, min, max });
+        }
+      }
     }
 
     // Teacher meetings: all members free at once; never evict lessons (see Solver).
@@ -101,7 +177,8 @@ class Engine {
       if (bad) { this.problems.push({ meetingId: m.id, msg: bad }); continue; }
       const sessions = Number(m.sessions) || 0;
       const parts = members.map((t, k) => ({ kind: 'meeting', ref: m.id, teacher: t, classes: [], roomCands: k === 0 ? roomCands : null }));
-      this.addUnits('m:' + m.id, 'meeting', parts, Math.max(1, Math.min(P, Number(m.length) || 1)), sessions, sessions > 1, allowedSet(m.allowed));
+      const len = Math.max(1, Math.min(P, Number(m.length) || 1));
+      this.addUnits('m:' + m.id, 'meeting', parts, Array.from({ length: sessions }, () => len), { maxOne: sessions > 1, allowed: allowedSet(m.allowed) });
     }
 
     // On-call duties: one unit per assigned hour; capacity per period is hard, coverage is soft.
@@ -115,7 +192,7 @@ class Engine {
       for (const a of svc.assignments || []) {
         if (!this.teachers[a.teacherId] || !(Number(a.hours) > 0)) continue;
         const parts = [{ kind: 'duty', ref: svc.id, teacher: a.teacherId, classes: [], roomCands: null }];
-        this.addUnits(`d:${svc.id}:${a.teacherId}`, 'duty', parts, 1, Number(a.hours), false, allowed, svc.id);
+        this.addUnits(`d:${svc.id}:${a.teacherId}`, 'duty', parts, Array.from({ length: Number(a.hours) }, () => 1), { allowed, service: svc.id });
       }
     }
 
@@ -142,36 +219,92 @@ class Engine {
     }
   }
 
-  addUnits(gkey, kind, parts, len, sessions, maxOne, allowed, service = null, allowBreak = false) {
+  // One unit per entry of `lengths` (unit k has that many periods); units of one group may differ
+  // in length. Options: maxOne (one unit per day), allowed (slot set), service (duty id),
+  // allowBreak, ends (penalise first/last period of a day), avoidAdj (penalise adjacent days).
+  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false } = {}) {
     const teachers = [...new Set(parts.map((p) => p.teacher))];
     const classes = [...new Set(parts.flatMap((p) => p.classes))];
     // Legal starts, the teaching cells each occupies and the full span it holds (cells plus any
     // break skipped inside a straddling unit: teacher, classes and rooms stay busy during it).
     // Non-duty units need every cell to be a teaching period outside the general template;
-    // duties get a pre-filtered `allowed`.
-    const starts = []; const cells = new Map(); const span = new Map();
-    for (let s = 0; s < this.N; s++) {
-      const cs = this.spanCells(kind, len, allowBreak, s);
-      if (!cs) continue;
-      let ok = true;
-      for (const c of cs) {
-        if (allowed && !allowed.has(c)) ok = false;
-        if (kind !== 'duty' && this.general.has(c)) ok = false;
-        for (const t of teachers) if (this.blocked['t' + t].has(c)) ok = false;
-        for (const k of classes) if (this.blocked['c' + k].has(c)) ok = false;
-        if (!ok) break;
+    // duties get a pre-filtered `allowed`. Computed once per distinct length.
+    const geo = new Map();
+    const geometry = (len) => {
+      if (geo.has(len)) return geo.get(len);
+      const starts = []; const cells = new Map(); const span = new Map();
+      for (let s = 0; s < this.N; s++) {
+        const cs = this.spanCells(kind, len, allowBreak, s);
+        if (!cs) continue;
+        let ok = true;
+        for (const c of cs) {
+          if (allowed && !allowed.has(c)) ok = false;
+          if (kind !== 'duty' && this.general.has(c)) ok = false;
+          for (const t of teachers) if (this.blocked['t' + t].has(c)) ok = false;
+          for (const k of classes) if (this.blocked['c' + k].has(c)) ok = false;
+          if (!ok) break;
+        }
+        if (!ok) continue;
+        starts.push(s); cells.set(s, cs);
+        const last = cs[cs.length - 1];
+        span.set(s, last - s + 1 === cs.length ? cs : Array.from({ length: last - s + 1 }, (_, q) => s + q));
       }
-      if (!ok) continue;
-      starts.push(s); cells.set(s, cs);
-      const last = cs[cs.length - 1];
-      span.set(s, last - s + 1 === cs.length ? cs : Array.from({ length: last - s + 1 }, (_, q) => s + q));
-    }
+      const g = { starts, cells, span };
+      geo.set(len, g);
+      return g;
+    };
     const idxs = [];
-    for (let k = 0; k < sessions; k++) {
+    lengths.forEach((len, k) => {
       idxs.push(this.units.length);
-      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, kind, service, len, parts, teachers, classes, maxOne, allowBreak, starts, cells, span });
-    }
+      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, maxOne, allowBreak, ends, avoidAdj, ...geometry(len) });
+    });
     this.groupUnits[gkey] = idxs;
+  }
+
+  // True when `lengths` is a legal distribution for a flexible spec.
+  fitsFlex(lengths, flex) {
+    return lengths.length > 0 && lengths.reduce((a, b) => a + b, 0) === flex.total && lengths.every((n) => n >= flex.min && n <= flex.max);
+  }
+
+  // Lengths for a flexible row. Placed units (k → len) keep their length and index when the rest
+  // of the total can still be partitioned (with enough blocks for every kept index to exist);
+  // otherwise the total is partitioned from scratch. null when the total cannot be split into
+  // blocks of min..max at all.
+  flexLengths(flex, placed) {
+    if (placed && placed.size) {
+      const ks = [...placed.keys()].sort((a, b) => a - b);
+      const lens = ks.map((k) => placed.get(k));
+      if (lens.every((n) => Number.isInteger(n) && n >= flex.min && n <= flex.max)) {
+        const rem = flex.total - lens.reduce((a, b) => a + b, 0);
+        const need = ks[ks.length - 1] + 1 - lens.length;
+        const rest = rem === 0 ? [] : rem > 0 ? this.partition(rem, flex.min, flex.max, need) || this.partition(rem, flex.min, flex.max) : null;
+        if (rest) {
+          const count = lens.length + rest.length; const out = new Array(count).fill(0); const spill = [];
+          ks.forEach((k, i) => { if (k < count && !out[k]) out[k] = lens[i]; else spill.push(lens[i]); });
+          const fill = [...spill, ...rest];
+          for (let i = 0; i < count; i++) if (!out[i]) out[i] = fill.shift();
+          return out;
+        }
+      }
+    }
+    return this.partition(flex.total, flex.min, flex.max);
+  }
+
+  // Random partition of n into at least `atLeast` blocks of min..max, or null. Fewer blocks are
+  // preferred (each extra block is about a third as likely); the extra periods and the order are
+  // shuffled so repeated attempts try different distributions.
+  partition(n, min, max, atLeast = 1) {
+    const bMin = Math.max(1, atLeast, Math.ceil(n / max)), bMax = Math.floor(n / min);
+    if (!(n >= 1) || bMin > bMax) return null;
+    let b = bMin;
+    while (b < bMax && Math.random() < 0.35) b++;
+    const out = new Array(b).fill(min);
+    for (let extra = n - b * min; extra > 0; extra--) {
+      const open = out.map((v, i) => (v < max ? i : -1)).filter((i) => i >= 0);
+      out[open[Math.floor(Math.random() * open.length)]]++;
+    }
+    for (let i = b - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+    return out;
   }
 
   // Slots a `len`-period unit of `kind` occupies when it starts at s, or null if it cannot start
@@ -195,14 +328,27 @@ class Engine {
   // Every slot unit ui holds when it starts at s (cells plus breaks skipped inside it).
   spanAt(ui, s) { return this.units[ui].span.get(s) || null; }
 
-  // null = lesson needs no room; [] = needs a room but none qualify.
-  roomCandidates(spec, rooms) {
+  // null = lesson needs no room; [] = needs a room but none qualify. Ordered: the preferred
+  // room (or rooms of its type) first, then the rooms of the alternative type `alt` ('type:X').
+  roomCandidates(spec, rooms, alt = '') {
     if (!spec) return null;
-    if (spec.startsWith('type:')) {
-      const type = spec.slice(5);
-      return rooms.filter((r) => (r.type || '') === type).map((r) => r.id);
+    const ofType = (type) => rooms.filter((r) => (r.type || '') === type).map((r) => r.id);
+    const out = spec.startsWith('type:') ? ofType(spec.slice(5)) : rooms.some((r) => r.id === spec) ? [spec] : [];
+    if (alt && String(alt).startsWith('type:')) for (const r of ofType(String(alt).slice(5))) if (!out.includes(r)) out.push(r);
+    return out;
+  }
+
+  // Room part k of another placed unit of ui's group uses (sameRoom rows must follow it), or null.
+  groupRoom(ui, k) {
+    for (const vi of this.groupUnits[this.units[ui].key]) {
+      if (vi !== ui && this.pos[vi] && this.pos[vi].rooms[k]) return this.pos[vi].rooms[k];
     }
-    return rooms.some((r) => r.id === spec) ? [spec] : [];
+    return null;
+  }
+
+  // Teaching cells a and b are adjacent in teaching order on one day (breaks between them ignored).
+  adjacent(a, b) {
+    return this.nextTeach[a[a.length - 1]] === b[0] || this.nextTeach[b[b.length - 1]] === a[0];
   }
 
   dayOf(s) { return Math.floor(s / this.P); }
@@ -220,6 +366,25 @@ class Engine {
     const d = this.dayOf(s);
     if (u.maxOne) {
       for (const vi of this.groupUnits[u.key]) if (vi !== ui && this.pos[vi] && this.dayOf(this.pos[vi].s) === d) out.add(vi);
+    }
+    // Relations with other rows: every placed unit of the related group that the start would
+    // violate must leave; a locked one makes the start impossible.
+    const cells = this.cellsAt(ui, s);
+    for (const r of this.rel[u.key] || []) {
+      const others = r.type === 'consecutive' ? [this.groupUnits[r.other][u.k]] : this.groupUnits[r.other];
+      for (const vi of others) {
+        if (vi === undefined || vi === ui || !this.pos[vi]) continue;
+        const pv = this.pos[vi]; const dv = this.dayOf(pv.s); const diff = Math.abs(d - dv);
+        let bad = false;
+        if (r.type === 'differentDays') bad = dv === d;
+        else if (r.type === 'notSameTime') bad = span[0] <= pv.span[pv.span.length - 1] && pv.span[0] <= span[span.length - 1];
+        else if (r.type === 'nonConsecutive') bad = dv === d && this.adjacent(cells, pv.cells);
+        else if (r.type === 'consecutive') bad = dv !== d || !this.adjacent(cells, pv.cells);
+        else if (r.type === 'daysApart') bad = (r.min > 0 && diff < r.min) || (r.max !== null && diff > r.max);
+        if (!bad) continue;
+        if (this.locked[vi]) return null;
+        out.add(vi);
+      }
     }
     if (u.service) {
       const svc = this.services[u.service];
@@ -262,6 +427,7 @@ class Engine {
       const part = u.parts[k]; const r = rooms[k];
       if (!part.roomCands) { if (r) return false; continue; }
       if (!part.roomCands.includes(r) || used.has(r)) return false;
+      if (part.sameRoom) { const g = this.groupRoom(ui, k); if (g && g !== r) return false; }
       used.add(r);
       for (const c of this.cellsAt(ui, s) || []) if (this.blocked['r' + r].has(c)) return false;
     }
@@ -275,23 +441,33 @@ class Engine {
   }
 
   // Greedy room choice per part: distinct rooms, fewest extra evictions, then fewest
-  // non-preferred cells. null if no valid rooms.
+  // non-preferred cells, the preferred room over an alternative, and a room the group already
+  // uses over a new one. A sameRoom part may only take the room its group already uses.
+  // null if no valid rooms.
   bestRooms(ui, s, base) {
     const u = this.units[ui];
     const cells = this.cellsAt(ui, s), span = this.spanAt(ui, s);
     if (!cells) return null;
     const conf = new Set(base); const rooms = []; const used = new Set();
-    for (const part of u.parts) {
+    for (let k = 0; k < u.parts.length; k++) {
+      const part = u.parts[k];
       if (!part.roomCands) { rooms.push(null); continue; }
+      let groupRooms = null; let cands = part.roomCands;
+      if (u.kind === 'lesson') {
+        groupRooms = new Set(this.groupUnits[u.key].filter((vi) => vi !== ui && this.pos[vi] && this.pos[vi].rooms[k]).map((vi) => this.pos[vi].rooms[k]));
+        if (part.sameRoom && groupRooms.size) cands = [this.groupRoom(ui, k)];
+      }
       let best = null;
-      for (const r of part.roomCands) {
+      for (const r of cands) {
         if (used.has(r)) continue;
         let ok = true; const extra = new Set();
-        for (const k of cells) if (this.blocked['r' + r].has(k)) { ok = false; break; }
+        for (const c of cells) if (this.blocked['r' + r].has(c)) { ok = false; break; }
         if (!ok) continue;
-        for (const k of span) { const o = this.occ['r' + r][k]; if (o >= 0 && o !== ui && !conf.has(o)) extra.add(o); }
-        let soft = 0; for (const k of cells) if (this.soft['r' + r].has(k)) soft++;
-        const score = extra.size * 10 + soft;
+        for (const c of span) { const o = this.occ['r' + r][c]; if (o >= 0 && o !== ui && !conf.has(o)) extra.add(o); }
+        let soft = 0; for (const c of cells) if (this.soft['r' + r].has(c)) soft++;
+        let score = extra.size * 10 + soft;
+        if (part.prefRoom && r !== part.prefRoom) score += this.W.roomPref;
+        if (groupRooms && groupRooms.size && !groupRooms.has(r)) score += this.W.roomSame;
         if (!best || score < best.score) best = { r, extra, score };
         if (score === 0) break;
       }
@@ -363,7 +539,24 @@ class Engine {
     return n;
   }
 
-  // Cost that depends only on where this unit sits: late periods and non-preferred cells.
+  // The unit's first cell opens its day or its last cell closes it (gap segments, so the general
+  // template and lunch handling are respected).
+  atDayEnd(cells) {
+    const segs = this.segments[this.dayOf(cells[0])];
+    if (!segs.length) return false;
+    const last = segs[segs.length - 1];
+    return cells[0] === segs[0][0] || cells[cells.length - 1] === last[last.length - 1];
+  }
+
+  // Non-preferred rooms used by a placed lesson unit (parts with a specific preferred room only).
+  roomPrefCount(ui) {
+    const u = this.units[ui]; const p = this.pos[ui];
+    if (!p || u.kind !== 'lesson') return 0;
+    return u.parts.filter((part, k) => part.prefRoom && p.rooms[k] !== part.prefRoom).length;
+  }
+
+  // Cost that depends only on where this unit sits: late periods, non-preferred cells, a
+  // non-preferred room and (when the row asks for it) the first/last period of a day.
   unitCost(ui) {
     const u = this.units[ui]; const p = this.pos[ui];
     if (!p) return 0;
@@ -373,7 +566,34 @@ class Engine {
       for (const c of u.classes) if (this.soft['c' + c].has(k)) soft++;
       for (const r of p.rooms) if (r && this.soft['r' + r].has(k)) soft++;
     }
-    return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft;
+    return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft
+      + this.W.roomPref * this.roomPrefCount(ui) + (u.ends && this.atDayEnd(p.cells) ? this.W.ends : 0);
+  }
+
+  // Group-level counts over the placed units of a lesson group: roomSame = extra distinct rooms
+  // per part beyond one; consecutiveDays = pairs of units on adjacent days (avoidConsecutiveDays
+  // rows with 2–3 units only).
+  groupStats(key) {
+    const uis = this.groupUnits[key]; const u = this.units[uis[0]];
+    let roomSame = 0, consecutiveDays = 0;
+    if (!u || u.kind !== 'lesson') return { roomSame, consecutiveDays };
+    const placed = uis.filter((vi) => this.pos[vi]);
+    if (placed.length < 2) return { roomSame, consecutiveDays };
+    for (let k = 0; k < u.parts.length; k++) {
+      if (!u.parts[k].roomCands) continue;
+      const rs = new Set(); for (const vi of placed) if (this.pos[vi].rooms[k]) rs.add(this.pos[vi].rooms[k]);
+      roomSame += Math.max(0, rs.size - 1);
+    }
+    if (u.avoidAdj) {
+      const days = placed.map((vi) => this.dayOf(this.pos[vi].s));
+      for (let i = 0; i < days.length; i++) for (let j = i + 1; j < days.length; j++) if (Math.abs(days[i] - days[j]) === 1) consecutiveDays++;
+    }
+    return { roomSame, consecutiveDays };
+  }
+
+  groupCost(key) {
+    const g = this.groupStats(key);
+    return this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays;
   }
 
   // Soft cost restricted to the entities/days a unit touches.
@@ -386,7 +606,7 @@ class Engine {
       c += this.W.sameDay * Math.max(0, this.sameDayCount(u.key, d) - 1);
       if (u.service) c += this.W.dutyUncovered * this.uncovered(u.service, d);
     }
-    return c + this.unitCost(ui);
+    return c + this.unitCost(ui) + this.groupCost(u.key);
   }
 
   // Soft cost of everything a set of units touches on the given days, each entity counted once.
@@ -400,13 +620,19 @@ class Engine {
       for (const key of keys) c += this.W.sameDay * Math.max(0, this.sameDayCount(key, d) - 1);
       for (const sv of svcs) c += this.W.dutyUncovered * this.uncovered(sv, d);
     }
+    for (const key of keys) c += this.groupCost(key);
     for (const ui of uis) c += this.unitCost(ui);
     return c;
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0 };
     let c = 0;
+    for (const key in this.groupUnits) {
+      const g = this.groupStats(key);
+      st.roomSame += g.roomSame; st.consecutiveDays += g.consecutiveDays;
+      c += this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays;
+    }
     for (let d = 0; d < this.D; d++) {
       for (const t in this.teachers) {
         c += this.teacherDayCost(t, d);
@@ -424,6 +650,8 @@ class Engine {
     this.units.forEach((u, i) => {
       const p = this.pos[i]; if (!p) return;
       c += this.unitCost(i);
+      st.roomPref += this.roomPrefCount(i);
+      if (u.ends && this.atDayEnd(p.cells)) st.ends++;
       for (const k of p.cells) {
         if (u.teachers.some((t) => this.soft['t' + t].has(k)) || u.classes.some((x) => this.soft['c' + x].has(k)) || p.rooms.some((r) => r && this.soft['r' + r].has(k))) st.dispreferred++;
       }
