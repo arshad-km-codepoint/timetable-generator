@@ -4,7 +4,7 @@
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
   unitBlockReason, pinSessions, pinName, pinAt, setPin, dropDeadPins,
-  newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
+  classDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -200,11 +200,14 @@ function renderTeachers(root) {
 function renderClasses(root) {
   const cols = [textCol('Name', 'name', 'e.g. 7B'),
     numCol('Size', 'size', 'Number of students. A lesson avoids rooms that seat fewer (when a room capacity is set).', 500),
+    numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day for this class', teachingPeriods(state)),
+    boolCol('No gaps', 'noGaps', 'Free periods inside this class’s day are penalised very heavily (strict no-gaps preference)'),
+    boolCol('Free in ~', 'forceFree', 'Keep this class’s free periods in its non-preferred (~ / ~~) slots: lessons placed there cost four times as much'),
     { label: '<span title="The grade (year group) this class belongs to. Its curriculum lists the subjects and weekly periods the class should have — see the Grades tab.">Grade</span>',
       input: (x) => `<select data-f="gradeId" aria-label="Grade"><option value="">— none —</option>${state.grades.map((g) => `<option value="${g.id}" ${x.gradeId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` },
     { label: '<span title="The room this class normally sits in. Lessons set to “Class homeroom” use it, and follow it when it changes.">Homeroom</span>',
       input: (x) => `<select data-f="homeroom" aria-label="Homeroom"><option value="">— none —</option>${state.rooms.map((r) => `<option value="${r.id}" ${x.homeroom === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` }];
-  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '', size: 0 });
+  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults() });
   cols.rerender = ['homeroom'];
   const extra = {
     label: 'Lessons', act: 'homeApply',

@@ -12,7 +12,7 @@
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
     activityMin: 'Activity day with fewer periods than its minimum (per period short)',
-    roomSize: 'Lesson in a room that seats fewer than the class',
+    roomSize: 'Lesson in a room that seats fewer than the class', classGapStrict: 'Free gap in the day of a “no gaps” class',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
     balance: 'Teacher load uneven across days (per period off)', consecutive: 'Teacher over their max periods in a row (per period)',
     presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s last period then first period next day',
@@ -22,6 +22,8 @@
     consecutive: 'In consecutive periods (same day)', daysApart: 'Days apart (min–max)',
   };
   // Week rules a teacher can carry (0 / false = none).
+  // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
+  const classDefaults = () => ({ homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false });
   const teacherDefaults = () => ({ maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
@@ -71,7 +73,7 @@
       fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
     };
     s.teachers = Object.values(T);
-    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '', size: 26 }));
+    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults(), size: 26 }));
     s.rooms = [
       ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30 })),
       ...[['Science Lab 1', 'Lab', 28], ['Science Lab 2', 'Lab', 28], ['Sports Hall', 'Gym', 60], ['Art Studio', 'Art', 28], ['Computer Lab', 'Computer', 28]]
@@ -308,7 +310,11 @@
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
       for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
     });
-    s.classes.forEach((c) => { if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = ''; c.size = Math.max(0, Math.floor(Number(c.size)) || 0); });
+    s.classes.forEach((c) => {
+      if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = '';
+      for (const k of ['size', 'maxPerDay']) c[k] = Math.max(0, Math.floor(Number(c[k])) || 0);
+      c.noGaps = !!c.noGaps; c.forceFree = !!c.forceFree;
+    });
     s.rooms.forEach((r) => { r.capacity = Math.max(0, Math.floor(Number(r.capacity)) || 0); });
     s.subjects = s.subjects || [];
     s.grades = Array.isArray(s.grades) ? s.grades.filter((g) => g && g.id) : [];
@@ -588,6 +594,7 @@
     s.classes.forEach((c) => {
       const n = w.c[c.id] || 0;
       if (n > availableSlots(s, c)) issues.push({ lvl: 'err', msg: `${c.name} has ${n} periods but only ${availableSlots(s, c)} free slots.` });
+      else if (c.maxPerDay && n > c.maxPerDay * D) issues.push({ lvl: 'err', msg: `${c.name} has ${n} periods but max ${c.maxPerDay}/day allows only ${c.maxPerDay * D}.` });
       else if (!n) issues.push({ lvl: 'warn', msg: `${c.name} has no lessons.` });
     });
     for (const r of e.roomDemand()) {
@@ -689,7 +696,7 @@
   }
 
   window.Model = {
-    uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
+    uid, esc, PALETTE, teacherDefaults, classDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
     unitBlockReason, PIN_KINDS, pinSessions, pinName, pinAt, setPin, dropDeadPins, pinIssues,
     lessonDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, classSubjectPeriods, deriveCurriculum, curriculumGaps, curriculumSubjects, applyCurriculum, missingLessons, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,

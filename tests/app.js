@@ -660,6 +660,18 @@ check('(o) migrate sets sizes and capacities; validate warns only when no usable
   r2.capacity = 40; l2.room = r2.id;
   assert.ok(!hasMsg(s, /students/));
 });
+check('(p) class rules migrate to numbers/booleans and a daily cap below the load is an error', () => {
+  const s = school('tttt', 2);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s, 'A');
+  c.maxPerDay = '3.7'; c.noGaps = 1; delete c.forceFree;
+  M.migrate(s);
+  eq([c.maxPerDay, c.noGaps, c.forceFree], [3, true, false]);
+  add.lesson(s, subj, t, [c], 7, 1, { maxOnePerDay: false });
+  assert.ok(hasMsg(s, /err: A has 7 periods but max 3\/day allows only 6\./), msgs(s).join('\n'));
+  c.maxPerDay = 4;
+  assert.ok(!hasMsg(s, /max 4\/day/));
+  eq(Object.keys(M.classDefaults()).sort(), ['forceFree', 'gradeId', 'homeroom', 'maxPerDay', 'noGaps', 'size']);
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

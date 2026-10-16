@@ -54,7 +54,7 @@ function scenarioA() {
   const satAfternoon = slotsWhere(s, (d, p) => d === 5 && p >= 4);
   const grades = [6, 7, 8, 9, 10];
   const div = {};
-  grades.forEach((g) => { div[g] = ['A', 'B', 'C', 'D'].map((x) => add.cls(s, `${g}${x}`, { unavailable: satAfternoon })); });
+  grades.forEach((g) => { div[g] = ['A', 'B', 'C', 'D'].map((x) => add.cls(s, `${g}${x}`, { unavailable: satAfternoon, maxPerDay: 7 })); });
   const all = grades.flatMap((g) => div[g]);
   const T = (n, code, extra) => add.teacher(s, n, code, { maxPerDay: 6, unavailable: satAfternoon, ...extra });
   // subject teachers, each covering 4 divisions (realistic 24–28 periods/week)
@@ -412,6 +412,11 @@ function audit(s, placements, chosen = {}, checkPins = true) {
       if (act.maxPerDay && day.length > act.maxPerDay) err(`activity ${act.name}: ${day.length} periods on day ${d}, max ${act.maxPerDay}`);
       if (act.nonConsecutive) for (let i = 1; i < day.length; i++) if (nextTeach(day[i - 1]) === day[i]) err(`activity ${act.name}: consecutive periods ${day[i - 1]},${day[i]} on day ${d}`);
     }
+  }
+  // Class daily caps, counted from the booked teaching periods of each class.
+  for (const c of s.classes) if (c.maxPerDay) for (let d = 0; d < D; d++) {
+    const n = [...Array(P).keys()].filter((p) => ptype(p) === 'teaching' && grid[`C${c.id}@${d}-${p}`]).length;
+    if (n > c.maxPerDay) err(`class ${c.name} has ${n} periods on day ${d}, max ${c.maxPerDay}`);
   }
   // Pins: every pinned session is placed exactly where the planner fixed it.
   if (checkPins) for (const pn of s.pins || []) {

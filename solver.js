@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
@@ -71,6 +71,9 @@ class Engine {
         this.soft2[kind + x.id] = slots(x.dispreferred2);
       }
     }
+    // Class rules: daily cap (hard), strict no-gaps (heavy gap weight), free periods in ~ slots (4× cost).
+    this.cRule = {};
+    for (const c of data.classes) this.cRule[c.id] = { max: Math.max(0, Math.floor(Number(c.maxPerDay)) || 0), strict: !!c.noGaps, force: !!c.forceFree };
     this.tMax = {}; this.tMin = {};
     data.teachers.forEach((t) => { this.tMax[t.id] = Number(t.maxPerDay) || 0; this.tMin[t.id] = Number(t.minPerDay) || 0; });
     // Days a teacher could work (at least one teaching slot outside the general template and their
@@ -504,6 +507,24 @@ class Engine {
       }
       if (load > max) return null;
     }
+    // A class's daily cap: lessons sharing the class on this day are evicted, smallest first, to make room.
+    if (u.kind === 'lesson') for (const c of u.classes) {
+      const max = this.cRule[c].max;
+      if (!max) continue;
+      if (u.len > max) return null;
+      const occ = this.occ['c' + c]; const onDay = new Map();
+      for (let p = 0; p < this.P; p++) {
+        const k = d * this.P + p; const o = occ[k];
+        if (this.teach[k] && o >= 0 && o !== ui && !out.has(o)) onDay.set(o, (onDay.get(o) || 0) + 1);
+      }
+      let load = [...onDay.values()].reduce((a, b) => a + b, 0) + u.len;
+      for (const [o, n] of [...onDay].sort((a, b) => a[1] - b[1])) {
+        if (load <= max) break;
+        if (this.locked[o]) continue;
+        out.add(o); load -= n;
+      }
+      if (load > max) return null;
+    }
     // Strict presence limits bind every unit that sits in teaching periods; free days bind lessons
     // only (a meeting or duty may use a day without lessons).
     for (const t of u.teachers) if (this.tRule[t].hard && !this.teacherAllows(t, ui, s, out)) return null;
@@ -813,7 +834,7 @@ class Engine {
     return n;
   }
 
-  classDayCost(c, d) { return this.W.classGap * this.dayStats(this.occ['c' + c], d).gaps; }
+  classDayCost(c, d) { return (this.cRule[c].strict ? this.W.classGapStrict : this.W.classGap) * this.dayStats(this.occ['c' + c], d).gaps; }
 
   sameDayCount(key, d) {
     let n = 0;
@@ -845,7 +866,7 @@ class Engine {
     let soft = 0, soft2 = 0;
     for (const k of p.cells) {
       for (const t of u.teachers) { if (this.soft['t' + t].has(k)) soft++; if (this.soft2['t' + t].has(k)) soft2++; }
-      for (const c of u.classes) { if (this.soft['c' + c].has(k)) soft++; if (this.soft2['c' + c].has(k)) soft2++; }
+      for (const c of u.classes) { const w = this.cRule[c].force ? 4 : 1; if (this.soft['c' + c].has(k)) soft += w; if (this.soft2['c' + c].has(k)) soft2 += w; }
       for (const sj of u.subjects) { if (this.soft['s' + sj].has(k)) soft++; if (this.soft2['s' + sj].has(k)) soft2++; }
       for (const r of p.rooms) if (r) { if (this.soft['r' + r].has(k)) soft++; if (this.soft2['r' + r].has(k)) soft2++; }
     }

@@ -1109,6 +1109,43 @@ check('room size: a lesson avoids rooms that seat fewer than its classes; parall
   void none; void la; void lf; void ls; void b;
 });
 
+check('class rules: max periods/day is hard (evicts, then refuses), strict no-gaps weighs gaps heavily, free-in-~ multiplies the ~ cost', () => {
+  const s = school({ days: 2, periods: 5 });
+  const subj = add.subject(s), c = add.cls(s, 'A', { maxPerDay: 3 }), t = add.teacher(s, 'T'), u = add.teacher(s, 'U');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1] });
+  const dbl = add.lesson(s, subj, u, [c], 0, 1, { lengths: [4] });
+  const e = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1), pl(l, 2, 0, 2, 1)]);
+  const u3 = e.unitById[`${l.id}#3`].i;
+  const b = e.baseConflicts(u3, 3);
+  assert.strictEqual(b.size, 1, 'a fourth period on Monday evicts one of the three');
+  assert.strictEqual(e.baseConflicts(u3, 5).size, 0, 'Tuesday is free');
+  assert.strictEqual(e.baseConflicts(e.unitById[`${dbl.id}#0`].i, 0), null, 'a block longer than the cap never fits');
+  const locked = new Engine(s, [0, 1, 2].map((k) => ({ ...pl(l, k, 0, k, 1), locked: true })));
+  assert.strictEqual(locked.baseConflicts(locked.unitById[`${l.id}#3`].i, 3), null, 'all locked: refused');
+  s.lessons = [l]; l.lengths = [1, 1, 1, 1, 1, 1];
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  for (let d = 0; d < 2; d++) assert.strictEqual(r.engine.dayStats(r.engine.occ['c' + c.id], d).n, 3);
+  // Strict no-gaps.
+  const g = school({ days: 1, periods: 5 });
+  const gs = add.subject(g), gc = add.cls(g, 'A'), gt = add.teacher(g, 'T');
+  const gl = add.lesson(g, gs, gt, [gc], 0, 1, { lengths: [1, 1] });
+  const gap = () => new Engine(g, [pl(gl, 0, 0, 0, 1), pl(gl, 1, 0, 2, 1)]);
+  assert.strictEqual(gap().classDayCost(gc.id, 0), gap().W.classGap);
+  gc.noGaps = true;
+  assert.strictEqual(gap().classDayCost(gc.id, 0), gap().W.classGapStrict, 'a no-gaps class pays the strict weight per gap');
+  assert.ok(gap().W.classGapStrict > 3 * gap().W.classGap);
+  // Free periods in ~ slots: a lesson in the class's ~ slot costs four times as much.
+  const f = school({ days: 1, periods: 3 });
+  const fs = add.subject(f), fc = add.cls(f, 'A'), ft = add.teacher(f, 'T');
+  fc.dispreferred = ['0-1'];
+  const fl = add.lesson(f, fs, ft, [fc], 0, 1, { lengths: [1] });
+  const cost = () => { const x = new Engine(f, [pl(fl, 0, 0, 1, 1)]); return x.unitCost(0) - x.W.late * 1; };
+  assert.strictEqual(cost(), new Engine(f, []).W.dispreferred);
+  fc.forceFree = true;
+  assert.strictEqual(cost(), 4 * new Engine(f, []).W.dispreferred);
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 
