@@ -3,7 +3,7 @@
 // Model function takes the state it works on. `state` is autosaved to localStorage.
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
-  newLesson, homeroomOf, applyHomeroom, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
+  newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -40,7 +40,7 @@ function changed() { save(); }
 function render() {
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === ui.tab)));
   $('#schoolName').value = state.settings.name;
-  const views = { setup: renderSetup, teachers: renderTeachers, classes: renderClasses, rooms: renderRooms, subjects: renderSubjects, lessons: renderLessons, staff: renderStaff, generate: renderGenerate, timetable: renderTimetable };
+  const views = { setup: renderSetup, teachers: renderTeachers, classes: renderClasses, rooms: renderRooms, subjects: renderSubjects, grades: renderGrades, lessons: renderLessons, staff: renderStaff, generate: renderGenerate, timetable: renderTimetable };
   $('#main').innerHTML = '';
   views[ui.tab]($('#main'));
 }
@@ -165,6 +165,7 @@ function cleanupRefs() {
     if (l.room && l.room !== 'home' && !l.room.startsWith('type:') && !r.has(l.room)) l.room = '';
   });
   state.classes.forEach((c) => { if (c.homeroom && !r.has(c.homeroom)) c.homeroom = ''; });
+  state.grades.forEach((g) => { g.curriculum = g.curriculum.filter((e) => s.has(e.subjectId)); });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
   dropDeadRelations(state);
   state.meetings.forEach((m) => {
@@ -194,9 +195,11 @@ function renderTeachers(root) {
 
 function renderClasses(root) {
   const cols = [textCol('Name', 'name', 'e.g. 7B'),
+    { label: '<span title="The grade (year group) this class belongs to. Its curriculum lists the subjects and weekly periods the class should have — see the Grades tab.">Grade</span>',
+      input: (x) => `<select data-f="gradeId" aria-label="Grade"><option value="">— none —</option>${state.grades.map((g) => `<option value="${g.id}" ${x.gradeId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` },
     { label: '<span title="The room this class normally sits in. Lessons set to “Class homeroom” use it, and follow it when it changes.">Homeroom</span>',
       input: (x) => `<select data-f="homeroom" aria-label="Homeroom"><option value="">— none —</option>${state.rooms.map((r) => `<option value="${r.id}" ${x.homeroom === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` }];
-  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], homeroom: '' });
+  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], homeroom: '', gradeId: '' });
   cols.rerender = ['homeroom'];
   const extra = {
     label: 'Lessons', act: 'homeApply',
@@ -239,6 +242,67 @@ function renderSubjects(root) {
   });
 }
 
+// ---------- Grades & curriculum ----------
+function renderGrades(root) {
+  const p = panel(root, 'Grades & curriculum', 'A grade is a year group. Its curriculum lists the subjects every class of the grade takes, with the weekly periods. Generate → data validation warns when a class has too few, too many or no lessons of a curriculum subject; the Lessons tab offers the curriculum subjects first; and “Create missing lessons” adds one row for each subject a class has no lessons for (pick the teacher afterwards). Assign classes to a grade on the Classes tab.');
+  p.querySelector('[data-slot=actions]').innerHTML = '<button data-add>+ Add grade</button>';
+  p.insertAdjacentHTML('beforeend', state.grades.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Classes</th><th>Curriculum</th><th></th><th></th></tr></thead><tbody>
+    ${state.grades.map((g) => {
+    const classes = state.classes.filter((c) => c.gradeId === g.id);
+    const total = g.curriculum.reduce((a, e) => a + e.periods, 0); const missing = missingLessons(state, g.id);
+    return `<tr data-id="${g.id}"><td><input data-f="name" value="${esc(g.name)}" aria-label="Grade name"></td>
+      <td>${classes.map((c) => `<span class="chip">${esc(c.name)}</span>`).join('') || '<span class="hint">none — set the grade on the Classes tab</span>'}</td>
+      <td><button class="ghost" data-curr>${g.curriculum.length} subject(s), ${total} periods</button></td>
+      <td><button class="ghost small" data-create ${missing ? '' : 'disabled'} title="Add a row for every curriculum subject a class of this grade has no lessons for">Create missing lessons${missing ? ` (${missing})` : ''}</button></td>
+      <td><button class="danger" data-del title="Delete">✕</button></td></tr>`;
+  }).join('')}</tbody></table></div>` : '<p class="hint">No grades yet. Click “+ Add grade”.</p>');
+  p.addEventListener('change', (e) => {
+    const tr = e.target.closest('tr[data-id]'); if (!tr || e.target.dataset.f !== 'name') return;
+    state.grades.find((g) => g.id === tr.dataset.id).name = e.target.value; changed();
+  });
+  p.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (btn.dataset.add !== undefined) { state.grades.push({ id: uid(), name: `Grade ${state.grades.length + 1}`, curriculum: [] }); changed(); render(); return; }
+    const tr = btn.closest('tr[data-id]'); if (!tr) return;
+    const g = state.grades.find((x) => x.id === tr.dataset.id);
+    if (btn.dataset.curr !== undefined) editCurriculum(g);
+    else if (btn.dataset.create !== undefined) {
+      const n = state.classes.filter((c) => c.gradeId === g.id).reduce((a, c) => a + applyCurriculum(state, c.id), 0);
+      toast(`${n} lesson row(s) added — choose a teacher for each on the Lessons tab.`, 4000); changed(); render();
+    } else if (btn.dataset.del !== undefined) {
+      if (!confirm(`Delete grade “${g.name}”? Its classes keep their lessons but lose the grade.`)) return;
+      state.grades = state.grades.filter((x) => x !== g); state.classes.forEach((c) => { if (c.gradeId === g.id) c.gradeId = ''; });
+      changed(); render();
+    }
+  });
+}
+
+// Curriculum of one grade: weekly periods per subject (blank or 0 = not taught).
+function editCurriculum(g) {
+  const per = Object.fromEntries(g.curriculum.map((e) => [e.subjectId, e.periods]));
+  const classes = state.classes.filter((c) => c.gradeId === g.id);
+  const rows = state.subjects.map((x) => `<tr data-sid="${x.id}"><td><span class="chip" style="background:${esc(x.color)};color:#fff">${esc(x.code || x.name.slice(0, 3))}</span> ${esc(x.name)}</td><td><input type="number" min="0" max="${teachingPeriods(state) * D()}" value="${per[x.id] || ''}" placeholder="—" style="max-width:80px" aria-label="Periods per week of ${esc(x.name)}"></td></tr>`).join('');
+  openModal(`Curriculum — ${g.name}`, `
+    ${state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Subject</th><th>Periods / week</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="hint">Add subjects first.</p>'}
+    <p class="hint" id="currTotal"></p>
+    ${classes.length ? `<label class="row" style="gap:6px;margin-top:8px">Fill from the lessons of <select id="currFrom">${classes.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select> <button type="button" class="ghost small" id="currFill">Fill</button></label>` : ''}`, (v) => {
+    if (v !== 'save') return;
+    g.curriculum = [...$('#modalContent').querySelectorAll('tr[data-sid]')]
+      .map((tr) => ({ subjectId: tr.dataset.sid, periods: Math.floor(Number(tr.querySelector('input').value)) }))
+      .filter((e) => e.periods >= 1);
+    changed(); render();
+  }, '<button value="cancel" class="ghost">Cancel</button><button value="save">Save</button>');
+  const total = () => { const n = [...$('#modalContent').querySelectorAll('tr[data-sid] input')].reduce((a, i) => a + (Math.floor(Number(i.value)) || 0), 0); $('#currTotal').textContent = `${n} periods per week in total (a class has ${classes.length ? availableSlots(state, classes[0]) : selectableKeys(state).length} free slots).`; };
+  total();
+  $('#modalContent').oninput = total;
+  const fill = $('#currFill');
+  if (fill) fill.onclick = () => {
+    const cur = Object.fromEntries(deriveCurriculum(state, $('#currFrom').value).map((e) => [e.subjectId, e.periods]));
+    $('#modalContent').querySelectorAll('tr[data-sid]').forEach((tr) => { tr.querySelector('input').value = cur[tr.dataset.sid] || ''; });
+    total();
+  };
+}
+
 function roomOptions(sel, lesson = null) {
   const types = [...new Set(state.rooms.map((r) => r.type).filter(Boolean))];
   const homeName = lesson && find('rooms', homeroomOf(state, lesson.classIds))?.name;
@@ -274,8 +338,20 @@ function distributionCell(l, eng) {
 
 function renderLessons(root) {
   const p = panel(root, 'Lessons', 'Each row is “subject × teacher × class(es)”. <b>Distribution</b> lists the length of every weekly session: “2 2 1” = two doubles and a single; <b>Flexible</b> lets the engine choose the split. Several classes = joint lesson. Give rows the same <b>Parallel group</b> name to run them at the same time (split classes, electives, sets) — they need the same distribution. <b>Room</b> is the preferred (or only) room; <b>Alternatives</b> adds every room of a type as fallback. <b>Options</b> holds the per-row rules (1/day, break inside, same room, …); <b>Relations</b> ties rows together (different days, consecutive, …).');
-  p.querySelector('[data-slot=actions]').innerHTML = `<select data-filter aria-label="Filter by class"><option value="">All classes</option>${state.classes.map((c) => `<option value="${c.id}" ${ui.lessonFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><button data-add>+ Add lesson</button>`;
-  const list = state.lessons.filter((l) => !ui.lessonFilter || (l.classIds || []).includes(ui.lessonFilter));
+  if (ui.gradeFilter && !state.grades.some((g) => g.id === ui.gradeFilter)) ui.gradeFilter = '';
+  const gradeClasses = state.classes.filter((c) => !ui.gradeFilter || c.gradeId === ui.gradeFilter);
+  if (ui.lessonFilter && !gradeClasses.some((c) => c.id === ui.lessonFilter)) ui.lessonFilter = '';
+  p.querySelector('[data-slot=actions]').innerHTML = `${state.grades.length ? `<select data-gfilter aria-label="Filter by grade"><option value="">All grades</option>${state.grades.map((g) => `<option value="${g.id}" ${ui.gradeFilter === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` : ''}<select data-filter aria-label="Filter by class"><option value="">All classes</option>${gradeClasses.map((c) => `<option value="${c.id}" ${ui.lessonFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><button data-add>+ Add lesson</button>`;
+  const inGrade = (l) => !ui.gradeFilter || (l.classIds || []).some((id) => find('classes', id)?.gradeId === ui.gradeFilter);
+  const list = state.lessons.filter((l) => inGrade(l) && (!ui.lessonFilter || (l.classIds || []).includes(ui.lessonFilter)));
+  // Subjects of the row's grade curriculum come first; every other subject stays selectable.
+  const subjectOptions = (l) => {
+    const cur = curriculumSubjects(state, l.classIds);
+    const o = (x) => `<option value="${x.id}" ${x.id === l.subjectId ? 'selected' : ''}>${esc(x.name)}</option>`;
+    if (!cur) return state.subjects.map(o).join('');
+    const inC = state.subjects.filter((x) => cur.has(x.id)), rest = state.subjects.filter((x) => !cur.has(x.id));
+    return `<optgroup label="In the ${esc(gradeOf(state, l.classIds[0]).name)} curriculum">${inC.map(o).join('')}</optgroup>${rest.length ? `<optgroup label="Other subjects">${rest.map(o).join('')}</optgroup>` : ''}`;
+  };
   const opt = (arr, sel, empty) => `${empty ? `<option value="">${empty}</option>` : ''}${arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
   const groups = [...new Set(state.lessons.map((l) => (l.parallel || '').trim()).filter(Boolean))];
   const eng = state.lessons.some((l) => l.flexible) && state.timetable.placements.length ? currentEngine() : null;
@@ -283,7 +359,7 @@ function renderLessons(root) {
   p.insertAdjacentHTML('beforeend', list.length ? `<datalist id="parallelGroups">${groups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
     <div class="table-wrap"><table class="edit lessons"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th title="Preferred room, or any room of a type">Room</th><th title="Fallback: any room of this type">Alternatives</th><th title="Length of every weekly session, e.g. 2 2 1">Distribution</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th><th></th><th></th></tr></thead><tbody>
     ${list.map((l) => `<tr data-id="${l.id}">
-      <td><select data-f="subjectId" aria-label="Subject">${opt(state.subjects, l.subjectId)}</select></td>
+      <td><select data-f="subjectId" aria-label="Subject">${subjectOptions(l)}</select></td>
       <td><select data-f="teacherId" aria-label="Teacher">${opt(state.teachers, l.teacherId, '— choose —')}</select></td>
       <td><button class="ghost" data-classes>${(l.classIds || []).map((id) => `<span class="chip">${esc(find('classes', id)?.name)}</span>`).join('') || '— choose —'}</button></td>
       <td><select data-f="room" aria-label="Room">${roomOptions(l.room, l)}</select></td>
@@ -296,6 +372,7 @@ function renderLessons(root) {
     </tbody></table></div><p class="hint" style="margin-top:8px">${list.length} lesson rows${ui.lessonFilter ? ` · class load ${workload(state).c[ui.lessonFilter] || 0} of ${availableSlots(state, find('classes', ui.lessonFilter) || {})} periods` : ''}</p>`
     : '<p class="hint">No lessons yet. Add subjects, teachers and classes first, then click “+ Add lesson”.</p>');
   p.addEventListener('change', (e) => {
+    if (e.target.dataset.gfilter !== undefined) { ui.gradeFilter = e.target.value; render(); return; }
     if (e.target.dataset.filter !== undefined) { ui.lessonFilter = e.target.value; render(); return; }
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const l = find('lessons', tr.dataset.id); const f = e.target.dataset.f;
@@ -316,7 +393,11 @@ function renderLessons(root) {
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.dataset.add !== undefined) {
       if (!state.subjects.length) { toast('Add a subject first.'); return; }
-      state.lessons.push(newLesson(state.subjects[0].id, ui.lessonFilter ? [ui.lessonFilter] : [], state));
+      // With a class selected, the next curriculum subject it has no lessons for comes pre-filled.
+      const gap = ui.lessonFilter ? curriculumGaps(state, ui.lessonFilter).find((x) => !x.have) : null;
+      const row = newLesson(gap ? gap.subjectId : state.subjects[0].id, ui.lessonFilter ? [ui.lessonFilter] : [], state);
+      if (gap) { row.lengths = Array(gap.want).fill(1); row.maxOnePerDay = gap.want <= D(); }
+      state.lessons.push(row);
       changed(); render(); return;
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
@@ -409,7 +490,10 @@ function editRelations(l) {
 }
 
 function pickClasses(l) {
-  openModal('Classes attending this lesson', `<div class="class-picks">${state.classes.map((c) => `<label><input type="checkbox" value="${c.id}" ${(l.classIds || []).includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div>`, () => {
+  const pick = (c) => `<label><input type="checkbox" value="${c.id}" ${(l.classIds || []).includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`;
+  const byGrade = [...state.grades.map((g) => [g.name, state.classes.filter((c) => c.gradeId === g.id)]), ['No grade', state.classes.filter((c) => !gradeOf(state, c.id))]].filter(([, cs]) => cs.length);
+  const body = state.grades.length ? byGrade.map(([name, cs]) => `<h4 style="margin:8px 0 2px">${esc(name)}</h4><div class="class-picks">${cs.map(pick).join('')}</div>`).join('') : `<div class="class-picks">${state.classes.map(pick).join('')}</div>`;
+  openModal('Classes attending this lesson', body, () => {
     l.classIds = [...$('#modalContent').querySelectorAll('input:checked')].map((i) => i.value);
     changed(); render();
   });
@@ -477,6 +561,7 @@ function openModal(title, html, onClose, actions) {
   $('#modalContent').innerHTML = html;
   $('#modalContent').onclick = null;
   $('#modalContent').onchange = null;
+  $('#modalContent').oninput = null;
   $('#modalForm').onsubmit = null;
   $('#modalActions').innerHTML = actions || '<button value="close">Done</button>';
   dlg.returnValue = '';

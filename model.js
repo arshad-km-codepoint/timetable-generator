@@ -40,7 +40,7 @@
         weights: { ...TT().DEFAULT_WEIGHTS },
         attempts: 3,
       },
-      teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], duties: [],
+      teachers: [], classes: [], grades: [], rooms: [], subjects: [], lessons: [], meetings: [], duties: [],
       timetable: { placements: [], generatedAt: null, difficulty: null },
     };
   }
@@ -69,7 +69,7 @@
       fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
     };
     s.teachers = Object.values(T);
-    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], homeroom: '' }));
+    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], homeroom: '', gradeId: '' }));
     s.rooms = [
       ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [] })),
       ...[['Science Lab 1', 'Lab'], ['Science Lab 2', 'Lab'], ['Sports Hall', 'Gym'], ['Art Studio', 'Art'], ['Computer Lab', 'Computer']]
@@ -110,8 +110,62 @@
       id: uid(), name: 'Playground supervision', kind: 'break', maxPerSlot: 3, allowed: [],
       assignments: [T.m1, T.m2, T.e1, T.e2, T.s1, T.s2].map((x) => ({ teacherId: x.id, hours: 2 })),
     }];
+    // One grade per year; its curriculum is what the year's first class is taught.
+    s.grades = [['Year 6', '6'], ['Year 7', '7'], ['Year 8', '8']].map(([name, y]) => {
+      const classes = s.classes.filter((c) => c.name.startsWith(y));
+      classes.forEach((c) => { c.gradeId = ''; });
+      const g = { id: uid(), name, curriculum: deriveCurriculum(s, classes[0].id) };
+      classes.forEach((c) => { c.gradeId = g.id; });
+      return g;
+    });
     return s;
   }
+
+  // ---------- Grades & curriculum ----------
+  // A grade names a group of classes and the subjects each of them takes, with weekly periods:
+  // grades: [{ id, name, curriculum: [{ subjectId, periods }] }], class.gradeId. Planning aid only —
+  // the engine never reads it; validation compares each class's lessons with it.
+  const gradeOf = (s, classId) => { const c = (s.classes || []).find((x) => x.id === classId); return (c && c.gradeId && (s.grades || []).find((g) => g.id === c.gradeId)) || null; };
+  // Weekly periods per subject among the lesson rows a class attends.
+  function classSubjectPeriods(s, classId) {
+    const out = {};
+    for (const l of s.lessons) if ((l.classIds || []).includes(classId)) out[l.subjectId] = (out[l.subjectId] || 0) + periodsOf(l);
+    return out;
+  }
+  // The subjects a class is taught as a curriculum, in subject-list order.
+  function deriveCurriculum(s, classId) {
+    const have = classSubjectPeriods(s, classId);
+    return s.subjects.filter((x) => have[x.id] > 0).map((x) => ({ subjectId: x.id, periods: have[x.id] }));
+  }
+  // Curriculum entries a class does not meet exactly: { subjectId, want, have }.
+  function curriculumGaps(s, classId) {
+    const g = gradeOf(s, classId); if (!g) return [];
+    const have = classSubjectPeriods(s, classId);
+    return g.curriculum.filter((e) => (have[e.subjectId] || 0) !== e.periods).map((e) => ({ subjectId: e.subjectId, want: e.periods, have: have[e.subjectId] || 0 }));
+  }
+  // The curriculum subject ids shared by the grade of all `classIds`, or null when they are not all
+  // in one grade with a curriculum (the Lessons tab then offers every subject alike).
+  function curriculumSubjects(s, classIds) {
+    const grades = new Set((classIds || []).map((id) => { const g = gradeOf(s, id); return g ? g.id : ''; }));
+    if (grades.size !== 1) return null;
+    const g = (s.grades || []).find((x) => x.id === [...grades][0]);
+    return g && g.curriculum.length ? new Set(g.curriculum.map((e) => e.subjectId)) : null;
+  }
+  // One new single-period row per curriculum subject the class has no lessons for (teacher left
+  // blank; the row starts in the class homeroom). Returns how many rows it added.
+  function applyCurriculum(s, classId) {
+    const g = gradeOf(s, classId); if (!g) return 0;
+    let n = 0;
+    for (const gap of curriculumGaps(s, classId)) {
+      if (gap.have) continue;
+      const l = newLesson(gap.subjectId, [classId], s);
+      l.lengths = Array(gap.want).fill(1);
+      l.maxOnePerDay = gap.want <= s.settings.days.length;
+      s.lessons.push(l); n++;
+    }
+    return n;
+  }
+  const missingLessons = (s, gradeId) => s.classes.filter((c) => c.gradeId === gradeId).reduce((n, c) => n + curriculumGaps(s, c.id).filter((x) => !x.have).length, 0);
 
   // ---------- Lessons ----------
   // Every field a lesson row carries besides its identity and references.
@@ -249,6 +303,15 @@
     });
     s.classes.forEach((c) => { if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = ''; });
     s.subjects = s.subjects || [];
+    s.grades = Array.isArray(s.grades) ? s.grades.filter((g) => g && g.id) : [];
+    s.grades.forEach((g) => {
+      g.name = typeof g.name === 'string' ? g.name : 'Grade';
+      const seen = new Set();
+      g.curriculum = (Array.isArray(g.curriculum) ? g.curriculum : [])
+        .map((e) => ({ subjectId: e && e.subjectId, periods: Math.floor(Number(e && e.periods)) }))
+        .filter((e) => s.subjects.some((x) => x.id === e.subjectId) && e.periods >= 1 && !seen.has(e.subjectId) && seen.add(e.subjectId));
+    });
+    s.classes.forEach((c) => { if (!s.grades.some((g) => g.id === c.gradeId)) c.gradeId = ''; });
     s.lessons = s.lessons || [];
     s.lessons.forEach((l) => migrateLesson(l));
     dropDeadRelations(s);
@@ -436,6 +499,17 @@
       // classes (or meetings) compete for them; one class filling its own homeroom is fine.
       else if (r.users > 1 && r.demand > 0.9 * r.capacity) issues.push({ lvl: 'warn', msg: `${Label} ${be} ${Math.round(r.demand / r.capacity * 100)}% booked (${r.demand} of ${r.capacity} periods, ${r.users} classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.` });
     }
+    // Curriculum: each class should have exactly the periods its grade lists for every subject.
+    s.classes.forEach((c) => {
+      const g = gradeOf(s, c.id); if (!g) return;
+      const total = g.curriculum.reduce((a, e) => a + e.periods, 0);
+      if (total > availableSlots(s, c)) issues.push({ lvl: 'err', msg: `The ${g.name} curriculum asks for ${total} periods but ${c.name} has only ${availableSlots(s, c)} free slots.` });
+      for (const gap of curriculumGaps(s, c.id)) {
+        const subj = find(s, 'subjects', gap.subjectId).name;
+        const pl = (n) => `${n} period${n === 1 ? '' : 's'}`;
+        issues.push({ lvl: 'warn', msg: gap.have ? `${c.name} has ${pl(gap.have)} of ${subj} but the ${g.name} curriculum asks for ${gap.want}.` : `${c.name} has no ${subj} lessons but the ${g.name} curriculum asks for ${pl(gap.want)}.` });
+      }
+    });
     // Homerooms: a room shared by several classes, and parallel rows that all want the same homeroom.
     const homeUsers = {};
     s.classes.forEach((c) => { if (c.homeroom) (homeUsers[c.homeroom] ||= []).push(c.name); });
@@ -497,7 +571,7 @@
   window.Model = {
     uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
-    lessonDefaults, newLesson, homeroomOf, applyHomeroom, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
+    lessonDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, classSubjectPeriods, deriveCurriculum, curriculumGaps, curriculumSubjects, applyCurriculum, missingLessons, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
     dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
     periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
     availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements,

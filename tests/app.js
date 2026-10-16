@@ -464,6 +464,69 @@ check('(i) validate: shared homeroom warning, parallel rows on one homeroom, a r
   assert.ok(hasMsg(s, /err: .*uses the class homeroom but its class has no homeroom/), msgs(s).join('\n'));
   void orphan;
 });
+// ---------- (j) grades & curriculum ----------
+const mkGrade = (s, name, curriculum = []) => { const g = { id: id('g'), name, curriculum }; s.grades.push(g); return g; };
+check('(j) migrate cleans grades: dangling subjects, bad or duplicate periods, unknown grade ids', () => {
+  const s = school('tttt', 5);
+  const m = add.subject(s, 'Maths'), e = add.subject(s, 'English');
+  const g = mkGrade(s, 'G1', [{ subjectId: m.id, periods: 4.7 }, { subjectId: m.id, periods: 2 }, { subjectId: e.id, periods: 0 }, { subjectId: 'gone', periods: 3 }, { subjectId: e.id, periods: 'x' }, null]);
+  const a = add.cls(s, 'A'); a.gradeId = g.id; const b = add.cls(s, 'B'); b.gradeId = 'nope';
+  M.migrate(s);
+  eq(g.curriculum, [{ subjectId: m.id, periods: 4 }], 'only the first valid entry per subject, whole periods');
+  eq([a.gradeId, b.gradeId], [g.id, ''], 'unknown grade id cleared');
+  const old = M.migrate({ settings: M.emptyState().settings, teachers: [], classes: [{ id: 'c', name: 'C' }], rooms: [], subjects: [], lessons: [] });
+  eq([old.grades, old.classes[0].gradeId], [[], ''], 'files without grades get them');
+});
+check('(j) curriculum helpers: periods per subject, gaps, derive, subjects shared by a row’s classes', () => {
+  const s = school('tttt', 5);
+  const m = add.subject(s, 'Maths'), e = add.subject(s, 'English'), h = add.subject(s, 'History'), t = add.teacher(s);
+  const g = mkGrade(s, 'Year 7', [{ subjectId: m.id, periods: 5 }, { subjectId: e.id, periods: 4 }, { subjectId: h.id, periods: 2 }]);
+  const a = add.cls(s, 'A'), b = add.cls(s, 'B'), other = add.cls(s, 'O'); a.gradeId = g.id; b.gradeId = g.id;
+  add.lesson(s, m, t, [a], 5, 1); add.lesson(s, e, t, [a], [2, 1]); add.lesson(s, e, t, [a, b], 1, 1);  // A: Maths 5, English 4 (3 + a joint 1)
+  add.lesson(s, m, t, [b], 3, 1);                                                                     // B: Maths 3, no English, no History
+  eq(M.classSubjectPeriods(s, a.id), { [m.id]: 5, [e.id]: 4 });
+  eq(M.curriculumGaps(s, a.id), [{ subjectId: h.id, want: 2, have: 0 }]);
+  eq(M.curriculumGaps(s, b.id), [{ subjectId: m.id, want: 5, have: 3 }, { subjectId: e.id, want: 4, have: 1 }, { subjectId: h.id, want: 2, have: 0 }]);
+  eq(M.curriculumGaps(s, other.id), [], 'a class without a grade has no gaps');
+  eq(M.deriveCurriculum(s, a.id), [{ subjectId: m.id, periods: 5 }, { subjectId: e.id, periods: 4 }], 'subject-list order, only subjects with lessons');
+  eq([...M.curriculumSubjects(s, [a.id])].sort(), [m.id, e.id, h.id].sort());
+  eq([...M.curriculumSubjects(s, [a.id, b.id])].length, 3, 'two classes of one grade');
+  assert.strictEqual(M.curriculumSubjects(s, [a.id, other.id]), null, 'mixed grades: no filtering');
+  assert.strictEqual(M.curriculumSubjects(s, []), null);
+  g.curriculum = [];
+  assert.strictEqual(M.curriculumSubjects(s, [a.id]), null, 'an empty curriculum filters nothing');
+});
+check('(j) applyCurriculum adds one row per subject with no lessons, in the homeroom, and nothing else', () => {
+  const s = school('tttt', 5);
+  const m = add.subject(s, 'Maths'), e = add.subject(s, 'English'), h = add.subject(s, 'History'), t = add.teacher(s);
+  const g = mkGrade(s, 'Year 7', [{ subjectId: m.id, periods: 5 }, { subjectId: e.id, periods: 4 }, { subjectId: h.id, periods: 7 }]);
+  const room = { id: id('r'), name: 'R1', type: 'Classroom', unavailable: [], dispreferred: [] }; s.rooms.push(room);
+  const a = add.cls(s, 'A'); a.gradeId = g.id; a.homeroom = room.id;
+  add.lesson(s, m, t, [a], 3, 1);  // Maths has lessons (3 of 5): reported, not topped up
+  assert.strictEqual(M.missingLessons(s, g.id), 2);
+  assert.strictEqual(M.applyCurriculum(s, a.id), 2);
+  const added = s.lessons.slice(1);
+  eq(added.map((l) => [l.subjectId, M.periodsOf(l), l.maxOnePerDay, l.room, l.teacherId]), [[e.id, 4, true, 'home', ''], [h.id, 7, false, 'home', '']], '7 periods cannot be one per day in a 5-day week');
+  eq(s.lessons[0].lengths, [1, 1, 1], 'existing rows are untouched');
+  assert.strictEqual(M.applyCurriculum(s, a.id), 0, 'idempotent');
+  assert.strictEqual(M.applyCurriculum(s, add.cls(s, 'Z').id), 0, 'a class without a grade');
+});
+check('(j) validate: missing, short and over-long subjects, and a curriculum bigger than the week', () => {
+  const s = school('tttt', 5);    // 20 slots per class
+  const m = add.subject(s, 'Maths'), e = add.subject(s, 'English'), t = add.teacher(s);
+  const g = mkGrade(s, 'Year 7', [{ subjectId: m.id, periods: 5 }, { subjectId: e.id, periods: 1 }]);
+  const a = add.cls(s, 'A'); a.gradeId = g.id;
+  assert.ok(hasMsg(s, /warn: A has no Maths lessons but the Year 7 curriculum asks for 5 periods\./), msgs(s).join('\n'));
+  add.lesson(s, m, t, [a], 4, 1);
+  assert.ok(hasMsg(s, /warn: A has 4 periods of Maths but the Year 7 curriculum asks for 5\./), msgs(s).join('\n'));
+  assert.ok(hasMsg(s, /warn: A has no English lessons but the Year 7 curriculum asks for 1 period\./), 'singular');
+  add.lesson(s, m, t, [a], 1, 1); add.lesson(s, e, t, [a], 1, 1);
+  assert.ok(!hasMsg(s, /curriculum/), msgs(s).join('\n'));
+  g.curriculum[0].periods = 20;
+  assert.ok(hasMsg(s, /err: The Year 7 curriculum asks for 21 periods but A has only 20 free slots\./), msgs(s).join('\n'));
+  a.gradeId = '';
+  assert.ok(!hasMsg(s, /curriculum/), 'classes outside a grade are not checked');
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
