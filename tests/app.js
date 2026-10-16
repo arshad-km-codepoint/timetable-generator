@@ -563,6 +563,62 @@ check('(k) validate: engine problems, impossible daily limits, too few usable sl
   assert.ok(hasMsg(s, /err: Activity “Prep” has no periods per week\./), msgs(s).join('\n'));
   assert.strictEqual(M.describeUnit(s, `a:${a.id}#2`), 'Prep · T');
 });
+// ---------- (l) pins ----------
+const pinMsgs = (s) => msgs(s).filter((m) => /Pin on/.test(m));
+check('(l) pinSessions, setPin / pinAt and dropDeadPins (migrate) keep only pins that point at a session and a slot', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  const l = add.lesson(s, subj, t, [c], [2, 1, 1]);
+  const fl = add.lesson(s, subj, t, [c], 2, 1, { flexible: { total: 4, min: 1, max: 2 } });
+  const m = { id: 'm1', name: 'Sync', teacherIds: [t.id], sessions: 2, length: 2, room: '', allowed: [] }; s.meetings.push(m);
+  const a = { id: 'a1', name: 'Prep', teacherId: t.id, periods: 3, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [] }; s.activities.push(a);
+  eq(M.pinSessions(s, 'lesson', l.id), [2, 1, 1]); eq(M.pinSessions(s, 'lesson', fl.id), [], 'flexible rows have no fixed sessions');
+  eq(M.pinSessions(s, 'meeting', 'm1'), [2, 2]); eq(M.pinSessions(s, 'activity', 'a1'), [1, 1, 1]); eq(M.pinSessions(s, 'lesson', 'gone'), []);
+  M.setPin(s, 'lesson', l.id, 0, 1, 2); M.setPin(s, 'lesson', l.id, 0, 3, 1);
+  eq(s.pins, [{ kind: 'lesson', id: l.id, k: 0, day: 3, period: 1 }], 'setting a pin again replaces it');
+  assert.deepStrictEqual({ ...M.pinAt(s, 'lesson', l.id, 0) }, { kind: 'lesson', id: l.id, k: 0, day: 3, period: 1 });
+  M.setPin(s, 'lesson', l.id, 0, null);
+  eq(s.pins, [], 'null clears');
+  s.pins = [
+    { kind: 'lesson', id: l.id, k: 2, day: 4, period: 3 },           // fine
+    { kind: 'lesson', id: l.id, k: 2, day: 0, period: 0 },           // duplicate session
+    { kind: 'lesson', id: l.id, k: 3, day: 0, period: 0 },           // session out of range
+    { kind: 'lesson', id: 'gone', k: 0, day: 0, period: 0 },         // deleted row
+    { kind: 'meeting', id: 'm1', k: 1, day: 5, period: 0 },          // day out of the week
+    { kind: 'activity', id: 'a1', k: 0, day: 0, period: 4 },         // period out of the week
+    { kind: 'activity', id: 'a1', k: 1, day: '2', period: '3' },     // numeric strings are accepted
+    { kind: 'room', id: 'x', k: 0, day: 0, period: 0 }, null, { kind: 'lesson', k: 0, day: 0, period: 0 },
+  ];
+  M.migrate(s);
+  eq(s.pins, [{ kind: 'lesson', id: l.id, k: 2, day: 4, period: 3 }, { kind: 'activity', id: 'a1', k: 1, day: 2, period: 3 }]);
+  eq(M.migrate({ settings: M.emptyState().settings, teachers: [], classes: [], rooms: [], subjects: [], lessons: [] }).pins, [], 'files without pins');
+  M.removeLesson(s, l.id);
+  eq(s.pins, [{ kind: 'activity', id: 'a1', k: 1, day: 2, period: 3 }], 'deleting a row drops its pins');
+});
+check('(l) validate: pins that cannot be honoured are errors that say why', () => {
+  const s = school('tttbtt', 3);
+  const subj = add.subject(s), c = add.cls(s, 'A'), c2 = add.cls(s, 'B'), t = add.teacher(s, 'Ann'), u = add.teacher(s, 'Bob');
+  c2.unavailable = ['1-0'];
+  const dbl = add.lesson(s, subj, t, [c], [2]), one = add.lesson(s, subj, u, [c2], [1]);
+  const fl = add.lesson(s, subj, u, [c], 2, 1, { flexible: { total: 3, min: 1, max: 2 } });
+  eq(pinMsgs(s), []);
+  s.pins = [{ kind: 'lesson', id: dbl.id, k: 0, day: 0, period: 1 }];
+  eq(pinMsgs(s), [], 'a valid pin is silent');
+  s.pins = [{ kind: 'lesson', id: dbl.id, k: 0, day: 0, period: 2 }];
+  assert.ok(hasMsg(s, /err: Pin on .*, session 1 \(Day 1, period 3\) cannot be honoured: A multi-period lesson would run into a break there/), msgs(s).join('\n'));
+  s.pins = [{ kind: 'lesson', id: one.id, k: 0, day: 1, period: 0 }];
+  assert.ok(hasMsg(s, /Pin on .* \(Day 2, period 1\) cannot be honoured: A teacher or class is marked ✕/), msgs(s).join('\n'));
+  s.pins = [{ kind: 'lesson', id: one.id, k: 0, day: 0, period: 3 }];
+  assert.ok(hasMsg(s, /cannot be honoured: That is a break period\./), msgs(s).join('\n'));
+  s.pins = [{ kind: 'lesson', id: fl.id, k: 0, day: 0, period: 0 }];
+  M.migrate(s);   // flexible rows have no pinnable sessions, so migrate drops the pin
+  eq(s.pins, []);
+  s.pins = [{ kind: 'lesson', id: dbl.id, k: 0, day: 0, period: 0 }, { kind: 'lesson', id: one.id, k: 0, day: 0, period: 1 }];
+  eq(pinMsgs(s), [], 'two pins that do not collide');
+  const cc = add.cls(s, 'C'); const three = add.lesson(s, subj, t, [cc], [1]);   // same teacher as dbl
+  s.pins = [{ kind: 'lesson', id: dbl.id, k: 0, day: 0, period: 0 }, { kind: 'lesson', id: three.id, k: 0, day: 0, period: 1 }];
+  assert.ok(hasMsg(s, /Pin on .*, session 1 \(Day 1, period 2\) cannot be honoured: Clash with: .*Ann/), msgs(s).join('\n'));
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

@@ -41,7 +41,7 @@
         weights: { ...TT().DEFAULT_WEIGHTS },
         attempts: 3,
       },
-      teachers: [], classes: [], grades: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [],
+      teachers: [], classes: [], grades: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
       timetable: { placements: [], generatedAt: null, difficulty: null },
     };
   }
@@ -113,6 +113,8 @@
     }];
     // A complementary activity: teacher-only periods, at most two a day and never back to back.
     s.activities = [{ id: uid(), name: 'Lab preparation', teacherId: T.s1.id, periods: 3, minPerDay: 0, maxPerDay: 1, nonConsecutive: true, countLoad: false, allowed: [] }];
+    // A pin: the first Maths session of 6A is fixed on Tuesday, period 2, before generation.
+    s.pins = [{ kind: 'lesson', id: s.lessons.find((l) => l.subjectId === S.math.id && l.classIds[0] === s.classes[0].id).id, k: 0, day: 1, period: 1 }];
     // One grade per year; its curriculum is what the year's first class is taught.
     s.grades = [['Year 6', '6'], ['Year 7', '7'], ['Year 8', '8']].map(([name, y]) => {
       const classes = s.classes.filter((c) => c.name.startsWith(y));
@@ -288,6 +290,7 @@
   function removeLesson(s, id) {
     s.lessons = s.lessons.filter((l) => l.id !== id);
     dropDeadRelations(s);
+    dropDeadPins(s);
   }
 
   // Backwards-compatible defaults for files saved by older versions.
@@ -329,6 +332,7 @@
       a.allowed = Array.isArray(a.allowed) ? a.allowed : [];
     });
     s.duties = s.duties || [];
+    dropDeadPins(s);
     s.duties.forEach((d) => { if (d.kind !== 'break') d.kind = 'teaching'; });
     s.timetable = s.timetable || base.timetable;
     // v1 placements stored a single roomId; v2 stores one room per parallel part.
@@ -477,11 +481,87 @@
     return base.split('+').map((id) => describeLesson(s, id)).join('  ∥  ');
   }
 
+
+  // Explain why unit u cannot start at slot s on engine e, or return null if it can.
+  function unitBlockReason(st, e, u, s) {
+    const p = s % e.P, ty = periodType(st, p);
+    const brkDuty = u.kind === 'duty' && dutyKind(find(st, 'duties', u.service)) === 'break';
+    if (brkDuty) { if (ty !== 'break') return 'Break supervision can only go on a break period.'; }
+    else {
+      if (ty !== 'teaching') return `That is a ${ty} period.`;
+      const cells = e.spanCells(u.kind, u.len, u.allowBreak, s);
+      if (!cells) {
+        return !u.allowBreak && e.spanCells(u.kind, u.len, true, s) ? 'A multi-period lesson would run into a break there — tick “Break inside” on the lesson to allow that.' : 'A multi-period lesson does not fit there.';
+      }
+      if (cells.some((c) => e.general.has(c))) return 'The general template blocks that time for everyone.';
+    }
+    if (!u.starts.includes(s)) return 'A teacher or class is marked ✕ (prohibited) at that time.';
+    const base = e.baseConflicts(u.i, s);
+    if (base === null) return 'That would break a hard rule of a teacher (maximum periods per day, days off, strict presence or an activity limit).';
+    if (base.size) {
+      const who = [...base].map((o) => describeUnit(st, e.units[o].id));
+      return `Clash with: ${who.slice(0, 2).join('; ')}${who.length > 2 ? ` (+${who.length - 2})` : ''}`;
+    }
+    return null;
+  }
+
+  // ---------- Pins (preset positions) ----------
+  // state.pins: [{ kind: 'lesson' | 'meeting' | 'activity', id, k, day, period }] fixes session k
+  // (0-based, in distribution order) of a lesson row, meeting or activity at a start slot before
+  // generation. The generator places pinned sessions first and builds around them; a pin that
+  // cannot be honoured is reported. Pins are planner data, separate from locks on a timetable.
+  const PIN_KINDS = { lesson: 'lessons', meeting: 'meetings', activity: 'activities' };
+  // How many sessions a pinnable thing has (the k range of its pins) and how long each is.
+  function pinSessions(s, kind, id) {
+    const x = PIN_KINDS[kind] && find(s, PIN_KINDS[kind], id); if (!x) return [];
+    if (kind === 'lesson') return x.flexible ? [] : isLengths(x.lengths) ? x.lengths.slice() : [];
+    if (kind === 'meeting') return Array.from({ length: Math.max(0, Math.floor(Number(x.sessions)) || 0) }, () => Math.max(1, Math.floor(Number(x.length)) || 1));
+    return Array.from({ length: Math.max(0, Math.floor(Number(x.periods)) || 0) }, () => 1);
+  }
+  const pinName = (s, kind, id) => (kind === 'lesson' ? describeLesson(s, id) : (find(s, PIN_KINDS[kind], id) || {}).name || kind);
+  const pinAt = (s, kind, id, k) => (s.pins || []).find((p) => p.kind === kind && p.id === id && p.k === k) || null;
+  // Fix session k at (day, period); day null clears it.
+  function setPin(s, kind, id, k, day, period) {
+    s.pins = (s.pins || []).filter((p) => !(p.kind === kind && p.id === id && p.k === k));
+    if (day !== null && day !== undefined) s.pins.push({ kind, id, k, day, period });
+  }
+  // Drop pins that no longer point at a session or a slot of the week; returns how many went.
+  function dropDeadPins(s) {
+    const D = s.settings.days.length, P = s.settings.periods.length; const seen = new Set();
+    const before = (s.pins || []).length;
+    s.pins = (Array.isArray(s.pins) ? s.pins : []).filter((p) => {
+      if (!p || !PIN_KINDS[p.kind] || typeof p.id !== 'string') return false;
+      const k = Math.floor(Number(p.k)), day = Math.floor(Number(p.day)), period = Math.floor(Number(p.period));
+      if (!(k >= 0 && k < pinSessions(s, p.kind, p.id).length && day >= 0 && day < D && period >= 0 && period < P)) return false;
+      const key = `${p.kind}|${p.id}|${k}`; if (seen.has(key)) return false; seen.add(key);
+      p.k = k; p.day = day; p.period = period;
+      return true;
+    });
+    return before - s.pins.length;
+  }
+  // Human messages for pins the engine cannot honour (an engine without placements is expected).
+  function pinIssues(s) {
+    const e = new (TT().Engine)(s);
+    const days = s.settings.days;
+    return e.applyPins(s.pins).map((pr) => {
+      const p = pr.pin; const who = `${pinName(s, p.kind, p.id)}, session ${p.k + 1}`;
+      const where = `${days[p.day]}, period ${s.settings.periods[p.period].label}`;
+      let why;
+      if (pr.why === 'flexible') why = 'a flexible row has no fixed sessions to pin — give it a fixed distribution';
+      else if (pr.why === 'missing') why = 'that session was not generated (check the row for data problems)';
+      else if (pr.why === 'twice') why = 'another pin already fixes this session elsewhere';
+      else if (pr.why === 'room') why = 'no free room of the required kind at that time';
+      else why = unitBlockReason(s, e, e.units[pr.unit], p.day * e.P + p.period) || 'it is not allowed there';
+      return { lvl: 'err', msg: `Pin on ${who} (${where}) cannot be honoured: ${why}` };
+    });
+  }
+
   // ---------- Validation ----------
   function validate(s) {
     const issues = [];
     const D = s.settings.days.length;
     const e = new (TT().Engine)(s);
+    issues.push(...pinIssues(s));
     e.problems.forEach((p) => issues.push({ lvl: 'err', msg: `${p.activityId ? `Activity “${find(s, 'activities', p.activityId)?.name}”` : p.meetingId ? `Meeting “${find(s, 'meetings', p.meetingId)?.name}”` : p.lessonIds.map((id) => describeLesson(s, id)).join(' & ')} ${p.msg}.` }));
     const w = workload(s);
     s.teachers.forEach((t) => {
@@ -599,6 +679,7 @@
   window.Model = {
     uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
+    unitBlockReason, PIN_KINDS, pinSessions, pinName, pinAt, setPin, dropDeadPins, pinIssues,
     lessonDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, classSubjectPeriods, deriveCurriculum, curriculumGaps, curriculumSubjects, applyCurriculum, missingLessons, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
     dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
     periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,

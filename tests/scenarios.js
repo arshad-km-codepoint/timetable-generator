@@ -1,6 +1,6 @@
 // Real-world timetable scenarios + an independent overlap auditor.
 // Usage (from the app folder): node tests/scenarios.js . [scenarios]   — second arg re-writes the scenario JSON files
-const fs = require('fs'), vm = require('vm'), path = require('path');
+const fs = require('fs'), vm = require('vm'), path = require('path'), assert = require('assert');
 const dir = process.argv[2];
 const outDir = process.argv[3];
 
@@ -16,7 +16,7 @@ const PAL = ['#2f6fdb', '#d9534f', '#1f8a4c', '#b7791f', '#7b4fd6', '#0f8f99', '
 function school(name, days, periodTimes) {
   return {
     settings: { name, days, periods: periodTimes.map(([s, e, type], i) => ({ label: type ? type[0].toUpperCase() + type.slice(1) : String(i + 1), start: s, end: e, ...(type ? { type } : {}) })), weights: { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 }, attempts: 2 },
-    teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [],
+    teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
     timetable: { placements: [], generatedAt: null, difficulty: null },
   };
 }
@@ -100,6 +100,14 @@ function scenarioA() {
   byLoad.slice(-12, -6).forEach((t) => { t.maxPresenceWeek = 40; t.presenceStrict = true; });
   // Complementary activities for mid-load teachers: lab prep, coordination, and one that counts toward max/day.
   byLoad.slice(6, 9).forEach((t, i) => s.activities.push({ id: id('a'), name: `Lab prep ${i + 1}`, teacherId: t.id, periods: 4, minPerDay: 0, maxPerDay: 1, nonConsecutive: true, countLoad: false, allowed: [] }));
+  // Pinned sessions: a maths lesson, PE, a parallel language block, a lab double, the staff meeting and an activity.
+  const pinRow = (l, k, d, p) => { assert.ok(l, 'pin target exists'); s.pins.push({ kind: 'lesson', id: l.id, k, day: d, period: p }); };
+  pinRow(s.lessons.find((l) => l.subjectId === S.math.id && l.classIds[0] === s.classes[0].id), 0, 3, 5);
+  pinRow(s.lessons.find((l) => l.subjectId === S.pe.id && l.classIds[0] === s.classes[5].id), 0, 2, 2);
+  pinRow(s.lessons.find((l) => l.subjectId === S.hin.id), 0, 3, 3);
+  pinRow(s.lessons.find((l) => l.subjectId === S.sci.id && (l.lengths ? l.lengths[0] === 2 : l.length === 2) && l.classIds[0] === s.classes[7].id), 0, 1, 4);
+  s.pins.push({ kind: 'meeting', id: s.meetings[0].id, k: 0, day: 2, period: 7 });
+  s.pins.push({ kind: 'activity', id: s.activities[0].id, k: 0, day: 4, period: 3 });
   byLoad.slice(9, 11).forEach((t, i) => s.activities.push({ id: id('a'), name: `Coordination ${i + 1}`, teacherId: t.id, periods: 5, minPerDay: 2, maxPerDay: 2, nonConsecutive: true, countLoad: true, allowed: [] }));
   return s;
 }
@@ -172,6 +180,9 @@ function scenarioB() {
   s.duties.push({ id: id('d'), name: 'Lab safety supervision', maxPerSlot: 1, allowed: slotsWhere(s, (d, p) => p >= 8), assignments: [t.cs, t.psy, t.ent, t.geo, t.acc].map((x) => ({ teacherId: x.id, hours: 2 })) });
   // Break supervision: 5 break periods × 2 teachers.
   s.duties.push({ id: id('d'), kind: 'break', name: 'Playground duty', maxPerSlot: 2, allowed: [], assignments: [t.eng1, t.eng2, t.pe1, t.pe2, t.his].map((x) => ({ teacherId: x.id, hours: 2 })) });
+  // Pinned: one session of an option block (a parallel group) and a PE lesson.
+  s.pins.push({ kind: 'lesson', id: s.lessons.find((l) => l.parallel === 'G11 Block P').id, k: 0, day: 2, period: 4 });
+  s.pins.push({ kind: 'lesson', id: s.lessons.find((l) => l.subjectId === S.pe.id).id, k: 1, day: 1, period: 5 });
   return s;
 }
 
@@ -224,6 +235,12 @@ function scenarioC() {
   });
   // Grade-level planning: the 3 class teachers of a grade together — only possible when all 3 divisions are with specialists.
   for (let g = 0; g < 5; g++) s.meetings.push({ id: id('m'), name: `Grade ${g + 1} planning`, teacherIds: ct.slice(g * 3, g * 3 + 3).map((x) => x.id), sessions: 1, length: 1, room: '', allowed: [] });
+  // Pinned: a double English, an EVS session, a grade planning meeting and an activity.
+  const find1 = (pred) => { const l = s.lessons.find(pred); assert.ok(l, 'pin target exists'); return l; };
+  s.pins.push({ kind: 'lesson', id: find1((l) => l.subjectId === S.eng.id && l.classIds[0] === cls[4].id).id, k: 0, day: 2, period: 1 });
+  s.pins.push({ kind: 'lesson', id: find1((l) => l.subjectId === S.evs.id && l.classIds[0] === cls[2].id).id, k: 1, day: 4, period: 0 });
+  s.pins.push({ kind: 'meeting', id: s.meetings[1].id, k: 0, day: 3, period: 4 });
+  s.pins.push({ kind: 'activity', id: s.activities[0].id, k: 0, day: 1, period: 2 });
   s.duties.push({ id: id('d'), name: 'Sick-bay cover', maxPerSlot: 1, allowed: [], assignments: [mus, art, ict, mor, lib, ...ara].map((x) => ({ teacherId: x.id, hours: 3 })) });
   return s;
 }
@@ -241,7 +258,7 @@ function scenarioD() {
 
 // ---------- independent auditor (does not use the engine) ----------
 // `chosen` (lessonId → lengths) is only used to count the expected sessions of flexible rows.
-function audit(s, placements, chosen = {}) {
+function audit(s, placements, chosen = {}, checkPins = true) {
   const errs = []; const err = (m) => errs.push(m);
   const P = s.settings.periods.length, D = s.settings.days.length;
   const by = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
@@ -394,6 +411,17 @@ function audit(s, placements, chosen = {}) {
       if (act.nonConsecutive) for (let i = 1; i < day.length; i++) if (nextTeach(day[i - 1]) === day[i]) err(`activity ${act.name}: consecutive periods ${day[i - 1]},${day[i]} on day ${d}`);
     }
   }
+  // Pins: every pinned session is placed exactly where the planner fixed it.
+  if (checkPins) for (const pn of s.pins || []) {
+    const hit = placements.find((pl) => {
+      const [base, k] = pl.unitId.split('#');
+      if (k !== String(pn.k)) return false;
+      return pn.kind === 'lesson' ? base.split('+').includes(pn.id) : base === `${pn.kind === 'meeting' ? 'm' : 'a'}:${pn.id}`;
+    });
+    if (!hit) err(`pinned ${pn.kind} ${pn.id} session ${pn.k} is not placed`);
+    else if (hit.day !== pn.day || hit.period !== pn.period) err(`pinned ${pn.kind} ${pn.id} session ${pn.k} sits at ${hit.day}-${hit.period}, pinned to ${pn.day}-${pn.period}`);
+    else if (hit.locked) err('a pinned session must not come out locked');
+  }
   // Teacher week rules, read straight from the placements: lesson days off (hard) and strict presence (lessons only).
   for (const t of s.teachers) {
     const worked = new Set(Object.keys(tTeach).filter((k) => k.startsWith(t.id + ':')).map((k) => Number(k.split(':')[1])));
@@ -535,6 +563,9 @@ for (const [key, s] of scenarios) {
     if (used > set.capacity) roomErrs.push(`room set of ${set.rooms.length} holds ${used} placed periods but capacity says ${set.capacity}`);
     if (set.users > 1 && set.capacity && (!tightest || set.demand / set.capacity > tightest.demand / tightest.capacity)) tightest = set;
   }
+  const pinProblems = best.sv.pinProblems;
+  if (s.pins.length || pinProblems.length) console.log(`  pins: ${s.pins.length - pinProblems.length}/${s.pins.length} honoured${pinProblems.length ? ' — ' + pinProblems.map((x) => x.why).join(', ') : ''}`);
+  if (pinProblems.length) allClean = false;
   console.log(`  room sets: ${sets.length}${tightest ? `, busiest ${tightest.demand}/${tightest.capacity} (${Math.round(tightest.demand / tightest.capacity * 100)}%, ${tightest.rooms.length} rooms, ${tightest.users} users)` : ''}${roomErrs.length ? '\n   ' + roomErrs.join('\n   ') : ''}`);
   if (roomErrs.length) allClean = false;
   if (unplaced.length) console.log(`  not placed: ${[...new Set(unplaced.map((u) => u.key))].slice(0, 6).map((k) => {
@@ -550,7 +581,7 @@ for (const [key, s] of scenarios) {
   const lockKept = locked.every((l) => re.placements.some((p) => p.unitId === l.unitId && p.day === l.day && p.period === l.period));
   const a2 = audit(s, re.placements, chosenOf(re.sv.e));
   const fz = fuzzMoves(s, best.placements);
-  const a3 = audit(s, fz.placements, chosenOf(best.sv.e));
+  const a3 = audit(s, fz.placements, chosenOf(best.sv.e), false);   // the fuzz moves pinned sessions on purpose
   console.log(`  regenerate with ${locked.length} locked: locks kept=${lockKept}, placed ${re.placed}/${re.total}, audit ${a2.overlaps} overlaps/${a2.errs.length} violations`);
   console.log(`  editor fuzz: ${fz.accepted} moves accepted, ${fz.refused} refused → audit ${a3.overlaps} overlaps/${a3.errs.length} violations`);
   if (!lockKept || a2.errs.length || a3.errs.length) allClean = false;

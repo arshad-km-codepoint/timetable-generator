@@ -3,6 +3,7 @@
 // Model function takes the state it works on. `state` is autosaved to localStorage.
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
+  unitBlockReason, pinSessions, pinName, pinAt, setPin, dropDeadPins,
   newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
@@ -169,6 +170,7 @@ function cleanupRefs() {
   state.grades.forEach((g) => { g.curriculum = g.curriculum.filter((e) => s.has(e.subjectId)); });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
   dropDeadRelations(state);
+  dropDeadPins(state);
   state.activities.forEach((a) => { if (!t.has(a.teacherId)) a.teacherId = ''; });
   state.meetings.forEach((m) => {
     m.teacherIds = (m.teacherIds || []).filter((id) => t.has(id));
@@ -359,7 +361,7 @@ function renderLessons(root) {
   const eng = state.lessons.some((l) => l.flexible) && state.timetable.placements.length ? currentEngine() : null;
   const nOpts = (l) => ROW_OPTIONS.filter(([k]) => l[k]).length;
   p.insertAdjacentHTML('beforeend', list.length ? `<datalist id="parallelGroups">${groups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
-    <div class="table-wrap"><table class="edit lessons"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th title="Preferred room, or any room of a type">Room</th><th title="Fallback: any room of this type">Alternatives</th><th title="Length of every weekly session, e.g. 2 2 1">Distribution</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th><th></th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table class="edit lessons"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th title="Preferred room, or any room of a type">Room</th><th title="Fallback: any room of this type">Alternatives</th><th title="Length of every weekly session, e.g. 2 2 1">Distribution</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th><th></th><th></th><th></th></tr></thead><tbody>
     ${list.map((l) => `<tr data-id="${l.id}">
       <td><select data-f="subjectId" aria-label="Subject">${subjectOptions(l)}</select></td>
       <td><select data-f="teacherId" aria-label="Teacher">${opt(state.teachers, l.teacherId, '— choose —')}</select></td>
@@ -370,6 +372,7 @@ function renderLessons(root) {
       <td><input data-f="parallel" list="parallelGroups" value="${esc(l.parallel || '')}" placeholder="—" style="max-width:140px" aria-label="Parallel group"></td>
       <td><button class="ghost small" data-options>Options${nOpts(l) ? ` (${nOpts(l)})` : ''}</button></td>
       <td><button class="ghost small" data-relations>Relations (${(l.relations || []).length})</button></td>
+      <td>${pinButton('lesson', l)}</td>
       <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div><p class="hint" style="margin-top:8px">${list.length} lesson rows${ui.lessonFilter ? ` · class load ${workload(state).c[ui.lessonFilter] || 0} of ${availableSlots(state, find('classes', ui.lessonFilter) || {})} periods` : ''}</p>`
     : '<p class="hint">No lessons yet. Add subjects, teachers and classes first, then click “+ Add lesson”.</p>');
@@ -409,6 +412,7 @@ function renderLessons(root) {
     if (btn.dataset.flex !== undefined) editFlexible(l);
     if (btn.dataset.options !== undefined) editRowOptions(l);
     if (btn.dataset.relations !== undefined) editRelations(l);
+    if (btn.dataset.pins !== undefined) editPins('lesson', l.id);
   });
 }
 
@@ -488,6 +492,38 @@ function editRelations(l) {
     } else return;
     changed();
     $('#relList').innerHTML = listHtml();
+  };
+}
+
+// Pins: fix individual sessions of a lesson row, meeting or activity at a day and period before
+// generation. Flexible rows have no fixed sessions, so they cannot be pinned.
+function pinButton(kind, x) {
+  const n = pinSessions(state, kind, x.id).length;
+  const pinned = state.pins.filter((p) => p.kind === kind && p.id === x.id).length;
+  if (!n) return `<button class="ghost small" disabled title="${kind === 'lesson' && x.flexible ? 'Flexible rows cannot be pinned — give the row a fixed distribution first' : 'Nothing to pin'}">📌 —</button>`;
+  return `<button class="ghost small ${pinned ? 'on' : ''}" data-pins title="Fix sessions at a day and period before generating">📌 Pins${pinned ? ` (${pinned})` : ''}</button>`;
+}
+function editPins(kind, id) {
+  const st = state.settings; const sessions = pinSessions(state, kind, id);
+  const periods = st.periods.map((pp, i) => [i, pp]).filter(([i]) => isTeachingPeriod(state, i));
+  const rows = sessions.map((len, k) => {
+    const pn = pinAt(state, kind, id, k);
+    return `<tr data-k="${k}"><td>Session ${k + 1}${len > 1 ? ` <span class="hint">(${len} periods)</span>` : ''}</td>
+      <td><select data-day aria-label="Day of session ${k + 1}"><option value="">— free —</option>${st.days.map((d, i) => `<option value="${i}" ${pn && pn.day === i ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></td>
+      <td><select data-period aria-label="Period of session ${k + 1}" ${pn ? '' : 'disabled'}>${periods.map(([i, pp]) => `<option value="${i}" ${pn && pn.period === i ? 'selected' : ''}>${esc(pp.label)}${pp.start ? ` · ${esc(pp.start)}` : ''}</option>`).join('')}</select></td></tr>`;
+  }).join('');
+  openModal(`Pin sessions — ${pinName(state, kind, id)}`, `<p class="hint">A pinned session is placed first and the rest of the timetable is built around it. A session that would clash with another pin or break a hard rule is reported when you generate. Meetings and activities pin the start period.</p>
+    <div class="table-wrap"><table class="edit"><thead><tr><th>Session</th><th>Day</th><th>Period</th></tr></thead><tbody>${rows}</tbody></table></div>`, (v) => {
+    if (v !== 'save') return;
+    $('#modalContent').querySelectorAll('tr[data-k]').forEach((tr) => {
+      const day = tr.querySelector('[data-day]').value;
+      setPin(state, kind, id, Number(tr.dataset.k), day === '' ? null : Number(day), Number(tr.querySelector('[data-period]').value));
+    });
+    changed(); render();
+  }, '<button value="cancel" class="ghost">Cancel</button><button value="save">Save</button>');
+  $('#modalContent').onchange = (ev) => {
+    const tr = ev.target.closest('tr[data-k]'); if (!tr || !ev.target.matches('[data-day]')) return;
+    tr.querySelector('[data-period]').disabled = ev.target.value === '';
   };
 }
 
@@ -577,7 +613,7 @@ function slotsLabel(keys) { return keys && keys.length ? `${keys.length} period(
 function renderStaff(root) {
   const m = panel(root, 'Teacher meetings', 'All members must be free at the same time. The generator fits lessons around meetings; if no common period can be found the meeting is reported as not placed. Restrict “When” to the periods the meeting may use.');
   m.querySelector('[data-slot=actions]').innerHTML = '<button data-add-meeting>+ Add meeting</button>';
-  m.insertAdjacentHTML('beforeend', state.meetings.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Members</th><th>Sessions/wk</th><th>Length</th><th>Room</th><th>When</th><th></th></tr></thead><tbody>
+  m.insertAdjacentHTML('beforeend', state.meetings.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Members</th><th>Sessions/wk</th><th>Length</th><th>Room</th><th>When</th><th></th><th></th></tr></thead><tbody>
     ${state.meetings.map((x) => `<tr data-id="${x.id}">
       <td><input data-f="name" value="${esc(x.name)}" aria-label="Meeting name"></td>
       <td><button class="ghost" data-members>${(x.teacherIds || []).length === state.teachers.length && state.teachers.length ? 'All teachers' : `${(x.teacherIds || []).length} teacher(s)`}</button></td>
@@ -585,6 +621,7 @@ function renderStaff(root) {
       <td><select data-f="length" aria-label="Length">${[1, 2].map((n) => `<option value="${n}" ${+x.length === n ? 'selected' : ''}>${n === 1 ? 'Single' : 'Double'}</option>`).join('')}</select></td>
       <td><select data-f="room" aria-label="Room">${roomOptions(x.room)}</select></td>
       <td><button class="ghost" data-when>${slotsLabel(x.allowed)}</button></td>
+      <td>${pinButton('meeting', x)}</td>
       <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="hint">No meetings yet.</p>');
   m.addEventListener('change', (e) => {
@@ -601,14 +638,15 @@ function renderStaff(root) {
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
     const x = find('meetings', tr.dataset.id);
-    if (btn.dataset.del !== undefined) { state.meetings = state.meetings.filter((y) => y !== x); changed(); render(); }
+    if (btn.dataset.del !== undefined) { state.meetings = state.meetings.filter((y) => y !== x); dropDeadPins(state); changed(); render(); }
+    if (btn.dataset.pins !== undefined) editPins('meeting', x.id);
     if (btn.dataset.members !== undefined) pickTeachers(x);
     if (btn.dataset.when !== undefined) editSlots(`When can “${x.name}” take place?`, x);
   });
 
   const a = panel(root, 'Complementary activities', 'Work that belongs to one teacher but no class — preparation, coordination, tutoring time. Set the periods per week; <b>Max/day</b> is a hard limit, <b>Min/day</b> a preference for days the activity is used, and <b>Not consecutive</b> keeps its periods on a day apart. The activity is scheduled around the lessons and fills free periods; tick <b>Counts</b> to include it in the teacher’s max periods/day.');
   a.querySelector('[data-slot=actions]').innerHTML = '<button data-add-activity>+ Add activity</button>';
-  a.insertAdjacentHTML('beforeend', state.activities.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Teacher</th><th>Periods/wk</th><th title="Preference: on days it is used, at least this many">Min/day</th><th title="Hard limit">Max/day</th><th title="No two periods of it next to each other on a day">Not consecutive</th><th title="Counts toward the teacher’s max periods/day">Counts</th><th>When</th><th></th></tr></thead><tbody>
+  a.insertAdjacentHTML('beforeend', state.activities.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Teacher</th><th>Periods/wk</th><th title="Preference: on days it is used, at least this many">Min/day</th><th title="Hard limit">Max/day</th><th title="No two periods of it next to each other on a day">Not consecutive</th><th title="Counts toward the teacher’s max periods/day">Counts</th><th>When</th><th></th><th></th></tr></thead><tbody>
     ${state.activities.map((x) => `<tr data-id="${x.id}">
       <td><input data-f="name" value="${esc(x.name)}" aria-label="Activity name"></td>
       <td><select data-f="teacherId" aria-label="Teacher"><option value="">— choose —</option>${state.teachers.map((t) => `<option value="${t.id}" ${t.id === x.teacherId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></td>
@@ -618,6 +656,7 @@ function renderStaff(root) {
       <td><input type="checkbox" data-f="nonConsecutive" ${x.nonConsecutive ? 'checked' : ''} aria-label="Not consecutive"></td>
       <td><input type="checkbox" data-f="countLoad" ${x.countLoad ? 'checked' : ''} aria-label="Counts toward max periods per day"></td>
       <td><button class="ghost" data-when>${slotsLabel(x.allowed)}</button></td>
+      <td>${pinButton('activity', x)}</td>
       <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="hint">No activities yet.</p>');
   a.addEventListener('change', (e) => {
@@ -634,7 +673,8 @@ function renderStaff(root) {
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
     const x = find('activities', tr.dataset.id);
-    if (btn.dataset.del !== undefined) { state.activities = state.activities.filter((y) => y !== x); changed(); render(); }
+    if (btn.dataset.del !== undefined) { state.activities = state.activities.filter((y) => y !== x); dropDeadPins(state); changed(); render(); }
+    if (btn.dataset.pins !== undefined) editPins('activity', x.id);
     if (btn.dataset.when !== undefined) editSlots(`When can “${x.name}” take place?`, x);
   });
 
@@ -737,7 +777,7 @@ function renderGenerate(root) {
       <label class="row" style="gap:6px"><input type="checkbox" id="keepLocked" checked> Keep ${locked} locked lesson(s)</label>
     </div>
     <div class="progress"><div id="prog"></div></div>
-    <div id="genStatus" class="hint">${units} sessions to place. Each attempt builds and optimises a full timetable; the best one is kept.</div>
+    <div id="genStatus" class="hint">${units} sessions to place${state.pins.length ? ` (${state.pins.length} pinned in place)` : ''}. Each attempt builds and optimises a full timetable; the best one is kept.</div>
     ${issues.length ? `<h3>Data validation</h3><ul class="issues">${issues.map((i) => `<li class="${i.lvl}">${esc(i.msg)}</li>`).join('')}</ul>` : '<p style="color:var(--ok)">✓ Data validation passed.</p>'}
     <details class="weights"><summary>Weighted optimisation criteria</summary>
       <p class="hint">Higher weight = avoided more strongly. What matters is the weight of one criterion relative to the others.</p>
@@ -773,7 +813,10 @@ function startGenerate(keepLocked) {
     if (better(res, best)) best = res;
   };
   const tick = () => {
-    if (!solver) solver = new Timetable.Solver(state, keep);
+    if (!solver) {
+      solver = new Timetable.Solver(state, keep);
+      if (attempt === 0 && solver.pinProblems.length) toast(`${solver.pinProblems.length} pin(s) could not be honoured — see the data validation list.`, 5000);
+    }
     const r = solver.run(40);
     const overall = (attempt + r.progress) / attempts;
     const bar = $('#prog'); if (bar) bar.style.width = `${Math.round(overall * 100)}%`;
@@ -849,6 +892,21 @@ function unitsFor(e, mode, id) {
   return e.units.filter((u, i) => e.pos[i] && partsFor(e, u, mode, id).length);
 }
 
+// The planner pins that point at each unit of engine e (unit index → slot), cached on the engine.
+function pinSlots(e) {
+  if (!e._pins) e._pins = new Map(state.pins.map((p) => [e.resolvePin(p), p.day * e.P + p.period]).filter(([i]) => i >= 0));
+  return e._pins;
+}
+const pinnedHere = (e, u) => e.pos[u.i] && pinSlots(e).get(u.i) === e.pos[u.i].s;
+// What a unit can be pinned as in the planner, or null (duties and flexible rows have no pins).
+function pinTarget(u) {
+  const part = u.parts[0];
+  if (u.kind === 'lesson') return find('lessons', part.lessonId)?.flexible ? null : { kind: 'lesson', id: part.lessonId };
+  if (u.kind === 'meeting') return { kind: 'meeting', id: part.ref };
+  if (u.kind === 'activity') return { kind: 'activity', id: part.ref };
+  return null;
+}
+
 function blockHtml(e, u, mode, id) {
   const parts = partsFor(e, u, mode, id);
   const color = partInfo(parts[0]).color;
@@ -865,7 +923,7 @@ function blockHtml(e, u, mode, id) {
     return `<div class="s">${esc(info.title)}</div><div class="m">${meta.filter(Boolean).map(esc).join(' · ')}</div>`;
   }).join('');
   return `<div class="block${u.parts.length > 1 ? ' par' : ''}" draggable="true" data-unit="${esc(u.id)}" style="--c:${esc(color)}" title="${esc(describeUnit(state, u.id))}">
-    ${e.locked[u.i] ? '<span class="lock" title="Locked">🔒</span>' : ''}${u.parts.length > 1 ? '<span class="partag" title="Lessons in this parallel group run at the same time">parallel</span>' : ''}${body}</div>`;
+    ${pinnedHere(e, u) ? '<span class="pin" title="Pinned in the planner — regenerating keeps it here">📌</span>' : ''}${e.locked[u.i] ? '<span class="lock" title="Locked">🔒</span>' : ''}${u.parts.length > 1 ? '<span class="partag" title="Lessons in this parallel group run at the same time">parallel</span>' : ''}${body}</div>`;
 }
 
 // Row header for period p: label, type for break/lunch rows, and the time.
@@ -1037,27 +1095,7 @@ function renderTimetable(root) {
 }
 
 // Explain why unit u cannot start at s, or return null if it can.
-function blockReason(e, u, s) {
-  const p = s % e.P, ty = periodType(state, p);
-  const brkDuty = u.kind === 'duty' && dutyKind(find('duties', u.service)) === 'break';
-  if (brkDuty) { if (ty !== 'break') return 'Break supervision can only go on a break period.'; }
-  else {
-    if (ty !== 'teaching') return `That is a ${ty} period.`;
-    const cells = e.spanCells(u.kind, u.len, u.allowBreak, s);
-    if (!cells) {
-      return !u.allowBreak && e.spanCells(u.kind, u.len, true, s) ? 'A multi-period lesson would run into a break there — tick “Break inside” on the lesson to allow that.' : 'A multi-period lesson does not fit there.';
-    }
-    if (cells.some((c) => e.general.has(c))) return 'The general template blocks that time for everyone.';
-  }
-  if (!u.starts.includes(s)) return 'A teacher or class is marked ✕ (prohibited) at that time.';
-  const base = e.baseConflicts(u.i, s);
-  if (base === null) return 'That would exceed a teacher’s maximum periods per day.';
-  if (base.size) {
-    const who = [...base].map((o) => describeUnit(state, e.units[o].id));
-    return `Clash with: ${who.slice(0, 2).join('; ')}${who.length > 2 ? ` (+${who.length - 2})` : ''}`;
-  }
-  return null;
-}
+const blockReason = (e, u, s) => unitBlockReason(state, e, u, s);
 
 function moveUnit(unitId, d, p) {
   const e = currentEngine();
@@ -1071,9 +1109,12 @@ function moveUnit(unitId, d, p) {
   if (!rooms) { const pick = e.bestRooms(u.i, s, new Set()); if (pick && !pick.conf.size) rooms = pick.rooms; }
   if (!rooms) { toast('No free room of the required kind at that time.', 4000); return; }
   e.place(u.i, s, rooms); e.locked[u.i] = true;
+  // A pinned session takes its pin along, otherwise the next generation would put it back.
+  const moved = state.pins.filter((pn) => e.resolvePin(pn) === u.i);
+  moved.forEach((pn) => { pn.day = d; pn.period = p; });
   state.timetable.placements = e.placements();
   changed(); render();
-  toast(`${old ? 'Moved' : 'Placed'} and locked.${usesDispreferred(e, u.i) ? ' Note: uses a non-preferred period.' : ''}`);
+  toast(`${old ? 'Moved' : 'Placed'} and locked${moved.length ? ' — its 📌 pin moved too' : ''}.${usesDispreferred(e, u.i) ? ' Note: uses a non-preferred period.' : ''}`);
 }
 
 function lessonMenu(unitId) {
@@ -1083,6 +1124,7 @@ function lessonMenu(unitId) {
   const pl = state.timetable.placements.find((x) => x.unitId === unitId);
   const st = state.settings; const day = e.dayOf(pos.s); const per = pos.s % e.P;
   const cells = cellsOf(e, u); const lastPer = cells[cells.length - 1] % e.P;
+  const target = pinTarget(u); const pinned = target ? state.pins.filter((p) => e.resolvePin(p) === u.i) : [];
   e.remove(u.i);
   const roomRows = u.parts.map((part, k) => {
     if (!part.roomCands) return '';
@@ -1098,9 +1140,12 @@ function lessonMenu(unitId) {
   e.place(u.i, pos.s, pos.rooms);
   openModal(describeUnit(state, unitId), `<p>${esc(st.days[day])}, period ${esc(st.periods[per].label)}${u.len > 1 ? `–${esc(st.periods[lastPer]?.label)}` : ''}</p>
     ${roomRows ? `<h4>Room</h4>${roomRows}` : '<p class="hint">No room needed.</p>'}
-    <p class="hint">${pl.locked ? '🔒 Locked — kept in place when regenerating.' : 'Not locked — may move when regenerating.'}</p>`,
+    <p class="hint">${pl.locked ? '🔒 Locked — kept in place when regenerating.' : 'Not locked — may move when regenerating.'}${pinTarget(u) ? (pinned.length ? ' 📌 Pinned in the planner — regenerating always puts it back.' : '') : ''}</p>`,
   (v) => {
-    if (v === 'lock') pl.locked = !pl.locked;
+    if (v === 'pin') {
+      if (pinned.length) pinned.forEach((p) => setPin(state, p.kind, p.id, p.k, null));
+      else setPin(state, target.kind, target.id, u.k, day, per);
+    } else if (v === 'lock') pl.locked = !pl.locked;
     else if (v === 'remove') state.timetable.placements = state.timetable.placements.filter((x) => x !== pl);
     else if (v === 'rooms') {
       const rooms = u.parts.map((_, k) => $(`#modalContent [data-part="${k}"]`)?.value || null);
@@ -1110,7 +1155,7 @@ function lessonMenu(unitId) {
     } else return;
     changed(); render();
   },
-  `<button value="remove" class="ghost">Unschedule</button>${roomRows ? '<button value="rooms" class="ghost">Apply room</button>' : ''}<button value="lock" class="ghost">${pl.locked ? 'Unlock' : 'Lock'}</button><button value="close">Close</button>`);
+  `<button value="remove" class="ghost">Unschedule</button>${roomRows ? '<button value="rooms" class="ghost">Apply room</button>' : ''}${target ? `<button value="pin" class="ghost" title="Fix this session at this day and period in the planner, so every generation keeps it here">${pinned.length ? '📌 Unpin' : '📌 Pin here'}</button>` : ''}<button value="lock" class="ghost">${pl.locked ? 'Unlock' : 'Lock'}</button><button value="close">Close</button>`);
 }
 
 function exportCsv(e) {

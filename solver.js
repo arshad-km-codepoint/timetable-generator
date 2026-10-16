@@ -108,6 +108,8 @@ class Engine {
     this.groupUnits = {};
     this.groupLengths = {}; // gkey → lengths actually used (flexible rows: the chosen distribution)
     this.lessonGroup = {};  // lessonId → gkey, for lessons that became units
+    this.flexRows = new Set(); // lessons whose distribution the engine chooses (cannot be pinned)
+    this.pinned = new Map();   // unit index → slot, for units fixed by applyPins
     this.rel = {};          // gkey → [{ type, other, min, max }], stored on both groups
     // Session lengths of the placements being restored, so a flexible row keeps its distribution.
     const placedLens = new Map();
@@ -127,6 +129,7 @@ class Engine {
         const spec = home ? home.room : l.room;
         const roomCands = home && !home.room ? null : this.roomCandidates(spec, data.rooms, l.roomAlt);
         const flex = l.flexible && typeof l.flexible === 'object' ? { total: Number(l.flexible.total), min: Number(l.flexible.min), max: Number(l.flexible.max) } : null;
+        if (flex) this.flexRows.add(l.id);
         const lengths = flex ? null : Array.isArray(l.lengths) ? l.lengths.map(Number) : Array.from({ length: Math.max(0, Number(l.sessions) || 0) }, () => Math.max(1, Math.min(P, Number(l.length) || 1)));
         const bad = !this.subjects[l.subjectId] ? 'has no subject' : !this.teachers[l.teacherId] ? 'has no teacher'
           : !classes.length ? 'has no class' : home && home.why ? home.why : roomCands && !roomCands.length ? 'needs a room type that has no rooms'
@@ -638,6 +641,36 @@ class Engine {
     });
   }
 
+  // The unit a pin (kind lesson/meeting/activity, id, k) fixes, or -1.
+  resolvePin(pin) {
+    const key = pin.kind === 'lesson' ? this.lessonGroup[pin.id] : pin.kind === 'meeting' ? 'm:' + pin.id : pin.kind === 'activity' ? 'a:' + pin.id : null;
+    const idxs = key && this.groupUnits[key];
+    return idxs && idxs[pin.k] !== undefined ? idxs[pin.k] : -1;
+  }
+
+  // Preset positions: place each pinned unit at its slot and hold it there (locked for the solver;
+  // placements() reports pinned units unlocked, so a pin lasts exactly as long as it is in the
+  // planner). A pin that cannot be honoured leaves its unit where it was and is returned as
+  // { pin, unit, why: 'flexible' | 'missing' | 'twice' | 'invalid' | 'clash' | 'room', with }.
+  applyPins(pins) {
+    const problems = [];
+    for (const pin of Array.isArray(pins) ? pins : []) {
+      if (pin.kind === 'lesson' && this.flexRows.has(pin.id)) { problems.push({ pin, unit: -1, why: 'flexible' }); continue; }
+      const ui = this.resolvePin(pin);
+      if (ui < 0) { problems.push({ pin, unit: -1, why: 'missing' }); continue; }
+      const s = pin.day * this.P + pin.period;
+      if (this.pinned.has(ui)) { if (this.pinned.get(ui) !== s) problems.push({ pin, unit: ui, why: 'twice' }); continue; }
+      const prev = this.pos[ui];
+      if (prev) this.remove(ui);
+      const base = this.baseConflicts(ui, s);
+      const pick = base && !base.size ? this.bestRooms(ui, s, base) : null;
+      if (pick && !pick.conf.size) { this.place(ui, s, pick.rooms); this.locked[ui] = true; this.pinned.set(ui, s); continue; }
+      if (prev) this.place(ui, prev.s, prev.rooms);
+      problems.push(base === null || (base && base.size) ? { pin, unit: ui, why: base === null ? 'invalid' : 'clash', with: base ? [...base] : [] } : { pin, unit: ui, why: 'room', with: pick ? [...pick.conf] : [] });
+    }
+    return problems;
+  }
+
   // Teacher, classes and rooms are held for the whole span (a break skipped inside a
   // straddling double included); the service rota only for the duty's own cell.
   place(ui, s, rooms) {
@@ -907,7 +940,7 @@ class Engine {
     return this.units.flatMap((u, i) => {
       const p = this.pos[i];
       if (!p) return [];
-      return [{ unitId: u.id, day: this.dayOf(p.s), period: p.s % this.P, len: u.len, rooms: p.rooms, locked: this.locked[i] }];
+      return [{ unitId: u.id, day: this.dayOf(p.s), period: p.s % this.P, len: u.len, rooms: p.rooms, locked: this.locked[i] && !this.pinned.has(i) }];
     });
   }
 }
@@ -916,8 +949,10 @@ class Solver {
   constructor(data, keepPlacements) {
     this.e = new Engine(data, keepPlacements);
     const e = this.e;
-    // Discard every non-locked unit so construction starts clean around the locks.
+    // Discard every non-locked unit so construction starts clean around the locks, then fix the
+    // pinned sessions in place (they count as locked for the rest of the run).
     e.units.forEach((u, i) => { if (!e.locked[i]) e.remove(i); });
+    this.pinProblems = e.applyPins(data.pins);
     this.rejections = new Array(e.units.length).fill(0);
     // How often a unit may still push others out. Once spent it only takes free slots, so one
     // impossible demand is reported as unplaced instead of churning the whole timetable.

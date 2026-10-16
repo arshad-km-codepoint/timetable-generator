@@ -100,6 +100,8 @@ table.tt td.drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
 .block .s { font-weight: 600; }
 .block .m { font-size: 12px; color: var(--muted); }
 .block .lock { position: absolute; top: 3px; right: 5px; font-size: 11px; }
+.block .pin { position: absolute; top: 3px; right: 5px; font-size: 11px; }
+.block .pin ~ .lock { right: 22px; }
 .block .partag { position: absolute; bottom: 3px; right: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .block.par .s ~ .s { margin-top: 2px; border-top: 1px dashed var(--line); padding-top: 2px; }
 .tray { display: flex; flex-wrap: wrap; gap: 8px; }

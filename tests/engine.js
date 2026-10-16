@@ -933,6 +933,105 @@ check('activity: placements round-trip, locks survive, and the activity may be m
   void a;
 });
 
+// ---------- pins (preset positions) ----------
+const pin = (kind, idv, k, day, period) => ({ kind, id: idv, k, day, period });
+const at = (placements, l, k) => placements.find((p) => p.unitId.split('#')[0].split('+').includes(l.id) && p.unitId.endsWith('#' + k));
+
+check('pins: pinned sessions sit at their slot after a full solve, unlocked, and the rest is built around them', () => {
+  const s = school({ days: 4, periods: 'tttbttt' });
+  const subj = add.subject(s), c = add.cls(s, 'A'), c2 = add.cls(s, 'B');
+  const t = add.teacher(s, 'T'), u = add.teacher(s, 'U');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [2, 1, 1] });
+  const l2 = add.lesson(s, subj, u, [c2], 4, 1, { maxOnePerDay: false });
+  const m = add.meeting(s, 'Sync', [t, u], { sessions: 2 });
+  const a = addActivity(s, 'Prep', t, 3, { maxPerDay: 1 });
+  s.pins = [pin('lesson', l.id, 0, 1, 4), pin('lesson', l.id, 2, 3, 0), pin('lesson', l2.id, 1, 0, 0), pin('meeting', m.id, 1, 2, 1), pin('activity', a.id, 0, 0, 5)];
+  const sv = new Solver(s, []);
+  eq(sv.pinProblems, []);
+  let r; do { r = sv.run(5000); } while (r.phase !== 'done');
+  assert.strictEqual(r.placed, r.total);
+  const pls = sv.e.placements();
+  const slotOf = (x) => [x.day, x.period];
+  eq(slotOf(at(pls, l, 0)), [1, 4]); eq(slotOf(at(pls, l, 2)), [3, 0]); eq(slotOf(at(pls, l2, 1)), [0, 0]);
+  eq(slotOf(pls.find((x) => x.unitId === `m:${m.id}#1`)), [2, 1]); eq(slotOf(pls.find((x) => x.unitId === `a:${a.id}#0`)), [0, 5]);
+  assert.ok(pls.every((x) => !x.locked), 'pinned sessions are reported unlocked');
+  assert.strictEqual(sv.e.pinned.size, 5);
+  // Pins are applied on every generation, so a second run lands on the same slots.
+  const again = solveAll(s);
+  eq(slotOf(at(again.placements, l, 0)), [1, 4]);
+  // Display engines (restoring placements) do not apply pins: they only show what is stored.
+  assert.strictEqual(new Engine(s, []).pinned.size, 0);
+});
+
+check('pins: a pin on one row of a parallel group fixes the shared unit; conflicting pins in the group are reported', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s, 'A');
+  const r1 = add.room(s, 'R1'), r2 = add.room(s, 'R2');
+  const a = add.lesson(s, subj, add.teacher(s, 'T1'), [c], 2, 1, { parallel: 'G', room: r1.id });
+  const b = add.lesson(s, subj, add.teacher(s, 'T2'), [c], 2, 1, { parallel: 'G', room: r2.id });
+  s.pins = [pin('lesson', b.id, 0, 1, 2)];
+  const sv = new Solver(s, []); eq(sv.pinProblems, []);
+  let r; do { r = sv.run(5000); } while (r.phase !== 'done');
+  const pls = sv.e.placements();
+  assert.strictEqual(pls.filter((x) => x.day === 1 && x.period === 2).length, 1, 'one merged unit at the pin');
+  eq(pls.find((x) => x.day === 1 && x.period === 2).rooms, [r1.id, r2.id]);
+  s.pins = [pin('lesson', a.id, 0, 1, 2), pin('lesson', b.id, 0, 2, 1)];
+  const bad = new Engine(s, []).applyPins(s.pins);
+  eq(bad.map((x) => x.why), ['twice'], 'the second row asks for a different slot');
+  s.pins = [pin('lesson', a.id, 0, 1, 2), pin('lesson', b.id, 0, 1, 2)];
+  eq(new Engine(s, []).applyPins(s.pins), [], 'the same slot from both rows is fine');
+});
+
+check('pins: reasons a pin cannot be honoured, and the unit is left alone', () => {
+  const s = school({ days: 2, periods: 'tttbtt' });
+  const subj = add.subject(s), c = add.cls(s, 'A'), c2 = add.cls(s, 'B', { unavailable: ['1-0'] });
+  const t = add.teacher(s, 'T', { unavailable: ['0-4'] }), u = add.teacher(s, 'U');
+  const r1 = add.room(s, 'R1');
+  const dbl = add.lesson(s, subj, t, [c], 0, 1, { lengths: [2] });
+  const one = add.lesson(s, subj, u, [c2], 0, 1, { lengths: [1] });
+  const flex = add.lesson(s, subj, u, [c], 0, 1, { flexible: { total: 3, min: 1, max: 2 } });
+  const x1 = add.lesson(s, subj, add.teacher(s, 'X1'), [add.cls(s, 'C1')], 0, 1, { lengths: [1], room: r1.id });
+  const x2 = add.lesson(s, subj, add.teacher(s, 'X2'), [add.cls(s, 'C2')], 0, 1, { lengths: [1], room: r1.id });
+  const ty = add.teacher(s, 'Y');
+  const y1 = add.lesson(s, subj, ty, [add.cls(s, 'C3')], 0, 1, { lengths: [1] });
+  const y2 = add.lesson(s, subj, ty, [add.cls(s, 'C4')], 0, 1, { lengths: [1] });
+  const why = (pins) => { const e = new Engine(s, []); return e.applyPins(pins).map((x) => x.why); };
+  eq(why([pin('lesson', dbl.id, 0, 0, 2)]), ['invalid'], 'a double starting before the break would straddle it');
+  eq(why([pin('lesson', one.id, 0, 1, 0)]), ['invalid'], 'the class is ✕ there');
+  eq(why([pin('lesson', dbl.id, 0, 0, 4)]), ['invalid'], 'the teacher is ✕ there');
+  eq(why([pin('lesson', one.id, 0, 0, 3)]), ['invalid'], 'a break period');
+  eq(why([pin('lesson', flex.id, 0, 0, 0)]), ['flexible']);
+  eq(why([pin('lesson', one.id, 5, 0, 0), pin('meeting', 'nope', 0, 0, 0)]), ['missing', 'missing']);
+  eq(why([pin('lesson', y1.id, 0, 1, 1), pin('lesson', y2.id, 0, 1, 1)]), ['clash'], 'same teacher, same slot');
+  eq(why([pin('lesson', x1.id, 0, 1, 2), pin('lesson', x2.id, 0, 1, 2)]), ['room'], 'teachers and classes differ, but the only room is taken');
+  // Failed pins leave the unit as it was, and everything else still applies.
+  const e = new Engine(s, [pl(one, 0, 0, 1, 1)]);
+  const probs = e.applyPins([pin('lesson', one.id, 0, 1, 0), pin('lesson', dbl.id, 0, 1, 1)]);
+  eq(probs.map((x) => x.why), ['invalid']);
+  eq([e.pos[e.unitById[`${one.id}#0`].i].s], [1], 'the unit stays at its old slot');
+  assert.ok(e.pinned.has(e.unitById[`${dbl.id}#0`].i));
+});
+
+check('pins vs locks: a pin moves a user-locked unit; a pin that fails leaves the lock; pins respect other locks', () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s, 'A'), d = add.cls(s, 'B');
+  const t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1] });
+  const other = add.lesson(s, subj, t, [d], 0, 1, { lengths: [1] });
+  const locked = [{ ...pl(l, 0, 0, 0, 1), locked: true }, { ...pl(other, 0, 1, 2, 1), locked: true }];
+  s.pins = [pin('lesson', l.id, 0, 2, 3)];
+  let sv = new Solver(s, locked); eq(sv.pinProblems, []);
+  let r; do { r = sv.run(5000); } while (r.phase !== 'done');
+  const pls = sv.e.placements();
+  eq([at(pls, l, 0).day, at(pls, l, 0).period], [2, 3], 'moved from its lock to the pin');
+  eq([at(pls, other, 0).day, at(pls, other, 0).period, at(pls, other, 0).locked], [1, 2, true], 'other locks stay');
+  s.pins = [pin('lesson', l.id, 1, 1, 2)];     // teacher T is held by the locked lesson at 1-2
+  sv = new Solver(s, locked);
+  eq(sv.pinProblems.map((x) => x.why), ['clash']);
+  const e = sv.e; assert.strictEqual(e.pinned.size, 0);
+  eq(e.pos[e.unitById[`${l.id}#0`].i].s, 0, 'the locked unit kept its slot');
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 
