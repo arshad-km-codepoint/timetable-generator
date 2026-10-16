@@ -24,8 +24,8 @@
   };
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
-  const classDefaults = () => ({ homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
-  const teacherDefaults = () => ({ departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
+  const classDefaults = () => ({ code: '', extKey: '', homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
+  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
   // ---------- State ----------
@@ -35,11 +35,12 @@
         name: 'My School',
         days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
         periods: [
-          { label: '1', start: '08:00', end: '08:45', type: 'teaching' }, { label: '2', start: '08:50', end: '09:35', type: 'teaching' },
-          { label: '3', start: '09:40', end: '10:25', type: 'teaching' }, { label: '4', start: '10:45', end: '11:30', type: 'teaching' },
-          { label: '5', start: '11:35', end: '12:20', type: 'teaching' }, { label: '6', start: '13:10', end: '13:55', type: 'teaching' },
-          { label: '7', start: '14:00', end: '14:45', type: 'teaching' },
+          { label: '1', start: '08:00', end: '08:45', type: 'teaching', extKey: '' }, { label: '2', start: '08:50', end: '09:35', type: 'teaching', extKey: '' },
+          { label: '3', start: '09:40', end: '10:25', type: 'teaching', extKey: '' }, { label: '4', start: '10:45', end: '11:30', type: 'teaching', extKey: '' },
+          { label: '5', start: '11:35', end: '12:20', type: 'teaching', extKey: '' }, { label: '6', start: '13:10', end: '13:55', type: 'teaching', extKey: '' },
+          { label: '7', start: '14:00', end: '14:45', type: 'teaching', extKey: '' },
         ],
+        dayKeys: ['', '', '', '', ''],
         blocked: [],
         options: { countMiddayGap: false },
         weights: { ...TT().DEFAULT_WEIGHTS },
@@ -54,9 +55,9 @@
     const s = emptyState();
     s.settings.name = 'Greenfield Secondary School';
     // Nine periods a day: 1–3, morning break, 4–5, lunch, 6–7.
-    s.settings.periods.splice(3, 0, { label: 'Break', start: '10:25', end: '10:45', type: 'break' });
-    s.settings.periods.splice(6, 0, { label: 'Lunch', start: '12:20', end: '13:10', type: 'lunch' });
-    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], departmentId: '', ...extra });
+    s.settings.periods.splice(3, 0, { label: 'Break', start: '10:25', end: '10:45', type: 'break', extKey: '' });
+    s.settings.periods.splice(6, 0, { label: 'Lunch', start: '12:20', end: '13:10', type: 'lunch', extKey: '' });
+    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], departmentId: '', extKey: '', ...extra });
     const S = {
       math: subj('Mathematics', 'MAT', 0), eng: subj('English', 'ENG', 1), sci: subj('Science', 'SCI', 2),
       his: subj('History', 'HIS', 3), geo: subj('Geography', 'GEO', 4), pe: subj('Physical Ed.', 'PE', 5, { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
@@ -77,13 +78,13 @@
     // Departments: who and what belongs to each (the lesson editor offers a subject's department first).
     s.departments = [['Mathematics', [S.math, S.ict], [T.m1, T.m2, T.ic]], ['Languages', [S.eng, S.fre, S.spa], [T.e1, T.e2, T.fr, T.sp]], ['Science', [S.sci], [T.s1, T.s2]],
       ['Humanities', [S.his, S.geo], [T.h1]], ['Arts & PE', [S.pe, S.art, S.mus], [T.pe, T.ar]]].map(([name, subs, tchs]) => {
-      const d = { id: uid(), name }; subs.forEach((x) => { x.departmentId = d.id; }); tchs.forEach((x) => { x.departmentId = d.id; }); return d;
+      const d = { id: uid(), name, extKey: '' }; subs.forEach((x) => { x.departmentId = d.id; }); tchs.forEach((x) => { x.departmentId = d.id; }); return d;
     });
-    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults(), size: 26 }));
+    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults(), code: n, size: 26 }));
     s.rooms = [
-      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30 })),
+      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30, code: n, extKey: '' })),
       ...[['Science Lab 1', 'Lab', 28], ['Science Lab 2', 'Lab', 28], ['Sports Hall', 'Gym', 60], ['Art Studio', 'Art', 28], ['Computer Lab', 'Computer', 28]]
-        .map(([name, type, capacity]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [], capacity })),
+        .map(([name, type, capacity]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [], capacity, code: name, extKey: '' })),
     ];
     const L = (subject, teacher, classes, sessions, length, room, parallel = '') => ({
       ...lessonDefaults(), id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), lengths: Array(sessions).fill(length), room, parallel,
@@ -106,7 +107,7 @@
     // Year-8 language elective: 8A+8B students split into French and Spanish at the same time.
     const y8 = s.classes.slice(4);
     s.lessons.push(L(S.fre, T.fr, y8, 2, 1, 'type:Classroom', 'Y8 languages'), L(S.spa, T.sp, y8, 2, 1, 'type:Classroom', 'Y8 languages'));
-    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0 });
+    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: 'Staff Room', extKey: '' });
     const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-7`, `${d}-8`]);
     s.meetings = [
       { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo },
@@ -128,7 +129,7 @@
     s.grades = [['Year 6', '6'], ['Year 7', '7'], ['Year 8', '8']].map(([name, y]) => {
       const classes = s.classes.filter((c) => c.name.startsWith(y));
       classes.forEach((c) => { c.gradeId = ''; });
-      const g = { id: uid(), name, curriculum: deriveCurriculum(s, classes[0].id) };
+      const g = { id: uid(), name, extKey: '', curriculum: deriveCurriculum(s, classes[0].id) };
       classes.forEach((c) => { c.gradeId = g.id; });
       return g;
     });
@@ -357,6 +358,12 @@
     s.departments = (Array.isArray(s.departments) ? s.departments : []).filter((d) => d && d.id).map((d) => ({ id: d.id, name: typeof d.name === 'string' ? d.name : 'Department' }));
     for (const list of [s.teachers, s.subjects]) for (const x of list) if (!s.departments.some((d) => d.id === x.departmentId)) x.departmentId = '';
     s.grades = Array.isArray(s.grades) ? s.grades.filter((g) => g && g.id) : [];
+    // Abbreviations and external keys (for export / exchange); days and periods carry keys too.
+    const str = (v) => (typeof v === 'string' ? v : '');
+    for (const list of [s.teachers, s.classes, s.rooms, s.subjects, s.grades, s.departments]) for (const x of list) x.extKey = str(x.extKey);
+    for (const list of [s.classes, s.rooms]) for (const x of list) x.code = str(x.code);
+    s.settings.dayKeys = s.settings.days.map((_, i) => str((s.settings.dayKeys || [])[i]));
+    s.settings.periods.forEach((p) => { p.extKey = str(p.extKey); });
     s.grades.forEach((g) => {
       g.name = typeof g.name === 'string' ? g.name : 'Grade';
       const seen = new Set();
@@ -680,6 +687,15 @@
       if (a.maxPerDay && a.periods > a.maxPerDay * days) issues.push({ lvl: 'err', msg: `Activity “${a.name}” has ${a.periods} periods but max ${a.maxPerDay}/day over the ${days} day(s) ${t.name} can be there holds only ${a.maxPerDay * days}.` });
       if (slots.length < a.periods) issues.push({ lvl: 'err', msg: `Activity “${a.name}” has ${a.periods} periods but only ${slots.length} usable slot(s) for ${t.name}.` });
     });
+    // Codes and external keys identify elements to the outside world, so they must be unique per list.
+    const dup = (label, list, field) => {
+      const seen = {};
+      for (const x of list) { const v = (x[field] || '').trim(); if (v) (seen[v.toLowerCase()] ||= []).push(x.name || x.label); }
+      for (const v in seen) if (seen[v].length > 1) issues.push({ lvl: 'warn', msg: `${seen[v].length} ${label} share the ${field === 'code' ? 'code' : 'external key'} “${v}”: ${seen[v].join(', ')}.` });
+    };
+    for (const [label, list] of [['teachers', s.teachers], ['classes', s.classes], ['rooms', s.rooms], ['subjects', s.subjects]]) { dup(label, list, 'code'); dup(label, list, 'extKey'); }
+    dup('grades', s.grades, 'extKey'); dup('departments', s.departments, 'extKey'); dup('periods', s.settings.periods, 'extKey');
+    dup('days', s.settings.days.map((name, i) => ({ name, extKey: s.settings.dayKeys[i] })), 'extKey');
     // Homerooms: a room shared by several classes, and parallel rows that all want the same homeroom.
     const homeUsers = {};
     s.classes.forEach((c) => { if (c.homeroom) (homeUsers[c.homeroom] ||= []).push(c.name); });

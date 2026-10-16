@@ -62,17 +62,18 @@ function renderSetup(root) {
   p.querySelector('[data-slot=actions]').innerHTML = `<button class="ghost" data-template title="Periods when nobody at all is scheduled (whole-school events, half days)">General template${nBlocked ? ` (${nBlocked} ✕)` : ''}</button>`;
   p.insertAdjacentHTML('beforeend', `
     <h3>Days</h3>
-    <div class="table-wrap"><table class="edit"><thead><tr><th>#</th><th>Day name</th><th></th></tr></thead><tbody>
-      ${st.days.map((d, i) => `<tr><td>${i + 1}</td><td><input data-day="${i}" value="${esc(d)}" aria-label="Day ${i + 1}"></td><td><button class="danger" data-del-day="${i}" title="Remove day">✕</button></td></tr>`).join('')}
+    <div class="table-wrap"><table class="edit"><thead><tr><th>#</th><th>Day name</th><th title="External key, used when exporting">Key</th><th></th></tr></thead><tbody>
+      ${st.days.map((d, i) => `<tr><td>${i + 1}</td><td><input data-day="${i}" value="${esc(d)}" aria-label="Day ${i + 1}"></td><td><input data-daykey="${i}" value="${esc(st.dayKeys[i] || '')}" placeholder="—" style="max-width:100px" aria-label="External key of day ${i + 1}"></td><td><button class="danger" data-del-day="${i}" title="Remove day">✕</button></td></tr>`).join('')}
     </tbody></table></div>
     <div class="row" style="margin:8px 0 16px"><button class="ghost" data-add-day>+ Add day</button></div>
     <h3>Periods</h3>
-    <div class="table-wrap"><table class="edit"><thead><tr><th>Label</th><th>Start</th><th>End</th><th title="Break and lunch periods hold no lessons">Type</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table class="edit"><thead><tr><th>Label</th><th>Start</th><th>End</th><th title="Break and lunch periods hold no lessons">Type</th><th title="External key, used when exporting">Key</th><th></th></tr></thead><tbody>
       ${st.periods.map((pp, i) => `<tr class="${isTeachingPeriod(state, i) ? '' : 'brk'}">
         <td><input data-period="${i}" data-f="label" value="${esc(pp.label)}" aria-label="Period label"></td>
         <td><input type="time" data-period="${i}" data-f="start" value="${esc(pp.start)}" aria-label="Start"></td>
         <td><input type="time" data-period="${i}" data-f="end" value="${esc(pp.end)}" aria-label="End"></td>
         <td><select data-period="${i}" data-f="type" aria-label="Period type">${Object.keys(PERIOD_TYPES).map((ty) => `<option value="${ty}" ${periodType(state, i) === ty ? 'selected' : ''}>${PERIOD_TYPES[ty]}</option>`).join('')}</select></td>
+        <td><input data-period="${i}" data-f="extKey" value="${esc(pp.extKey || '')}" placeholder="—" style="max-width:100px" aria-label="External key of the period"></td>
         <td><button class="danger" data-del-period="${i}" title="Remove period">✕</button></td></tr>`).join('')}
     </tbody></table></div>
     <div class="row" style="margin-top:8px"><button class="ghost" data-add-period>+ Add period</button></div>
@@ -82,6 +83,7 @@ function renderSetup(root) {
   p.addEventListener('change', (e) => {
     const t = e.target;
     if (t.dataset.day) st.days[+t.dataset.day] = t.value;
+    if (t.dataset.daykey) st.dayKeys[+t.dataset.daykey] = t.value;
     if (t.dataset.period) st.periods[+t.dataset.period][t.dataset.f] = t.value;
     if (t.dataset.midday !== undefined) st.options.countMiddayGap = t.checked;
     if (t.dataset.f === 'type') periodTypeChanged(+t.dataset.period);
@@ -91,9 +93,9 @@ function renderSetup(root) {
   p.addEventListener('click', (e) => {
     const t = e.target;
     if (t.dataset.template !== undefined) { editGeneralTemplate(); return; }
-    if (t.dataset.addDay !== undefined) { st.days.push(`Day ${st.days.length + 1}`); resetTimetable('Week changed'); }
-    else if (t.dataset.delDay) { if (st.days.length > 1) { st.days.splice(+t.dataset.delDay, 1); resetTimetable('Week changed'); } }
-    else if (t.dataset.addPeriod !== undefined) { st.periods.push({ label: String(st.periods.length + 1), start: '', end: '', type: 'teaching' }); resetTimetable('Week changed'); }
+    if (t.dataset.addDay !== undefined) { st.days.push(`Day ${st.days.length + 1}`); st.dayKeys.push(''); resetTimetable('Week changed'); }
+    else if (t.dataset.delDay) { if (st.days.length > 1) { st.days.splice(+t.dataset.delDay, 1); st.dayKeys.splice(+t.dataset.delDay, 1); resetTimetable('Week changed'); } }
+    else if (t.dataset.addPeriod !== undefined) { st.periods.push({ label: String(st.periods.length + 1), start: '', end: '', type: 'teaching', extKey: '' }); resetTimetable('Week changed'); }
     else if (t.dataset.delPeriod) { if (st.periods.length > 1) { st.periods.splice(+t.dataset.delPeriod, 1); resetTimetable('Week changed'); } }
     else return;
     render();
@@ -112,6 +114,7 @@ function periodTypeChanged(i) {
 function resetTimetable(reason) {
   ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => state[k].forEach((x) => { x.unavailable = []; x.dispreferred = []; x.dispreferred2 = []; }));
   state.settings.blocked = [];
+  dropDeadPins(state);
   state.timetable = { placements: [], generatedAt: null, difficulty: null };
   changed();
   toast(`${reason}: availability and timetable were reset.`);
@@ -181,12 +184,13 @@ function cleanupRefs() {
 
 const textCol = (label, f, ph = '') => ({ label, input: (x) => `<input data-f="${f}" value="${esc(x[f])}" placeholder="${ph}" aria-label="${label}">` });
 const numCol = (label, f, title, max = teachingPeriods(state)) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="number" min="0" max="${max}" data-f="${f}" value="${x[f] || ''}" placeholder="—" style="max-width:80px" aria-label="${label}">` });
+const keyCol = () => ({ label: '<span title="External key, used when exporting and exchanging data">Key</span>', input: (x) => `<input data-f="extKey" value="${esc(x.extKey || '')}" placeholder="—" style="max-width:100px" aria-label="External key">` });
 const deptCol = () => ({ label: '<span title="The teacher’s department (add departments on the Subjects tab). The lesson editor offers a subject’s department first.">Department</span>',
   input: (x) => `<select data-f="departmentId" aria-label="Department"><option value="">— none —</option>${state.departments.map((d) => `<option value="${d.id}" ${x.departmentId === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>` });
 const boolCol = (label, f, title) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="checkbox" data-f="${f}" ${x[f] ? 'checked' : ''} aria-label="${label}">` });
 
 function renderTeachers(root) {
-  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'e.g. ARA'), deptCol(),
+  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'e.g. ARA'), keyCol(), deptCol(),
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day'),
     numCol('Min/day', 'minPerDay', 'Preference: on days they teach, at least this many periods'),
     numCol('Max in a row', 'maxConsecutive', 'Preference: no more than this many teaching periods back to back (a break or lunch ends the run)'),
@@ -200,7 +204,7 @@ function renderTeachers(root) {
 }
 
 function renderClasses(root) {
-  const cols = [textCol('Name', 'name', 'e.g. 7B'),
+  const cols = [textCol('Name', 'name', 'e.g. 7B'), textCol('Code', 'code', 'short'), keyCol(),
     numCol('Size', 'size', 'Number of students. A lesson avoids rooms that seat fewer (when a room capacity is set).', 500),
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day for this class', teachingPeriods(state)),
     boolCol('No gaps', 'noGaps', 'Free periods inside this class’s day are penalised very heavily (strict no-gaps preference)'),
@@ -240,16 +244,16 @@ function renderClasses(root) {
 }
 
 function renderRooms(root) {
-  const cols = [textCol('Name', 'name'), textCol('Type', 'type', 'Classroom, Lab…'), numCol('Capacity', 'capacity', 'Seats. A lesson avoids a room that seats fewer than its classes have (when class sizes are set).', 999)];
-  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0 });
+  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'short'), keyCol(), textCol('Type', 'type', 'Classroom, Lab…'), numCol('Capacity', 'capacity', 'Seats. A lesson avoids a room that seats fewer than its classes have (when class sizes are set).', 999)];
+  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: '', extKey: '' });
   entityEditor(root, { list: 'rooms', title: 'Rooms', hint: 'Rooms of the same type form a set of alternatives — a lesson asking for “Any Lab” gets whichever lab is free.', cols });
 }
 
 function renderSubjects(root) {
   const p = panel(root, 'Subjects', 'Colour and short code are used in the timetables. Availability: ✕ = the subject is never scheduled then (PE never in period 1), ~ = avoided when possible; it applies to every lesson of the subject.');
   p.querySelector('[data-slot=actions]').innerHTML = `<button data-add>+ Add</button>`;
-  p.insertAdjacentHTML('beforeend', state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Colour</th><th>Name</th><th>Code</th><th>Department</th><th></th><th></th></tr></thead><tbody>
-    ${state.subjects.map((s) => `<tr data-id="${s.id}"><td><input type="color" data-f="color" value="${esc(s.color)}" aria-label="Colour"></td><td><input data-f="name" value="${esc(s.name)}" aria-label="Name"></td><td><input data-f="code" value="${esc(s.code)}" style="max-width:100px" aria-label="Code"></td><td><select data-f="departmentId" aria-label="Department"><option value="">— none —</option>${state.departments.map((d) => `<option value="${d.id}" ${s.departmentId === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></td><td><button class="ghost" data-avail title="Periods when this subject is never (✕) or preferably not (~) scheduled, for every class and teacher">${availLabel(s)}</button></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}
+  p.insertAdjacentHTML('beforeend', state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Colour</th><th>Name</th><th>Code</th><th>Key</th><th>Department</th><th></th><th></th></tr></thead><tbody>
+    ${state.subjects.map((s) => `<tr data-id="${s.id}"><td><input type="color" data-f="color" value="${esc(s.color)}" aria-label="Colour"></td><td><input data-f="name" value="${esc(s.name)}" aria-label="Name"></td><td><input data-f="code" value="${esc(s.code)}" style="max-width:100px" aria-label="Code"></td><td><input data-f="extKey" value="${esc(s.extKey || '')}" placeholder="—" style="max-width:100px" aria-label="External key"></td><td><select data-f="departmentId" aria-label="Department"><option value="">— none —</option>${state.departments.map((d) => `<option value="${d.id}" ${s.departmentId === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></td><td><button class="ghost" data-avail title="Periods when this subject is never (✕) or preferably not (~) scheduled, for every class and teacher">${availLabel(s)}</button></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="hint">Nothing here yet. Click “+ Add”.</p>');
   p.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
@@ -257,7 +261,7 @@ function renderSubjects(root) {
   });
   p.addEventListener('click', (e) => {
     if (e.target.dataset.add !== undefined) {
-      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], departmentId: '' });
+      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], departmentId: '', extKey: '' });
       changed(); render();
     } else if (e.target.dataset.avail !== undefined) {
       const sj = find('subjects', e.target.closest('tr').dataset.id); editAvailability(sj, `Subject: ${sj.name}`);
@@ -272,15 +276,16 @@ function renderSubjects(root) {
   // Departments group teachers and subjects; the Lessons tab offers a subject's department first.
   const dp = panel(root, 'Departments', 'Departments group teachers and subjects (set both in their tables). In Lessons the teacher list starts with the subject’s department, and rows can be filtered by department.');
   dp.querySelector('[data-slot=actions]').innerHTML = '<button data-add>+ Add department</button>';
-  dp.insertAdjacentHTML('beforeend', state.departments.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Subjects</th><th>Teachers</th><th></th></tr></thead><tbody>
+  dp.insertAdjacentHTML('beforeend', state.departments.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Key</th><th>Subjects</th><th>Teachers</th><th></th></tr></thead><tbody>
     ${state.departments.map((d) => `<tr data-id="${d.id}"><td><input data-f="name" value="${esc(d.name)}" aria-label="Department name"></td>
+      <td><input data-f="extKey" value="${esc(d.extKey || '')}" placeholder="—" style="max-width:100px" aria-label="External key"></td>
       <td>${state.subjects.filter((x) => x.departmentId === d.id).map((x) => `<span class="chip">${esc(x.name)}</span>`).join('') || '<span class="hint">none</span>'}</td>
       <td>${state.teachers.filter((x) => x.departmentId === d.id).map((x) => `<span class="chip">${esc(x.name)}</span>`).join('') || '<span class="hint">none</span>'}</td>
       <td><button class="danger" data-del title="Delete">✕</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No departments yet.</p>');
-  dp.addEventListener('change', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr && e.target.dataset.f === 'name') { state.departments.find((d) => d.id === tr.dataset.id).name = e.target.value; changed(); } });
+  dp.addEventListener('change', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr && ['name', 'extKey'].includes(e.target.dataset.f)) { state.departments.find((d) => d.id === tr.dataset.id)[e.target.dataset.f] = e.target.value; changed(); } });
   dp.addEventListener('click', (e) => {
     const btn = e.target.closest('button'); if (!btn) return;
-    if (btn.dataset.add !== undefined) { state.departments.push({ id: uid(), name: `Department ${state.departments.length + 1}` }); changed(); render(); return; }
+    if (btn.dataset.add !== undefined) { state.departments.push({ id: uid(), name: `Department ${state.departments.length + 1}`, extKey: '' }); changed(); render(); return; }
     const tr = btn.closest('tr[data-id]'); if (!tr || btn.dataset.del === undefined) return;
     const id = tr.dataset.id;
     if (!confirm('Delete this department? Its teachers and subjects stay but lose the department.')) return;
@@ -294,23 +299,24 @@ function renderSubjects(root) {
 function renderGrades(root) {
   const p = panel(root, 'Grades & curriculum', 'A grade is a year group. Its curriculum lists the subjects every class of the grade takes, with the weekly periods. Generate → data validation warns when a class has too few, too many or no lessons of a curriculum subject; the Lessons tab offers the curriculum subjects first; and “Create missing lessons” adds one row for each subject a class has no lessons for (pick the teacher afterwards). Assign classes to a grade on the Classes tab.');
   p.querySelector('[data-slot=actions]').innerHTML = '<button data-add>+ Add grade</button>';
-  p.insertAdjacentHTML('beforeend', state.grades.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Classes</th><th>Curriculum</th><th></th><th></th></tr></thead><tbody>
+  p.insertAdjacentHTML('beforeend', state.grades.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Key</th><th>Classes</th><th>Curriculum</th><th></th><th></th></tr></thead><tbody>
     ${state.grades.map((g) => {
     const classes = state.classes.filter((c) => c.gradeId === g.id);
     const total = g.curriculum.reduce((a, e) => a + e.periods, 0); const missing = missingLessons(state, g.id);
     return `<tr data-id="${g.id}"><td><input data-f="name" value="${esc(g.name)}" aria-label="Grade name"></td>
+      <td><input data-f="extKey" value="${esc(g.extKey || '')}" placeholder="—" style="max-width:100px" aria-label="External key"></td>
       <td>${classes.map((c) => `<span class="chip">${esc(c.name)}</span>`).join('') || '<span class="hint">none — set the grade on the Classes tab</span>'}</td>
       <td><button class="ghost" data-curr>${g.curriculum.length} subject(s), ${total} periods</button></td>
       <td><button class="ghost small" data-create ${missing ? '' : 'disabled'} title="Add a row for every curriculum subject a class of this grade has no lessons for">Create missing lessons${missing ? ` (${missing})` : ''}</button></td>
       <td><button class="danger" data-del title="Delete">✕</button></td></tr>`;
   }).join('')}</tbody></table></div>` : '<p class="hint">No grades yet. Click “+ Add grade”.</p>');
   p.addEventListener('change', (e) => {
-    const tr = e.target.closest('tr[data-id]'); if (!tr || e.target.dataset.f !== 'name') return;
-    state.grades.find((g) => g.id === tr.dataset.id).name = e.target.value; changed();
+    const tr = e.target.closest('tr[data-id]'); if (!tr || !['name', 'extKey'].includes(e.target.dataset.f)) return;
+    state.grades.find((g) => g.id === tr.dataset.id)[e.target.dataset.f] = e.target.value; changed();
   });
   p.addEventListener('click', (e) => {
     const btn = e.target.closest('button'); if (!btn) return;
-    if (btn.dataset.add !== undefined) { state.grades.push({ id: uid(), name: `Grade ${state.grades.length + 1}`, curriculum: [] }); changed(); render(); return; }
+    if (btn.dataset.add !== undefined) { state.grades.push({ id: uid(), name: `Grade ${state.grades.length + 1}`, extKey: '', curriculum: [] }); changed(); render(); return; }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
     const g = state.grades.find((x) => x.id === tr.dataset.id);
     if (btn.dataset.curr !== undefined) editCurriculum(g);
@@ -967,6 +973,8 @@ function pinTarget(u) {
   return null;
 }
 
+const shortName = (x) => (x && (x.code || x.name)) || '?';
+
 function blockHtml(e, u, mode, id) {
   const parts = partsFor(e, u, mode, id);
   const color = partInfo(parts[0]).color;
@@ -977,7 +985,7 @@ function blockHtml(e, u, mode, id) {
       const meta = p.kind === 'meeting' ? [room, `${u.teachers.length} teacher(s)`] : p.kind === 'activity' ? ['Activity'] : ['On call'];
       return `<div class="s">${esc(info.title)}</div><div class="m">${meta.filter(Boolean).map(esc).join(' · ')}</div>`;
     }
-    const cls = p.classes.map((c) => find('classes', c)?.name).join('+');
+    const cls = p.classes.map((c) => shortName(find('classes', c))).join('+');
     const tch = find('teachers', p.teacher); const tName = tch?.code || tch?.name || '';
     const meta = mode === 'class' ? [tName, room] : mode === 'teacher' ? [cls, room] : [cls, tName];
     return `<div class="s">${esc(info.title)}</div><div class="m">${meta.filter(Boolean).map(esc).join(' · ')}</div>`;

@@ -30,7 +30,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Overlapping time frames (up to 4), each class assigned to one frame.
 - [ ] Fractional periods (½, ¾) and class units with fractional duration.
 - [ ] Multiple weeks (up to 6) sharing one frame, each element placed in one or several weeks, optionally at the same position.
-- [ ] External keys on days and periods (needed for export).
+- [x] External keys on days and periods (needed for export). Each day and period has a Key field on the Week tab (`settings.dayKeys`, `periods[].extKey`); duplicates are flagged in the data validation.
 
 ### Data lists
 
@@ -41,7 +41,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Elective subject sets (subjects of one class allowed to overlap, with a max-overlap limit and incompatible pairs).
 - [ ] Group assistant (4-step wizard: electives per grade → enrolment per combination → groups → shared rooms).
 - [ ] Individual students and subgroups profile (music schools, universities).
-- [ ] Abbreviation, full name and external key on every element.
+- [x] Abbreviation, full name and external key on every element. Teachers, classes, rooms and subjects have a code (the name is the full name) and an external key; grades and departments have a key; classes' codes show in the timetable blocks; duplicate codes or keys are warned about.
 - [x] Per-subject availability template (e.g. PE never in period 1). Subjects have ✕ / ~ templates like teachers, classes and rooms; they apply to every lesson of the subject (engine start filter and non-preferred cost).
 
 ### Classes and rooms

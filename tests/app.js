@@ -670,7 +670,7 @@ check('(p) class rules migrate to numbers/booleans and a daily cap below the loa
   assert.ok(hasMsg(s, /err: A has 7 periods but max 3\/day allows only 6\./), msgs(s).join('\n'));
   c.maxPerDay = 4;
   assert.ok(!hasMsg(s, /max 4\/day/));
-  eq(Object.keys(M.classDefaults()).sort(), ['forceFree', 'gradeId', 'homeroom', 'maxPerDay', 'noGaps', 'size', 'tutorDaily', 'tutorEarly', 'tutorId', 'tutorLate']);
+  eq(Object.keys(M.classDefaults()).sort(), ['code', 'extKey', 'forceFree', 'gradeId', 'homeroom', 'maxPerDay', 'noGaps', 'size', 'tutorDaily', 'tutorEarly', 'tutorId', 'tutorLate']);
 });
 check('(q) copyLessons clones a class’s own rows, keeps relations among the copies and renames parallel groups', () => {
   const s = school('tttt', 5);
@@ -729,7 +729,7 @@ check('(s) departments: migrate drops dangling references; the sample puts every
   subj.departmentId = 'gone'; t.departmentId = 'gone';
   s.departments = [{ id: 'd1', name: 'Maths' }, null, { name: 'no id' }, { id: 'd2', name: 7 }];
   M.migrate(s);
-  eq(s.departments, [{ id: 'd1', name: 'Maths' }, { id: 'd2', name: 'Department' }]);
+  eq(s.departments, [{ id: 'd1', name: 'Maths', extKey: '' }, { id: 'd2', name: 'Department', extKey: '' }]);
   eq([subj.departmentId, t.departmentId], ['', '']);
   subj.departmentId = 'd1'; t.departmentId = 'd2'; M.migrate(s);
   eq([subj.departmentId, t.departmentId], ['d1', 'd2'], 'real references are kept');
@@ -738,6 +738,27 @@ check('(s) departments: migrate drops dangling references; the sample puts every
   assert.ok(sample.departments.length >= 4);
   assert.ok(sample.teachers.every((x) => x.departmentId) && sample.subjects.every((x) => x.departmentId), 'everyone is in a department');
   assert.strictEqual(sample.subjects.find((x) => x.name === 'Mathematics').departmentId, sample.teachers.find((x) => x.name === 'Anita Rao').departmentId);
+});
+check('(t) codes and external keys: migrate defaults, days and periods carry keys, duplicates are warned about', () => {
+  const s = school('ttt', 3);
+  const t1 = add.teacher(s, 'Ann'), t2 = add.teacher(s, 'Bob'), c1 = add.cls(s, 'A'), c2 = add.cls(s, 'B');
+  const r1 = addRoom(s, 'R1'), r2 = addRoom(s, 'R2');
+  delete t1.extKey; c1.code = 5; delete r1.code; s.settings.dayKeys = ['mon'];
+  M.migrate(s);
+  eq([t1.extKey, c1.code, c1.extKey, r1.code, r1.extKey], ['', '', '', '', '']);
+  eq(s.settings.dayKeys, ['mon', '', ''], 'one key per day, padded');
+  assert.ok(s.settings.periods.every((p) => p.extKey === ''));
+  eq(msgs(s).filter((m) => /share the/.test(m)), [], 'empty keys never collide');
+  t1.extKey = 'T-1'; t2.extKey = 't-1'; c1.code = '7A'; c2.code = '7A'; r1.extKey = 'X'; r2.extKey = 'Y';
+  s.settings.dayKeys = ['d', 'd', 'e']; s.settings.periods[0].extKey = 'p'; s.settings.periods[1].extKey = 'p';
+  const dups = msgs(s).filter((m) => /share the/.test(m));
+  assert.ok(dups.some((m) => /2 teachers share the external key “t-1”: Ann, Bob/.test(m)), dups.join('\n'));
+  assert.ok(dups.some((m) => /2 classes share the code “7a”: A, B/.test(m)), dups.join('\n'));
+  assert.ok(dups.some((m) => /2 days share the external key “d”/.test(m)) && dups.some((m) => /2 periods share the external key “p”/.test(m)), dups.join('\n'));
+  assert.ok(!dups.some((m) => /rooms/.test(m)), 'distinct keys are fine');
+  const sample = M.sampleState();
+  assert.ok(sample.classes.every((c) => c.code) && sample.rooms.every((r) => r.code), 'the sample has codes');
+  eq(M.migrate(JSON.parse(JSON.stringify(sample))), sample);
 });
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
