@@ -607,7 +607,7 @@ check('(l) validate: pins that cannot be honoured are errors that say why', () =
   s.pins = [{ kind: 'lesson', id: dbl.id, k: 0, day: 0, period: 2 }];
   assert.ok(hasMsg(s, /err: Pin on .*, session 1 \(Day 1, period 3\) cannot be honoured: A multi-period lesson would run into a break there/), msgs(s).join('\n'));
   s.pins = [{ kind: 'lesson', id: one.id, k: 0, day: 1, period: 0 }];
-  assert.ok(hasMsg(s, /Pin on .* \(Day 2, period 1\) cannot be honoured: A teacher or class is marked ✕/), msgs(s).join('\n'));
+  assert.ok(hasMsg(s, /Pin on .* \(Day 2, period 1\) cannot be honoured: A teacher, class or subject is marked ✕/), msgs(s).join('\n'));
   s.pins = [{ kind: 'lesson', id: one.id, k: 0, day: 0, period: 3 }];
   assert.ok(hasMsg(s, /cannot be honoured: That is a break period\./), msgs(s).join('\n'));
   s.pins = [{ kind: 'lesson', id: fl.id, k: 0, day: 0, period: 0 }];
@@ -618,6 +618,22 @@ check('(l) validate: pins that cannot be honoured are errors that say why', () =
   const cc = add.cls(s, 'C'); const three = add.lesson(s, subj, t, [cc], [1]);   // same teacher as dbl
   s.pins = [{ kind: 'lesson', id: dbl.id, k: 0, day: 0, period: 0 }, { kind: 'lesson', id: three.id, k: 0, day: 0, period: 1 }];
   assert.ok(hasMsg(s, /Pin on .*, session 1 \(Day 1, period 2\) cannot be honoured: Clash with: .*Ann/), msgs(s).join('\n'));
+});
+// ---------- (m) subject templates ----------
+check('(m) migrate gives subjects availability lists; pruneDeadKeys and validation see them', () => {
+  const s = school('ttlt', 2);
+  const subj = add.subject(s, 'PE'); delete subj.unavailable;
+  M.migrate(s);
+  eq([subj.unavailable, subj.dispreferred], [[], []]);
+  subj.unavailable = ['0-0', '0-2', '1-9']; subj.dispreferred = ['1-1', '0-2'];
+  assert.strictEqual(M.availableSlots(s, subj), 5, 'a subject has a template like any element: 6 teaching slots minus the one ✕ on a teaching period');
+  const removed = M.pruneDeadKeys(s);
+  assert.ok(removed >= 1);
+  assert.ok(!subj.unavailable.includes('1-9') && !subj.unavailable.includes('0-2'), 'keys on lunch / outside the week are dropped');
+  const t = add.teacher(s), c = add.cls(s);
+  add.lesson(s, subj, t, [c], 2, 1);
+  subj.unavailable = s.settings.days.flatMap((_, d) => [0, 1, 3].map((p) => `${d}-${p}`));
+  assert.ok(hasMsg(s, /err: .*has no period where all its teachers and classes are available/), msgs(s).join('\n'));
 });
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();

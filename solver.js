@@ -64,7 +64,7 @@ class Engine {
     this.rooms = byId(data.rooms);
     this.subjects = byId(data.subjects);
     this.blocked = {}; this.soft = {};
-    for (const [kind, list] of [['t', data.teachers], ['c', data.classes], ['r', data.rooms]]) {
+    for (const [kind, list] of [['t', data.teachers], ['c', data.classes], ['r', data.rooms], ['s', data.subjects]]) {
       for (const x of list) {
         this.blocked[kind + x.id] = slots(x.unavailable);
         this.soft[kind + x.id] = slots(x.dispreferred);
@@ -137,7 +137,7 @@ class Engine {
               : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
         if (bad) { this.problems.push({ lessonIds: [l.id], msg: bad }); continue; }
         const prefRoom = spec && !String(spec).startsWith('type:') && this.rooms[spec] ? spec : null;
-        parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, teacher: l.teacherId, classes, roomCands, prefRoom, sameRoom: !!l.sameRoom });
+        parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, subject: l.subjectId, teacher: l.teacherId, classes, roomCands, prefRoom, sameRoom: !!l.sameRoom });
         rows.push({ l, lengths, flex });
       }
       if (!parts.length) continue;
@@ -270,6 +270,7 @@ class Engine {
   addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false, maxDay = 0, minDay = 0, nonAdj = false, countLoad = false } = {}) {
     const teachers = [...new Set(parts.map((p) => p.teacher))];
     const classes = [...new Set(parts.flatMap((p) => p.classes))];
+    const subjects = [...new Set(parts.map((p) => p.subject).filter(Boolean))]; // subject templates apply to lessons
     // Legal starts, the teaching cells each occupies and the full span it holds (cells plus any
     // break skipped inside a straddling unit: teacher, classes and rooms stay busy during it).
     // Non-duty units need every cell to be a teaching period outside the general template;
@@ -287,6 +288,7 @@ class Engine {
           if (kind !== 'duty' && this.general.has(c)) ok = false;
           for (const t of teachers) if (this.blocked['t' + t].has(c)) ok = false;
           for (const k of classes) if (this.blocked['c' + k].has(c)) ok = false;
+          for (const sj of subjects) if (this.blocked['s' + sj].has(c)) ok = false;
           if (!ok) break;
         }
         if (!ok) continue;
@@ -301,7 +303,7 @@ class Engine {
     const idxs = [];
     lengths.forEach((len, k) => {
       idxs.push(this.units.length);
-      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, countLoad, ...geometry(len) });
+      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, subjects, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, countLoad, ...geometry(len) });
     });
     this.groupUnits[gkey] = idxs;
   }
@@ -826,6 +828,7 @@ class Engine {
     for (const k of p.cells) {
       for (const t of u.teachers) if (this.soft['t' + t].has(k)) soft++;
       for (const c of u.classes) if (this.soft['c' + c].has(k)) soft++;
+      for (const sj of u.subjects) if (this.soft['s' + sj].has(k)) soft++;
       for (const r of p.rooms) if (r && this.soft['r' + r].has(k)) soft++;
     }
     return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft
@@ -929,7 +932,7 @@ class Engine {
       st.roomPref += this.roomPrefCount(i);
       if (u.ends && this.atDayEnd(p.cells)) st.ends++;
       for (const k of p.cells) {
-        if (u.teachers.some((t) => this.soft['t' + t].has(k)) || u.classes.some((x) => this.soft['c' + x].has(k)) || p.rooms.some((r) => r && this.soft['r' + r].has(k))) st.dispreferred++;
+        if (u.teachers.some((t) => this.soft['t' + t].has(k)) || u.classes.some((x) => this.soft['c' + x].has(k)) || u.subjects.some((x) => this.soft['s' + x].has(k)) || p.rooms.some((r) => r && this.soft['r' + r].has(k))) st.dispreferred++;
       }
     });
     st.cost = Math.round(c * 10) / 10;

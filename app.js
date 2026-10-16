@@ -110,7 +110,7 @@ function periodTypeChanged(i) {
 
 // Changing the week shape invalidates slot indices, so availability and placements are cleared.
 function resetTimetable(reason) {
-  ['teachers', 'classes', 'rooms'].forEach((k) => state[k].forEach((x) => { x.unavailable = []; x.dispreferred = []; }));
+  ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => state[k].forEach((x) => { x.unavailable = []; x.dispreferred = []; }));
   state.settings.blocked = [];
   state.timetable = { placements: [], generatedAt: null, difficulty: null };
   changed();
@@ -224,10 +224,10 @@ function renderRooms(root) {
 }
 
 function renderSubjects(root) {
-  const p = panel(root, 'Subjects', 'Colour and short code are used in the timetables.');
+  const p = panel(root, 'Subjects', 'Colour and short code are used in the timetables. Availability: ✕ = the subject is never scheduled then (PE never in period 1), ~ = avoided when possible; it applies to every lesson of the subject.');
   p.querySelector('[data-slot=actions]').innerHTML = `<button data-add>+ Add</button>`;
-  p.insertAdjacentHTML('beforeend', state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Colour</th><th>Name</th><th>Code</th><th></th></tr></thead><tbody>
-    ${state.subjects.map((s) => `<tr data-id="${s.id}"><td><input type="color" data-f="color" value="${esc(s.color)}" aria-label="Colour"></td><td><input data-f="name" value="${esc(s.name)}" aria-label="Name"></td><td><input data-f="code" value="${esc(s.code)}" style="max-width:100px" aria-label="Code"></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}
+  p.insertAdjacentHTML('beforeend', state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Colour</th><th>Name</th><th>Code</th><th></th><th></th></tr></thead><tbody>
+    ${state.subjects.map((s) => `<tr data-id="${s.id}"><td><input type="color" data-f="color" value="${esc(s.color)}" aria-label="Colour"></td><td><input data-f="name" value="${esc(s.name)}" aria-label="Name"></td><td><input data-f="code" value="${esc(s.code)}" style="max-width:100px" aria-label="Code"></td><td><button class="ghost" data-avail title="Periods when this subject is never (✕) or preferably not (~) scheduled, for every class and teacher">${availLabel(s)}</button></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="hint">Nothing here yet. Click “+ Add”.</p>');
   p.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
@@ -235,8 +235,10 @@ function renderSubjects(root) {
   });
   p.addEventListener('click', (e) => {
     if (e.target.dataset.add !== undefined) {
-      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length] });
+      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [] });
       changed(); render();
+    } else if (e.target.dataset.avail !== undefined) {
+      const sj = find('subjects', e.target.closest('tr').dataset.id); editAvailability(sj, `Subject: ${sj.name}`);
     } else if (e.target.dataset.del !== undefined) {
       const id = e.target.closest('tr').dataset.id;
       const n = state.lessons.filter((l) => l.subjectId === id).length;

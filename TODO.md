@@ -42,7 +42,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Group assistant (4-step wizard: electives per grade → enrolment per combination → groups → shared rooms).
 - [ ] Individual students and subgroups profile (music schools, universities).
 - [ ] Abbreviation, full name and external key on every element.
-- [ ] Per-subject availability template (e.g. PE never in period 1).
+- [x] Per-subject availability template (e.g. PE never in period 1). Subjects have ✕ / ~ templates like teachers, classes and rooms; they apply to every lesson of the subject (engine start filter and non-preferred cost).
 
 ### Classes and rooms
 

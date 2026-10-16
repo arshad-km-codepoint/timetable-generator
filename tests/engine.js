@@ -1032,6 +1032,26 @@ check('pins vs locks: a pin moves a user-locked unit; a pin that fails leaves th
   eq(e.pos[e.unitById[`${l.id}#0`].i].s, 0, 'the locked unit kept its slot');
 });
 
+check('subject templates: ✕ periods are never used by the subject\'s lessons, ~ periods cost like any non-preferred period', () => {
+  const s = school({ days: 2, periods: 4 });
+  const pe = add.subject(s, 'PE'), maths = add.subject(s, 'Maths');
+  pe.unavailable = ['0-0', '1-0']; pe.dispreferred = ['0-1', '1-1'];
+  const c = add.cls(s, 'A'), t = add.teacher(s, 'T'), u = add.teacher(s, 'U');
+  const lp = add.lesson(s, pe, t, [c], 0, 1, { lengths: [1, 1] });
+  const lm = add.lesson(s, maths, u, [c], 0, 1, { lengths: [1, 1] });
+  const e = new Engine(s, []);
+  assert.ok(!e.unitById[`${lp.id}#0`].starts.includes(0) && !e.unitById[`${lp.id}#0`].starts.includes(4), 'no PE in period 1');
+  assert.ok(e.unitById[`${lm.id}#0`].starts.includes(0), 'maths is not affected');
+  const at = (day, period) => { const x = new Engine(s, [pl(lp, 0, day, period, 1)]); return x.unitCost(x.unitById[`${lp.id}#0`].i) - x.W.late * period; };
+  assert.strictEqual(at(0, 2), 0);
+  assert.strictEqual(at(0, 1), e.W.dispreferred, 'PE in a ~ period');
+  const x = new Engine(s, [pl(lp, 0, 0, 1, 1), pl(lm, 0, 0, 0, 1)]);
+  assert.strictEqual(x.totalCost().dispreferred, 1, 'counted in the statistics; the maths lesson is not');
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  assert.ok(r.placements.filter((p) => p.unitId.startsWith(lp.id)).every((p) => p.period !== 0 && p.period !== 1), 'the annealer avoids ✕ and ~ periods when it can');
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

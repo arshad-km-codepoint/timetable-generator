@@ -52,10 +52,10 @@
     // Nine periods a day: 1–3, morning break, 4–5, lunch, 6–7.
     s.settings.periods.splice(3, 0, { label: 'Break', start: '10:25', end: '10:45', type: 'break' });
     s.settings.periods.splice(6, 0, { label: 'Lunch', start: '12:20', end: '13:10', type: 'lunch' });
-    const subj = (name, code, i) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length] });
+    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], ...extra });
     const S = {
       math: subj('Mathematics', 'MAT', 0), eng: subj('English', 'ENG', 1), sci: subj('Science', 'SCI', 2),
-      his: subj('History', 'HIS', 3), geo: subj('Geography', 'GEO', 4), pe: subj('Physical Ed.', 'PE', 5),
+      his: subj('History', 'HIS', 3), geo: subj('Geography', 'GEO', 4), pe: subj('Physical Ed.', 'PE', 5, { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
       art: subj('Art', 'ART', 6), mus: subj('Music', 'MUS', 7), ict: subj('Computing', 'ICT', 8),
       fre: subj('French', 'FRE', 9), spa: subj('Spanish', 'SPA', 10),
     };
@@ -301,7 +301,7 @@
     (s.settings.periods || []).forEach((p) => { if (!PERIOD_TYPES[p.type]) p.type = 'teaching'; });
     s.settings.blocked = Array.isArray(s.settings.blocked) ? s.settings.blocked : [];
     s.settings.options = { ...base.settings.options, ...(s.settings.options || {}) };
-    ['teachers', 'classes', 'rooms'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; }); });
+    ['teachers', 'classes', 'rooms', 'subjects'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; }); });
     s.teachers.forEach((t) => {
       for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
@@ -451,7 +451,7 @@
     };
     const byKind = (kind) => (k) => !!slotDisabled(s, k, kind, { general: false });
     const unusable = (k) => slotDisabled(s, k, 'teaching', { general: false }) === 'Outside the week' || periodType(s, keyParts(k)[1]) === 'lunch';
-    for (const list of ['teachers', 'classes', 'rooms']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, unusable); x.dispreferred = keep(x.dispreferred, unusable); }
+    for (const list of ['teachers', 'classes', 'rooms', 'subjects']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, unusable); x.dispreferred = keep(x.dispreferred, unusable); }
     s.settings.blocked = keep(s.settings.blocked, byKind('teaching'));
     for (const m of s.meetings) m.allowed = keep(m.allowed, byKind('teaching'));
     for (const a of s.activities) a.allowed = keep(a.allowed, byKind('teaching'));
@@ -495,7 +495,7 @@
       }
       if (cells.some((c) => e.general.has(c))) return 'The general template blocks that time for everyone.';
     }
-    if (!u.starts.includes(s)) return 'A teacher or class is marked ✕ (prohibited) at that time.';
+    if (!u.starts.includes(s)) return 'A teacher, class or subject is marked ✕ (prohibited) at that time.';
     const base = e.baseConflicts(u.i, s);
     if (base === null) return 'That would break a hard rule of a teacher (maximum periods per day, days off, strict presence or an activity limit).';
     if (base.size) {
