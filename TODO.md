@@ -19,3 +19,107 @@ Open tasks from the code review of the solver-hardening and scenario commits (`c
 
 - Scenario B keeps 2–5 free periods inside class days: its option blocks need four teachers free at once and three of them teach in both grades' blocks. Needs different teachers per grade or allowing a block twice on some days.
 - Duties use teaching periods only; break-time supervision between periods needs the breaks added as periods.
+
+## GHC feature gaps (compared against GHC 20.8.71.0, 2026-10-16)
+
+Source: GHC's shipped help files (planner, editor, engine, file platform), the user's guide PDF and the `.xghc` data model. The installed edition is GHC Lite, which does not optimise; the app's annealing optimiser already goes beyond it. Items marked **(core)** change what timetables can be expressed and should come first; the rest are tooling.
+
+### Time frame
+
+- [ ] **(core) Breaks and lunch break as frame elements.** GHC periods have a type (`lectivo`, `recreo`, `mediodia`). Breaks drive the after-break, afternoon and midday-gap rules and break-time supervision duties. Today duties use teaching periods only.
+- [ ] **(core) Different schedule per weekday** (e.g. Saturday half day expressed in the frame rather than by prohibiting periods).
+- [ ] Overlapping time frames (up to 4), each class assigned to one frame.
+- [ ] Fractional periods (½, ¾) and class units with fractional duration.
+- [ ] Multiple weeks (up to 6) sharing one frame, each element placed in one or several weeks, optionally at the same position.
+- [ ] External keys on days and periods (needed for export).
+
+### Data lists
+
+- [ ] **(core) Grades/courses** with a curriculum (subject × weekly sessions) used to filter subject and class drop-downs and to warn when a class lacks a curriculum subject.
+- [ ] Departments (teacher and subject membership; filters in the lesson editor).
+- [ ] Tasks / activity types (teaching, on-call, meeting, management) assignable to lessons, meetings, duties and activities, with their own availability template.
+- [ ] **(core) Complementary activities:** teacher-only load with weekly periods, daily min/max and optional non-consecutive daily periods.
+- [ ] Elective subject sets (subjects of one class allowed to overlap, with a max-overlap limit and incompatible pairs).
+- [ ] Group assistant (4-step wizard: electives per grade → enrolment per combination → groups → shared rooms).
+- [ ] Individual students and subgroups profile (music schools, universities).
+- [ ] Abbreviation, full name and external key on every element.
+- [ ] Per-subject availability template (e.g. PE never in period 1).
+
+### Classes and rooms
+
+- [ ] **(core) Class homeroom** assigned once and applied to all its lessons.
+- [ ] Tutor/advisory teacher per class, "add class units with tutor" (primary), and tutor-every-day / early / late preferences.
+- [ ] Class size and room capacity, with a validation warning when the assigned room is too small.
+- [ ] Max daily occupancy per class; strict "no gaps" per class; force free periods into non-preferred slots.
+- [ ] Dedicated-room flag and anonymous (unnamed) general-purpose rooms counted by number only.
+- [ ] **(core) Preferred room with an alternative set as fallback** (today: a specific room or any of a type, never both).
+- [ ] "All units of this subject in the same room" as a hard rule, with a soft "room changes" criterion.
+
+### Lessons (class units)
+
+- [ ] **(core) Mixed lengths in one row** (GHC "221" = one single and two doubles) instead of one row per length.
+- [ ] **(core) Flexible weekly distributions:** 4 periods as 2-2 or 3-1, daily min/max block length with optional penalties, discontinuous daily blocks, up to 4 explicit alternative distributions, blocks up to 7 periods.
+- [ ] Relations between lesson rows: must be on different days, consecutive (with order and "breaks divide consecutive"), non-consecutive, non-overlapping, min/max days apart, before/after.
+- [ ] Interchangeable teachers (teachers P and Q may swap between rows A and B).
+- [ ] Per-row soft options: penalise concentration in first/last periods, after the break, in the afternoon; avoid or promote same-hour coincidence; no break inside a double; penalise consecutive days for 2–3 session subjects.
+- [ ] Preset positions before generation (pin a session to a slot in the planner, shown with a thumbtack); today locking only exists on an already generated timetable.
+- [ ] Two non-preferred levels (lower and higher weight) in all templates.
+- [ ] Copy all lessons from one class to another.
+
+### Teachers
+
+- [ ] Max consecutive teaching periods (rest period required).
+- [ ] Daily and weekly presence (first to last period, including gaps) limits, hard or soft, optionally counting the midday gap.
+- [ ] Minimum free days, or free mornings/afternoons, in non-preset positions.
+- [ ] Mutually exclusive periods: last period then first next day (n periods apart), first and last on the same day, morning/afternoon combinations, Friday→Monday option.
+- [ ] Concentrate load in the fewest days.
+- [ ] Associated timetables (a named set of teachers who should start and finish together).
+- [ ] Count meetings, duties and activities toward daily min/max load (per item).
+- [ ] Auto-calculated daily min/max from weekly load and available days, with per-teacher override.
+- [ ] Teacher priority for timetable choice (university profile).
+
+### Meetings and duties
+
+- [ ] **(core) Break-time supervision duties** on break periods with their own template.
+- [ ] Per-period teacher count for a duty (detail per hour instead of one number).
+- [ ] "No teaching on both sides of a break duty" criterion.
+- [ ] Option to discard unplaceable duty hours instead of failing.
+- [ ] Meetings 1–5 times per week placed on distinct days; task type per meeting.
+- [ ] Teacher-by-duty-position detail view.
+
+### Weighted criteria (GHC has ~20, app has 7)
+
+- [ ] Non-preferred positions in subject/task templates and in lesson templates (separate weights).
+- [ ] Consecutive days; non-preferred room; same room; first/last-period concentration; afternoon coincidence; same-hour coincidence; elective overlap.
+- [ ] Teacher: exclusive periods, balanced week (more lessons one day than another), continuous hours, presence, followed by the same group, duties at the ends of the day, priority order.
+- [ ] Priority warnings (e.g. class gaps) minimised before the global weight.
+
+### Engine controls
+
+- [ ] Partial outcome: run with a subset of elements (e.g. only one grade).
+- [ ] Debugging run that drops hard constraints to find what blocks a result.
+- [ ] Conflict analyser and "update conditions between days" maintenance command.
+- [ ] Project a result back onto the planner as preset positions (today: lock + regenerate on the timetable tab only).
+- [ ] Several attempts in parallel (Web Workers) instead of sequential.
+- [ ] Engine caution messages on the best result (non-optimal warnings).
+
+### Editor views and editing
+
+- [ ] Free teachers per period and free rooms per period views.
+- [ ] Teacher × class junction view; general view in rows and in columns; table with member list; break-supervisors view.
+- [ ] Undo/redo; cut/copy/paste; search/replace in tables.
+- [ ] Change the teacher (or other assignment) across all units of a subject; create new lessons, activities, meetings and duties inside the editor; rename and add elements.
+- [ ] Edit header signs and labels; add a new weekly timetable by copying another.
+- [ ] Insert break supervision directly on the timetable.
+- [ ] Recombination wizard (automatic search for a chain of moves to free a slot).
+
+### Output, import and files
+
+- [ ] Excel and PDF export (PDF with proportional period heights); print a chosen list of tables; headers/footers and page setup; cell styling and colour palette.
+- [ ] Independent table documents (GHC `.gri`) that can be edited freely.
+- [ ] Reports: teaching assignments per teacher, staff per class, tutors, preferences, engine messages, outcome weight breakdown.
+- [ ] Import lists from CSV / clipboard and from school-management systems; XML-GHC exchange format in and out.
+- [ ] Merge two configuration files; backup recovery; notes attached to a file.
+- [ ] Preference capture per department (teachers submit subject and slot preferences).
+- [ ] Absences and substitutions manager; assessment-board meeting planning.
+- [ ] File platform / cloud publishing (out of scope for a local web app; listed for completeness).
