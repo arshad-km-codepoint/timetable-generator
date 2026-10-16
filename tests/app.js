@@ -672,6 +672,38 @@ check('(p) class rules migrate to numbers/booleans and a daily cap below the loa
   assert.ok(!hasMsg(s, /max 4\/day/));
   eq(Object.keys(M.classDefaults()).sort(), ['forceFree', 'gradeId', 'homeroom', 'maxPerDay', 'noGaps', 'size']);
 });
+check('(q) copyLessons clones a class’s own rows, keeps relations among the copies and renames parallel groups', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s, 'Maths'), eng = add.subject(s, 'English'), t = add.teacher(s), u = add.teacher(s, 'U');
+  const a = add.cls(s, 'A'), b = add.cls(s, 'B'), c = add.cls(s, 'C');
+  const home = addRoom(s, 'Home A'); a.homeroom = home.id;
+  const l1 = add.lesson(s, subj, t, [a], [2, 1], 1, { room: 'home', penalizeEnds: true });
+  const l2 = add.lesson(s, eng, u, [a], 3, 1, { flexible: null, roomAlt: 'type:Classroom', room: 'type:Classroom' });
+  const g1 = add.lesson(s, subj, t, [a], 2, 1, { parallel: 'Split' }), g2 = add.lesson(s, eng, u, [a], 2, 1, { parallel: 'Split' });
+  const shared = add.lesson(s, subj, t, [a, b], 1, 1);
+  M.addRelation(s, l1.id, l2.id, 'differentDays');
+  M.addRelation(s, l1.id, shared.id, 'notSameTime');
+  s.pins = [{ kind: 'lesson', id: l1.id, k: 0, day: 0, period: 0 }];
+  const before = s.lessons.length;
+  const out = M.copyLessons(s, a.id, c.id);
+  assert.strictEqual(out.length, 4, 'four single-class rows; the shared row stays out');
+  assert.strictEqual(s.lessons.length, before + 4);
+  assert.ok(out.every((l) => l.classIds.length === 1 && l.classIds[0] === c.id));
+  const cl1 = out.find((l) => l.subjectId === subj.id && M.periodsOf(l) === 3);
+  eq([cl1.lengths, cl1.room, cl1.penalizeEnds, cl1.teacherId], [[2, 1], 'home', true, t.id], 'subject, distribution, room spec, options and teacher are copied');
+  assert.notStrictEqual(cl1.id, l1.id);
+  const cl2 = out.find((l) => l.subjectId === eng.id && !l.parallel);
+  eq(cl1.relations.map((r) => [r.type, r.lessonId]), [['differentDays', cl2.id]], 'relation between copies kept; the one to the shared row is not');
+  eq(cl2.relations.map((r) => [r.type, r.lessonId]), [['differentDays', cl1.id]]);
+  eq(out.filter((l) => l.parallel).map((l) => l.parallel), ['Split C', 'Split C'], 'the copied group is named after the new class');
+  eq(s.lessons.find((l) => l.id === g1.id).parallel, 'Split', 'the original group is untouched');
+  eq(s.pins.length, 1, 'pins are not copied');
+  assert.strictEqual(M.homeroomOf(s, [c.id]), '', 'the new class has no homeroom yet, so a “Class homeroom” row reports it when validating');
+  assert.ok(hasMsg(s, /err: .*uses the class homeroom but its class has no homeroom/), msgs(s).join('\n'));
+  eq(M.copyLessons(s, a.id, a.id), [], 'a class cannot copy to itself');
+  eq(M.copyLessons(s, 'nope', c.id), [], 'unknown class');
+  void g2;
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

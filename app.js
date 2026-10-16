@@ -4,7 +4,7 @@
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
   unitBlockReason, pinSessions, pinName, pinAt, setPin, dropDeadPins,
-  classDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
+  classDefaults, copyLessons, newLesson, homeroomOf, applyHomeroom, gradeOf, curriculumGaps, curriculumSubjects, deriveCurriculum, applyCurriculum, missingLessons, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -150,8 +150,8 @@ function entityEditor(root, { list, title, hint, cols, loadKey, extra }) {
       if (!confirm(`Delete “${x.name}”? Lessons that use it will be updated.`)) return;
       state[list] = state[list].filter((y) => y !== x);
       cleanupRefs(); changed(); render();
-    } else if (extra && e.target.dataset[extra.act] !== undefined) {
-      extra.run(x);
+    } else if (extra && Object.keys(extra.acts).some((a) => e.target.dataset[a] !== undefined)) {
+      extra.acts[Object.keys(extra.acts).find((a) => e.target.dataset[a] !== undefined)](x);
     } else if (e.target.dataset.avail !== undefined) {
       editAvailability(x, `${title.replace(/es$|s$/, '')}: ${x.name}`);
     }
@@ -210,12 +210,23 @@ function renderClasses(root) {
   cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults() });
   cols.rerender = ['homeroom'];
   const extra = {
-    label: 'Lessons', act: 'homeApply',
-    html: (x) => { const n = state.lessons.filter((l) => l.room === 'home' && (l.classIds || []).includes(x.id)).length; return `<button class="ghost small" data-home-apply ${x.homeroom ? '' : 'disabled'} title="Set the room of this class’s own lessons that have none (or ask for any room of the homeroom’s type) to “Class homeroom”">Use in lessons${n ? ` (${n} now)` : ''}</button>`; },
-    run: (x) => {
-      const r = applyHomeroom(state, x.id);
-      toast(r.none + r.type ? `${r.none + r.type} lesson row(s) of ${x.name} now use the homeroom${r.type ? ` (${r.type} keep “Any ${find('rooms', x.homeroom).type}” as a fallback)` : ''}.` : `No lesson row of ${x.name} needed changing.`, 4000);
-      changed(); render();
+    label: 'Lessons',
+    html: (x) => { const n = state.lessons.filter((l) => l.room === 'home' && (l.classIds || []).includes(x.id)).length; return `<button class="ghost small" data-home-apply ${x.homeroom ? '' : 'disabled'} title="Set the room of this class’s own lessons that have none (or ask for any room of the homeroom’s type) to “Class homeroom”">Use in lessons${n ? ` (${n} now)` : ''}</button> <button class="ghost small" data-copy-from ${state.classes.length > 1 ? '' : 'disabled'} title="Copy every lesson row of another class to this class">Copy lessons from…</button>`; },
+    acts: {
+      homeApply: (x) => {
+        const r = applyHomeroom(state, x.id);
+        toast(r.none + r.type ? `${r.none + r.type} lesson row(s) of ${x.name} now use the homeroom${r.type ? ` (${r.type} keep “Any ${find('rooms', x.homeroom).type}” as a fallback)` : ''}.` : `No lesson row of ${x.name} needed changing.`, 4000);
+        changed(); render();
+      },
+      copyFrom: (x) => {
+        const others = state.classes.filter((c) => c.id !== x.id);
+        openModal(`Copy lessons to ${x.name}`, `<p class="hint">Copies every lesson row that only the chosen class attends — subject, teacher, room, distribution and options — to ${esc(x.name)}. Teachers are copied too, so give each copy its own teacher where they would clash. Shared rows and pins are not copied.</p>
+          <label class="row" style="gap:6px">From <select id="copyFrom">${others.map((c) => `<option value="${c.id}">${esc(c.name)} (${state.lessons.filter((l) => (l.classIds || []).length === 1 && l.classIds[0] === c.id).length} rows)</option>`).join('')}</select></label>`, (v) => {
+          if (v !== 'save') return;
+          const n = copyLessons(state, $('#copyFrom').value, x.id).length;
+          toast(`${n} lesson row(s) copied to ${x.name}.`, 3500); changed(); render();
+        }, '<button value="cancel" class="ghost">Cancel</button><button value="save">Copy</button>');
+      },
     },
   };
   entityEditor(root, { list: 'classes', title: 'Classes', hint: 'Class groups of students. Use ✕ for fixed events (assembly), ~ for periods to leave free if possible. Give a class a homeroom once, then pick “Class homeroom” as the room of its lessons (or use the button) — changing the homeroom later moves all of them.', cols, loadKey: 'c', extra });

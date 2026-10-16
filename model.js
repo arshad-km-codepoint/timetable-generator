@@ -289,6 +289,27 @@
   function removeRelation(s, aId, bId, type) {
     for (const [x, y] of [[aId, bId], [bId, aId]]) { const row = find(s, 'lessons', x); if (row) row.relations = (row.relations || []).filter((r) => !(r.type === type && r.lessonId === y)); }
   }
+  // Copy every lesson row that only `fromId` attends to class `toId`: same subject, teacher, room
+  // ("Class homeroom" follows the new class), distribution and options. Relations between copied
+  // rows are kept among the copies; a parallel group is renamed after the new class so the copies
+  // do not join the original group. Shared rows and pins are not copied. Returns the new rows.
+  function copyLessons(s, fromId, toId) {
+    const to = find(s, 'classes', toId);
+    if (!to || !find(s, 'classes', fromId) || fromId === toId) return [];
+    const rows = s.lessons.filter((l) => (l.classIds || []).length === 1 && l.classIds[0] === fromId);
+    const copy = new Map();
+    for (const l of rows) {
+      const c = JSON.parse(JSON.stringify(l));
+      c.id = uid(); c.classIds = [toId]; c.relations = [];
+      if (c.parallel) c.parallel = `${c.parallel} ${to.name}`;
+      copy.set(l.id, c);
+    }
+    s.lessons.push(...copy.values());
+    for (const l of rows) for (const r of l.relations || []) {
+      if (copy.has(r.lessonId)) addRelation(s, copy.get(l.id).id, copy.get(r.lessonId).id, r.type, r);
+    }
+    return [...copy.values()];
+  }
   // Delete a lesson row together with every relation that points at it.
   function removeLesson(s, id) {
     s.lessons = s.lessons.filter((l) => l.id !== id);
@@ -699,6 +720,7 @@
     uid, esc, PALETTE, teacherDefaults, classDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
     unitBlockReason, PIN_KINDS, pinSessions, pinName, pinAt, setPin, dropDeadPins, pinIssues,
+    copyLessons,
     lessonDefaults, newLesson, homeroomOf, applyHomeroom, gradeOf, classSubjectPeriods, deriveCurriculum, curriculumGaps, curriculumSubjects, applyCurriculum, missingLessons, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
     dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
     periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
