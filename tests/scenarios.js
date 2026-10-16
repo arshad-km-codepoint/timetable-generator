@@ -155,8 +155,8 @@ function scenarioB() {
   });
   s.meetings.push({ id: id('m'), name: 'Senior-school team', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: '', allowed: slotsWhere(s, (d, p) => p >= 8) });
   s.duties.push({ id: id('d'), name: 'Lab safety supervision', maxPerSlot: 1, allowed: slotsWhere(s, (d, p) => p >= 8), assignments: [t.cs, t.psy, t.ent, t.geo, t.acc].map((x) => ({ teacherId: x.id, hours: 2 })) });
-  // Break supervision: 5 break periods × 2 teachers = 10 slots for 12 assigned hours (2 stay unplaced by design).
-  s.duties.push({ id: id('d'), kind: 'break', name: 'Playground duty', maxPerSlot: 2, allowed: [], assignments: [t.eng1, t.eng2, t.pe1, t.pe2, t.his, t.pol].map((x) => ({ teacherId: x.id, hours: 2 })) });
+  // Break supervision: 5 break periods × 2 teachers.
+  s.duties.push({ id: id('d'), kind: 'break', name: 'Playground duty', maxPerSlot: 2, allowed: [], assignments: [t.eng1, t.eng2, t.pe1, t.pe2, t.his].map((x) => ({ teacherId: x.id, hours: 2 })) });
   return s;
 }
 
@@ -226,10 +226,10 @@ function audit(s, placements) {
   const ptype = (p) => (s.settings.periods[p] && s.settings.periods[p].type) || 'teaching';
   const general = new Set(s.settings.blocked || []);
   // Cells of a lesson/meeting placement: `len` consecutive periods, or — when the unit may
-  // straddle a break — the next `len` teaching periods with break/lunch skipped.
+  // straddle a break — the next `len` teaching periods with break periods skipped (never lunch).
   const cellsOf = (pl, allowBreak) => {
     const out = []; let p = pl.period;
-    while (out.length < pl.len && p < P) { if (ptype(p) === 'teaching' || !allowBreak) out.push([pl.day, p]); p++; }
+    while (out.length < pl.len && p < P) { if (!(allowBreak && ptype(p) === 'break')) out.push([pl.day, p]); p++; }
     if (out.length < pl.len) err(`out of bounds ${pl.unitId}`);
     return out;
   };
@@ -324,7 +324,7 @@ function classGaps(s, placements) {
     const base = pl.unitId.split('#')[0]; if (base.startsWith('m:') || base.startsWith('d:')) continue;
     for (const lid of base.split('+')) {
       const l = s.lessons.find((x) => x.id === lid);
-      const cells = []; for (let p = pl.period; p < P && cells.length < pl.len; p++) if (ptype(p) === 'teaching' || !l.allowBreakInside) cells.push(p);
+      const cells = []; for (let p = pl.period; p < P && cells.length < pl.len; p++) if (!(l.allowBreakInside && ptype(p) === 'break')) cells.push(p);
       for (const c of l.classIds) for (const p of cells) (occ[`${c}:${pl.day}`] ||= new Set()).add(p);
     }
   }

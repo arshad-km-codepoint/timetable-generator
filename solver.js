@@ -169,7 +169,8 @@ class Engine {
 
   // Slots a `len`-period unit of `kind` occupies when it starts at s, or null if it cannot start
   // there. Duties take any single slot. Other units need `len` teaching periods on one day:
-  // consecutive ones, or — with allowBreak — the next teaching periods with breaks/lunch skipped.
+  // consecutive ones, or — with allowBreak — the next teaching periods with break periods
+  // skipped. Lunch is never inside a unit.
   spanCells(kind, len, allowBreak, s) {
     if (kind === 'duty') return [s];
     const { P } = this; const d = Math.floor(s / P);
@@ -177,7 +178,7 @@ class Engine {
     const out = [];
     for (let p = s % P; p < P && out.length < len; p++) {
       if (this.teach[d * P + p]) out.push(d * P + p);
-      else if (!allowBreak) return null;
+      else if (!allowBreak || this.periodTypes[p] !== 'break') return null;
     }
     return out.length === len ? out : null;
   }

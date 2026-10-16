@@ -109,6 +109,20 @@ check('(b2) without allowBreakInside the same double is impossible', () => {
   assert.strictEqual(e.cellsAt(0, 2), null);
 });
 
+check('(b3) a flagged double may straddle a break but never lunch', () => {
+  const s = school({ days: 1, periods: 'ttlttbt' });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
+  add.lesson(s, subj, t, [c], 1, 2, { allowBreakInside: true });
+  const e = new Engine(s, []);
+  eq(e.units[0].starts, [0, 3, 4], 'starts 0-1, 3-4 and 4-6 (across the break); never 1-3 across lunch');
+  assert.strictEqual(e.cellsAt(0, 1), null);
+  eq(e.cellsAt(0, 4), [4, 6]);
+  for (const st of e.units[0].starts) {
+    const cells = e.cellsAt(0, st);
+    for (let p = cells[0] + 1; p < cells[1]; p++) assert.notStrictEqual(ptype(s, p), 'lunch', `start ${st} puts lunch inside the double`);
+  }
+});
+
 check('(c) general template: blocked keys are never used by lessons, meetings or teaching duties', () => {
   const s = school({ days: 2, periods: 4, blocked: ['0-1', '1-2'] });
   const subj = add.subject(s), c = add.cls(s), t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
@@ -200,21 +214,27 @@ check('(e3) a straddling double creates no gap and costs late periods by its las
 });
 
 check('(f) placements() round-trips through new Engine(data, placements), including straddling doubles', () => {
-  const s = school({ days: 3, periods: 'tttbtlt', blocked: ['2-5', '2-6'] });
+  // Every double here must straddle a break: the only double starts are 0 (cells 0,2) and 4 (cells 4,6).
+  const s = school({ days: 3, periods: 'tbtltbt', blocked: ['2-5', '2-6'] });
   const subj = add.subject(s), r1 = add.room(s, 'R1', 'Lab'), r2 = add.room(s, 'R2', 'Lab');
   const c1 = add.cls(s, 'C1'), c2 = add.cls(s, 'C2');
   const t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B'), t3 = add.teacher(s, 'C');
-  add.lesson(s, subj, t1, [c1], 3, 2, { allowBreakInside: true, room: 'type:Lab' });
-  add.lesson(s, subj, t2, [c2], 3, 2, { allowBreakInside: true, room: 'type:Lab' });
-  add.lesson(s, subj, t2, [c1], 4, 1);
-  add.lesson(s, subj, t1, [c2], 4, 1);
+  add.lesson(s, subj, t1, [c1], 2, 2, { allowBreakInside: true, room: 'type:Lab' });
+  add.lesson(s, subj, t2, [c2], 2, 2, { allowBreakInside: true, room: 'type:Lab' });
+  add.lesson(s, subj, t2, [c1], 3, 1);
+  add.lesson(s, subj, t1, [c2], 3, 1);
   add.meeting(s, 'All', [t1, t2, t3]);
   add.duty(s, 'Playground', [[t3, 3]], { kind: 'break', maxPerSlot: 1 });
   add.duty(s, 'On call', [[t3, 4]]);
   const { engine, placements, placed, total } = solveAll(s);
   assert.strictEqual(placed, total, `all ${total} units placed`);
-  const straddles = placements.filter((pl) => pl.len === 2 && ptype(s, pl.period + 1) !== 'teaching');
-  assert.ok(straddles.length >= 1, 'at least one double straddles the break (doubles only fit as 0-1, 1-2, 2-4, 4-6)');
+  const doubles = placements.filter((pl) => pl.len === 2);
+  assert.strictEqual(doubles.length, 4);
+  for (const pl of doubles) {
+    assert.ok(pl.period === 0 || pl.period === 4, `${pl.unitId} starts at ${pl.period}`);
+    assert.strictEqual(ptype(s, pl.period + 1), 'break');
+    eq(engine.pos[engine.unitById[pl.unitId].i].cells, [pl.day * 7 + pl.period, pl.day * 7 + pl.period + 2]);
+  }
   const e2 = new Engine(s, placements);
   const sort = (ps) => ps.slice().sort((x, y) => x.unitId.localeCompare(y.unitId));
   eq(sort(e2.placements()), sort(placements));
