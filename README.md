@@ -10,7 +10,7 @@ No build step, no server, no dependencies — open `index.html` in a browser.
 2. **Teachers / Classes / Rooms** – availability template per element with three states: available, **~ non-preferred** (soft, weighted) and **✕ prohibited** (hard). Teachers also get **max periods/day** (hard), **min periods/day** (soft), **max periods in a row**, **free days**, **presence/day and /week** (soft, or hard with *Strict*) and a **no last→first period** rule. Rooms have a type; rooms of one type form a set of alternatives. Classes can have a **homeroom**, assigned once: lessons set to “Class homeroom” use it and follow it when it changes.
 3. **Subjects** – name, short code, colour. **Grades** – year groups with a *curriculum* (subject × weekly periods): classes join a grade, validation compares each class's lessons with its curriculum, the Lessons tab offers the curriculum subjects first, and *Create missing lessons* adds a row for every curriculum subject a class has none of.
 4. **Lessons** – subject × teacher × class(es), sessions per week, single/double/triple, room (specific / any of a type / none), "max one per day", and **parallel group**: rows with the same group name run simultaneously (split classes, electives, setted groups), each with its own teacher and room.
-5. **Meetings & duties** – **teacher meetings** (members, sessions/week, single/double, optional room, allowed periods) and **on-call duties** (service such as library supervision, duty periods, max teachers per period, weekly hours per teacher).
+5. **Meetings, activities & duties** – **teacher meetings** (members, sessions/week, single/double, optional room, allowed periods) **complementary activities** (teacher-only work such as preparation or coordination: periods per week, max/day, min/day, not-consecutive, allowed periods, optional share of the teacher's max periods/day) and **on-call duties** (service such as library supervision, duty periods, max teachers per period, weekly hours per teacher).
 6. **Generate** – data validation (errors/warnings), editable **weighted criteria**, several **attempts** with the best result kept, stop-any-time, statistics, a **not-placed list** and a **difficulty report** (most-rejected lessons and % of rejections per class/teacher, as in GHC).
 7. **Timetables** – by class, teacher (including meetings and duties), room, **duty rota** (who is on call each period, uncovered periods flagged), or whole-school overview (classes or teachers). Drag to move (every hard rule is checked, with the reason shown when refused), drag from the **not-placed tray** to add lessons back, click to lock/unlock, **change room** or unschedule. Export CSV / standalone HTML, print one or all.
 
@@ -18,7 +18,7 @@ Data autosaves in the browser; **Save file / Open…** keep JSON backups. Files 
 
 ## Engine (`solver.js`)
 
-**Hard:** no teacher/class/room double-booking; ✕ periods; teacher max/day; teacher free days (no lessons on them) and strict presence limits; contiguous multi-period lessons; "1/day"; parallel-group lessons share a slot with distinct rooms; meetings only in allowed periods with all members free; duty capacity per period; locked items stay.
+**Hard:** no teacher/class/room double-booking; ✕ periods; teacher max/day; activity max/day and non-consecutive periods; teacher free days (no lessons on them) and strict presence limits; contiguous multi-period lessons; "1/day"; parallel-group lessons share a slot with distinct rooms; meetings only in allowed periods with all members free; duty capacity per period; locked items stay.
 
 **Soft (weights editable in the UI):** class gaps, teacher gaps, same lesson twice a day, non-preferred periods, teacher below min/day, late periods, uncovered duty periods, uneven teacher week (periods above/below an even spread over the days the teacher can work), too many periods in a row, presence over its limit, last period followed by the first of the next day.
 
@@ -45,4 +45,4 @@ The sample school (6 classes, 12 teachers, 12 rooms, 140 lesson sessions includi
 
 ## Not implemented (GHC has these)
 
-Complementary activities, multi-week and overlapping time frames, fractional periods, explicit alternative weekly distributions and daily block limits, group-assignment assistant, import from school-management systems / XML-GHC exchange.
+Multi-week and overlapping time frames, fractional periods, explicit alternative weekly distributions and daily block limits, group-assignment assistant, import from school-management systems / XML-GHC exchange.

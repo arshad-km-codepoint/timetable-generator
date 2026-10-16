@@ -843,6 +843,96 @@ check('homeroom with an alternative type: the homeroom is preferred, the type is
   void lb;
 });
 
+// ---------- complementary activities ----------
+const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
+const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });
+
+check('activity: one single-period unit per weekly period, teacher only; bad data is reported', () => {
+  const s = school({ days: 3, periods: 4 });
+  const t = add.teacher(s, 'T');
+  const a = addActivity(s, 'Lab prep', t, 3);
+  const e = new Engine(s, []);
+  eq(e.units.map((u) => [u.id, u.kind, u.len, u.teachers, u.classes]), [0, 1, 2].map((k) => [`a:${a.id}#${k}`, 'activity', 1, [t.id], []]));
+  eq(e.units[0].parts[0].roomCands, null);
+  s.activities.push({ id: 'x1', name: 'No teacher', teacherId: 'gone', periods: 2 }, { id: 'x2', name: 'Empty', teacherId: t.id, periods: 0 });
+  const bad = new Engine(s, []).problems.filter((p) => p.activityId);
+  eq(bad.map((p) => [p.activityId, p.msg]), [['x1', 'has no teacher'], ['x2', 'has no periods per week']]);
+});
+
+check('activity: maxPerDay and nonConsecutive hold over a solve; activities and lessons never clash', () => {
+  const s = school({ days: 4, periods: 'tttbttt' });
+  const t = add.teacher(s, 'T'), subj = add.subject(s), c = add.cls(s, 'A');
+  add.lesson(s, subj, t, [c], 8, 1, { maxOnePerDay: false });
+  const a = addActivity(s, 'Coordination', t, 6, { maxPerDay: 2, nonConsecutive: true });
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  const mine = r.placements.filter((p) => p.unitId.startsWith(`a:${a.id}#`));
+  assert.strictEqual(mine.length, 6);
+  for (let d = 0; d < 4; d++) {
+    const ps = mine.filter((p) => p.day === d).map((p) => p.period).sort((x, y) => x - y);
+    assert.ok(ps.length <= 2, `day ${d}: ${ps}`);
+    // adjacent in teaching order: periods 2 and 4 are neighbours across the break
+    for (let i = 1; i < ps.length; i++) assert.ok(!(ps[i] - ps[i - 1] === 1 || (ps[i - 1] === 2 && ps[i] === 4)), `adjacent on day ${d}: ${ps}`);
+  }
+  const occ = {}; for (const p of r.placements) { const k = `${p.day}-${p.period}`; assert.ok(!occ[k], `teacher double-booked at ${k}`); occ[k] = 1; }
+});
+
+check('activity: baseConflicts evicts to keep maxPerDay / nonConsecutive and refuses over locked units', () => {
+  const s = school({ days: 2, periods: 5 });
+  const t = add.teacher(s, 'T');
+  const a = addActivity(s, 'Prep', t, 4, { maxPerDay: 2, nonConsecutive: true });
+  const cap = new Engine(s, [apl(a, 0, 0, 0), apl(a, 1, 0, 2)]);
+  const u3 = cap.unitById[`a:${a.id}#2`].i, u0 = cap.unitById[`a:${a.id}#0`].i, u1 = cap.unitById[`a:${a.id}#1`].i;
+  eq([...cap.baseConflicts(u3, 4)], [u0], 'a third period on Monday evicts one of the two (the first movable)');
+  assert.strictEqual(cap.baseConflicts(u3, 5 + 4).size, 0, 'Tuesday is free');
+  const adj = new Engine(s, [apl(a, 0, 0, 0)]);
+  eq([...adj.baseConflicts(adj.unitById[`a:${a.id}#1`].i, 1)], [adj.unitById[`a:${a.id}#0`].i], 'the neighbouring period is evicted');
+  assert.strictEqual(adj.baseConflicts(adj.unitById[`a:${a.id}#1`].i, 2).size, 0, 'one period apart is fine');
+  const locked = new Engine(s, [{ ...apl(a, 0, 0, 0), locked: true }, { ...apl(a, 1, 0, 2), locked: true }]);
+  assert.strictEqual(locked.baseConflicts(locked.unitById[`a:${a.id}#2`].i, 4), null, 'both locked: refused');
+  void u1;
+});
+
+check('activity: allowed slots, minPerDay as a soft cost, and countLoad for the teacher max/day', () => {
+  const s = school({ days: 3, periods: 4 });
+  const t = add.teacher(s, 'T', { maxPerDay: 2 }), subj = add.subject(s), c = add.cls(s, 'A');
+  const a = addActivity(s, 'Meeting prep', t, 3, { minPerDay: 2, allowed: ['0-1', '1-1', '1-2', '2-3'] });
+  const e = new Engine(s, []);
+  eq(e.units[0].starts, [1, 5, 6, 11], 'only the allowed periods');
+  const at = (cells) => new Engine(s, cells.map(([d, p], k) => apl(a, k, d, p)));
+  assert.strictEqual(at([[1, 1], [1, 2], [0, 1]]).groupStats(`a:${a.id}`).activityMin, 1, 'Monday has 1 of 2');
+  assert.strictEqual(at([[1, 1], [1, 2]]).groupStats(`a:${a.id}`).activityMin, 0);
+  const e3 = at([[0, 1], [1, 1], [2, 3]]);
+  assert.strictEqual(e3.totalCost().activityMin, 3, 'three days with 1 period each');
+  const flat = new Engine({ ...s, settings: { ...s.settings, weights: { activityMin: 0 } } }, e3.placements());
+  assert.ok(Math.abs(e3.totalCost().cost - flat.totalCost().cost - 3 * e3.W.activityMin) < 0.11, 'cost carries W.activityMin × shortfall');
+  const ui = e3.unitById[`a:${a.id}#0`].i;
+  assert.ok(Math.abs(e3.localCost(ui, [0]) - flat.localCost(ui, [0]) - 3 * e3.W.activityMin) < 1e-9, 'localCost carries the group cost');
+  // countLoad: the activity counts toward the teacher's max 2/day only when it opts in.
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1] });
+  const place = (opt) => { a.countLoad = opt; a.allowed = []; return new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1)]); };
+  let e4 = place(false);
+  assert.strictEqual(e4.baseConflicts(e4.unitById[`a:${a.id}#0`].i, 2).size, 0, 'without countLoad the third period is fine');
+  e4 = place(true);
+  assert.strictEqual(e4.baseConflicts(e4.unitById[`a:${a.id}#0`].i, 2).size, 1, 'with countLoad a lesson makes way (3 > max 2)');
+});
+
+check('activity: placements round-trip, locks survive, and the activity may be moved by a plain solve', () => {
+  const s = school({ days: 3, periods: 4 });
+  const t = add.teacher(s, 'T'), subj = add.subject(s), c = add.cls(s, 'A');
+  add.lesson(s, subj, t, [c], 6, 1, { maxOnePerDay: false });
+  const a = addActivity(s, 'Prep', t, 3, { maxPerDay: 1 });
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  const e2 = new Engine(s, r.placements);
+  eq(e2.placements().slice().sort((x, y) => x.unitId.localeCompare(y.unitId)), r.placements.slice().sort((x, y) => x.unitId.localeCompare(y.unitId)));
+  const lock = r.placements.filter((p) => p.unitId.startsWith('a:')).map((p) => ({ ...p, locked: true }));
+  const r2 = solveAll(s, lock);
+  assert.strictEqual(r2.placed, r2.total);
+  for (const p of lock) assert.ok(r2.placements.some((q) => q.unitId === p.unitId && q.day === p.day && q.period === p.period), 'locked activity period kept');
+  void a;
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

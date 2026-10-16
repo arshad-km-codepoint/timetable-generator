@@ -527,11 +527,47 @@ check('(j) validate: missing, short and over-long subjects, and a curriculum big
   a.gradeId = '';
   assert.ok(!hasMsg(s, /curriculum/), 'classes outside a grade are not checked');
 });
+// ---------- (k) complementary activities ----------
+check('(k) migrate cleans activities; workload counts them (max/day only when countLoad)', () => {
+  const s = school('tttt', 5);
+  const t = add.teacher(s, 'T');
+  s.activities = [{ id: 'a1', name: 5, teacherId: t.id, periods: '3.9', minPerDay: -1, maxPerDay: 'x', nonConsecutive: 1, allowed: 'no' }, null, { name: 'no id' }, { id: 'a2', name: 'B', teacherId: t.id, periods: 2, countLoad: true, allowed: ['0-0'] }];
+  M.migrate(s);
+  eq(s.activities.map((a) => a.id), ['a1', 'a2']);
+  eq(s.activities[0], { id: 'a1', name: 'Activity', teacherId: t.id, periods: 3, minPerDay: 0, maxPerDay: 0, nonConsecutive: true, countLoad: false, allowed: [] });
+  const w = M.workload(s);
+  eq([w.t[t.id], w.tl[t.id] || 0], [5, 2], 'all five periods load the teacher; only the opted-in two count toward max/day');
+  const old = M.migrate({ settings: M.emptyState().settings, teachers: [], classes: [], rooms: [], subjects: [], lessons: [] });
+  eq(old.activities, [], 'files without activities get an empty list');
+});
+check('(k) validate: engine problems, impossible daily limits, too few usable slots, load over free slots', () => {
+  const s = school('tttt', 3);   // 12 slots
+  const t = add.teacher(s, 'T');
+  const a = { id: id('a'), name: 'Prep', teacherId: t.id, periods: 4, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [] };
+  s.activities.push(a);
+  assert.ok(!hasMsg(s, /err/), msgs(s).join('\n'));
+  a.maxPerDay = 1;
+  assert.ok(hasMsg(s, /err: Activity “Prep” has 4 periods but max 1\/day over the 3 day\(s\) T can be there holds only 3\./), msgs(s).join('\n'));
+  a.maxPerDay = 2; a.minPerDay = 3;
+  assert.ok(hasMsg(s, /warn: Activity “Prep”: min\/day is above max\/day\./), msgs(s).join('\n'));
+  a.minPerDay = 0; a.allowed = ['0-0', '0-1', '1-0'];
+  assert.ok(hasMsg(s, /err: Activity “Prep” has 4 periods but only 3 usable slot\(s\) for T\./), msgs(s).join('\n'));
+  a.allowed = []; t.unavailable = Array.from({ length: 12 }, (_, i) => `${Math.floor(i / 4)}-${i % 4}`).filter((k) => !k.startsWith('2-'));
+  a.maxPerDay = 0;
+  assert.ok(!hasMsg(s, /only 4 usable/) && !hasMsg(s, /err/), 'four slots fit four periods');
+  a.periods = 5;
+  assert.ok(hasMsg(s, /err: .*T has 5 periods but only 4 free slots\./) && hasMsg(s, /Activity “Prep” has 5 periods but only 4 usable slot\(s\) for T\./), msgs(s).join('\n'));
+  a.teacherId = 'gone';
+  assert.ok(hasMsg(s, /err: Activity “Prep” has no teacher\./), msgs(s).join('\n'));
+  a.teacherId = t.id; a.periods = 0;
+  assert.ok(hasMsg(s, /err: Activity “Prep” has no periods per week\./), msgs(s).join('\n'));
+  assert.strictEqual(M.describeUnit(s, `a:${a.id}#2`), 'Prep · T');
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
   eq(msgs(s), []);
-  assert.strictEqual(M.validate(s).units, s.lessons.reduce((n, l) => n + l.lengths.length, 0) - 2 + s.meetings.length + 2 * 5 + 2 * 6, 'one unit per length (the parallel pair merges), plus meetings and duty hours');
+  assert.strictEqual(M.validate(s).units, s.lessons.reduce((n, l) => n + l.lengths.length, 0) - 2 + s.meetings.length + 2 * 5 + 2 * 6 + s.activities.reduce((n, x) => n + x.periods, 0), 'one unit per length (the parallel pair merges), plus meetings, duty hours and activity periods');
 });
 check('(e) prunePlacements drops placements the engine cannot restore and reports how many', () => {
   const s = school('ttttt');

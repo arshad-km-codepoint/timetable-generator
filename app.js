@@ -10,6 +10,7 @@ const {
 const $ = (s, r = document) => r.querySelector(s);
 const STORAGE_KEY = 'school-timetable.v1';
 const MEETING_COLOR = '#64748b';
+const ACTIVITY_COLOR = '#0e7490';
 const DUTY_COLOR = '#a16207';
 
 function load() {
@@ -168,6 +169,7 @@ function cleanupRefs() {
   state.grades.forEach((g) => { g.curriculum = g.curriculum.filter((e) => s.has(e.subjectId)); });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
   dropDeadRelations(state);
+  state.activities.forEach((a) => { if (!t.has(a.teacherId)) a.teacherId = ''; });
   state.meetings.forEach((m) => {
     m.teacherIds = (m.teacherIds || []).filter((id) => t.has(id));
     if (m.room && !m.room.startsWith('type:') && !r.has(m.room)) m.room = '';
@@ -604,6 +606,38 @@ function renderStaff(root) {
     if (btn.dataset.when !== undefined) editSlots(`When can “${x.name}” take place?`, x);
   });
 
+  const a = panel(root, 'Complementary activities', 'Work that belongs to one teacher but no class — preparation, coordination, tutoring time. Set the periods per week; <b>Max/day</b> is a hard limit, <b>Min/day</b> a preference for days the activity is used, and <b>Not consecutive</b> keeps its periods on a day apart. The activity is scheduled around the lessons and fills free periods; tick <b>Counts</b> to include it in the teacher’s max periods/day.');
+  a.querySelector('[data-slot=actions]').innerHTML = '<button data-add-activity>+ Add activity</button>';
+  a.insertAdjacentHTML('beforeend', state.activities.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Teacher</th><th>Periods/wk</th><th title="Preference: on days it is used, at least this many">Min/day</th><th title="Hard limit">Max/day</th><th title="No two periods of it next to each other on a day">Not consecutive</th><th title="Counts toward the teacher’s max periods/day">Counts</th><th>When</th><th></th></tr></thead><tbody>
+    ${state.activities.map((x) => `<tr data-id="${x.id}">
+      <td><input data-f="name" value="${esc(x.name)}" aria-label="Activity name"></td>
+      <td><select data-f="teacherId" aria-label="Teacher"><option value="">— choose —</option>${state.teachers.map((t) => `<option value="${t.id}" ${t.id === x.teacherId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></td>
+      <td><input type="number" min="1" max="${teachingPeriods(state) * D()}" data-f="periods" value="${x.periods || ''}" style="max-width:80px" aria-label="Periods per week"></td>
+      <td><input type="number" min="0" max="${teachingPeriods(state)}" data-f="minPerDay" value="${x.minPerDay || ''}" placeholder="—" style="max-width:70px" aria-label="Minimum per day"></td>
+      <td><input type="number" min="0" max="${teachingPeriods(state)}" data-f="maxPerDay" value="${x.maxPerDay || ''}" placeholder="—" style="max-width:70px" aria-label="Maximum per day"></td>
+      <td><input type="checkbox" data-f="nonConsecutive" ${x.nonConsecutive ? 'checked' : ''} aria-label="Not consecutive"></td>
+      <td><input type="checkbox" data-f="countLoad" ${x.countLoad ? 'checked' : ''} aria-label="Counts toward max periods per day"></td>
+      <td><button class="ghost" data-when>${slotsLabel(x.allowed)}</button></td>
+      <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
+    </tbody></table></div>` : '<p class="hint">No activities yet.</p>');
+  a.addEventListener('change', (e) => {
+    const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+    const x = find('activities', tr.dataset.id); const f = e.target.dataset.f;
+    x[f] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Math.max(0, Math.floor(Number(e.target.value)) || 0) : e.target.value;
+    changed();
+  });
+  a.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (btn.dataset.addActivity !== undefined) {
+      state.activities.push({ id: uid(), name: `Activity ${state.activities.length + 1}`, teacherId: '', periods: 2, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [] });
+      changed(); render(); return;
+    }
+    const tr = btn.closest('tr[data-id]'); if (!tr) return;
+    const x = find('activities', tr.dataset.id);
+    if (btn.dataset.del !== undefined) { state.activities = state.activities.filter((y) => y !== x); changed(); render(); }
+    if (btn.dataset.when !== undefined) editSlots(`When can “${x.name}” take place?`, x);
+  });
+
   const d = panel(root, 'On-call duties', 'Services such as library or corridor supervision. Mark the duty periods under “When”, set how many teachers may be on call at once, and give each teacher weekly hours. The engine tries to cover every duty period with at least one teacher. Kind <b>Teaching periods</b> uses free teaching periods and counts toward a teacher’s load; <b>Break supervision</b> (playground, corridors) uses only the periods typed “Break” on the Week tab and is counted separately.');
   d.querySelector('[data-slot=actions]').innerHTML = '<button data-add-duty>+ Add duty</button>';
   d.insertAdjacentHTML('beforeend', state.duties.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Service</th><th title="Teaching periods, or supervision during breaks">Kind</th><th title="Hard limit">Max teachers / period</th><th>When</th><th>Teachers &amp; hours</th><th>Hours / duty periods</th><th></th></tr></thead><tbody>
@@ -683,6 +717,7 @@ function editSlots(title, obj, kind = 'teaching') {
 // Display data for one part of a unit: lesson subject, meeting or duty.
 function partInfo(part) {
   if (part.kind === 'meeting') { const m = find('meetings', part.ref); return { title: m?.name || 'Meeting', code: 'MTG', color: MEETING_COLOR }; }
+  if (part.kind === 'activity') { const a = find('activities', part.ref); return { title: a?.name || 'Activity', code: 'ACT', color: ACTIVITY_COLOR }; }
   if (part.kind === 'duty') { const d = find('duties', part.ref); return { title: d?.name || 'Duty', code: 'DUTY', color: DUTY_COLOR }; }
   const s = find('subjects', find('lessons', part.lessonId)?.subjectId);
   return { title: s?.name || '?', code: s?.code || s?.name?.slice(0, 3) || '?', color: s?.color };
@@ -785,6 +820,7 @@ function renderStats(box) {
     ${s.consecutive ? `<div class="stat"><b>${s.consecutive}</b><span>teacher periods over their max in a row</span></div>` : ''}
     ${s.presence ? `<div class="stat"><b>${s.presence}</b><span>teacher presence periods over the limit</span></div>` : ''}
     ${s.exclusive ? `<div class="stat"><b>${s.exclusive}</b><span>teacher last→first period pairs</span></div>` : ''}
+    ${s.activityMin ? `<div class="stat"><b>${s.activityMin}</b><span>activity periods short of the daily minimum</span></div>` : ''}
     ${s.balance ? `<div class="stat"><b>${s.balance}</b><span>teacher periods off an even week</span></div>` : ''}
     <div class="stat"><b>${s.cost}</b><span>weighted score (lower is better)</span></div>
   </div>
@@ -820,7 +856,7 @@ function blockHtml(e, u, mode, id) {
     const info = partInfo(p);
     const room = p.room ? find('rooms', p.room)?.name : '';
     if (p.kind !== 'lesson') {
-      const meta = p.kind === 'meeting' ? [room, `${u.teachers.length} teacher(s)`] : ['On call'];
+      const meta = p.kind === 'meeting' ? [room, `${u.teachers.length} teacher(s)`] : p.kind === 'activity' ? ['Activity'] : ['On call'];
       return `<div class="s">${esc(info.title)}</div><div class="m">${meta.filter(Boolean).map(esc).join(' · ')}</div>`;
     }
     const cls = p.classes.map((c) => find('classes', c)?.name).join('+');

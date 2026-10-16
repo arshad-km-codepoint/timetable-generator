@@ -16,7 +16,7 @@ const PAL = ['#2f6fdb', '#d9534f', '#1f8a4c', '#b7791f', '#7b4fd6', '#0f8f99', '
 function school(name, days, periodTimes) {
   return {
     settings: { name, days, periods: periodTimes.map(([s, e, type], i) => ({ label: type ? type[0].toUpperCase() + type.slice(1) : String(i + 1), start: s, end: e, ...(type ? { type } : {}) })), weights: { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 }, attempts: 2 },
-    teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], duties: [],
+    teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [],
     timetable: { placements: [], generatedAt: null, difficulty: null },
   };
 }
@@ -98,6 +98,9 @@ function scenarioA() {
   byLoad.slice(0, 6).forEach((t) => { t.freeDays = 1; });
   byLoad.slice(-6).forEach((t) => { t.maxConsecutive = 4; t.noLastFirst = true; });
   byLoad.slice(-12, -6).forEach((t) => { t.maxPresenceWeek = 40; t.presenceStrict = true; });
+  // Complementary activities for mid-load teachers: lab prep, coordination, and one that counts toward max/day.
+  byLoad.slice(6, 9).forEach((t, i) => s.activities.push({ id: id('a'), name: `Lab prep ${i + 1}`, teacherId: t.id, periods: 4, minPerDay: 0, maxPerDay: 1, nonConsecutive: true, countLoad: false, allowed: [] }));
+  byLoad.slice(9, 11).forEach((t, i) => s.activities.push({ id: id('a'), name: `Coordination ${i + 1}`, teacherId: t.id, periods: 5, minPerDay: 2, maxPerDay: 2, nonConsecutive: true, countLoad: true, allowed: [] }));
   return s;
 }
 
@@ -192,6 +195,8 @@ function scenarioC() {
   const ara = [spec('Arabic 1', 'AR1'), spec('Arabic 2', 'AR2')]; const pe = [spec('PE 1', 'PE1'), spec('PE 2', 'PE2')];
   const mus = spec('Music', 'MUS'), art = spec('Art', 'ART', { unavailable: ['4-5', '4-6'] }), ict = spec('ICT', 'ICT'), mor = spec('Moral Ed.', 'MOR'), lib = spec('Librarian', 'LIB');
   // Week rules on the specialists: a day off (the librarian), a rest rule, a strict presence cap, an overnight rule.
+  s.activities.push({ id: id('a'), name: 'PE kit room', teacherId: pe[1].id, periods: 4, minPerDay: 0, maxPerDay: 1, nonConsecutive: true, countLoad: false, allowed: [] },
+    { id: id('a'), name: 'Equipment check', teacherId: pe[0].id, periods: 3, minPerDay: 0, maxPerDay: 2, nonConsecutive: false, countLoad: true, allowed: [] });
   lib.freeDays = 2; pe[0].maxConsecutive = 3; lib.maxPresenceDay = 6; lib.presenceStrict = true; mor.noLastFirst = true;
   cls.forEach((c, i) => {
     const t = ct[i]; const grade = Math.floor(i / 3) + 1;
@@ -240,11 +245,12 @@ function audit(s, placements, chosen = {}) {
   const errs = []; const err = (m) => errs.push(m);
   const P = s.settings.periods.length, D = s.settings.days.length;
   const by = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
-  const L = by(s.lessons), T = by(s.teachers), C = by(s.classes), R = by(s.rooms), M = by(s.meetings), DU = by(s.duties);
+  const L = by(s.lessons), T = by(s.teachers), C = by(s.classes), R = by(s.rooms), M = by(s.meetings), DU = by(s.duties), AC = by(s.activities || []);
   const grid = {}; // entity@slot -> Set(unitId)
   const book = (ent, d, p, unit) => { const k = `${ent}@${d}-${p}`; (grid[k] ||= new Set()).add(unit); };
   const seenUnits = new Set();
   const placedPerLesson = {}, perDay = {}, tTeach = {};
+  const actPlaced = {}, tActLoad = {}; // activityId -> [{ day, period }]; teacher:day -> periods of countLoad activities
   // Session lengths a row allows: its lengths list, or (legacy) sessions × length; null = flexible.
   const lensOf = (l) => (l.flexible ? null : Array.isArray(l.lengths) ? l.lengths : Array.from({ length: l.sessions }, () => l.length));
   const placedLens = {};   // lessonId -> [len]
@@ -284,6 +290,18 @@ function audit(s, placements, chosen = {}) {
         for (const t of new Set(m.teacherIds)) { book('T' + t, d, p, pl.unitId); if (T[t].unavailable.includes(`${d}-${p}`)) err(`meeting member prohibited`); }
         if (pl.rooms[0]) book('R' + pl.rooms[0], d, p, pl.unitId);
       }
+      continue;
+    }
+    if (base.startsWith('a:')) {
+      const act = AC[base.slice(2)]; if (!act) { err('unknown activity'); continue; }
+      const [d, p] = [pl.day, pl.period];
+      if (pl.len !== 1) err(`activity ${act.name} longer than one period`);
+      checkTeachingCells([[d, p]], `activity ${act.name}`);
+      if (act.allowed.length && !act.allowed.includes(`${d}-${p}`)) err(`activity ${act.name} outside allowed period`);
+      if (T[act.teacherId].unavailable.includes(`${d}-${p}`)) err(`activity ${act.name} on a prohibited period of the teacher`);
+      book('T' + act.teacherId, d, p, pl.unitId);
+      (actPlaced[act.id] ||= []).push({ day: d, period: p });
+      if (act.countLoad) tActLoad[`${act.teacherId}:${d}`] = (tActLoad[`${act.teacherId}:${d}`] || 0) + 1;
       continue;
     }
     if (base.startsWith('d:')) {
@@ -363,6 +381,19 @@ function audit(s, placements, chosen = {}) {
     if (n > 1) { overlaps++; err(`OVERLAP ${k}: ${[...grid[k]].join(', ')}`); }
   }
   for (const k in tTeach) { const [t] = k.split(':'); if (T[t].maxPerDay && tTeach[k] > T[t].maxPerDay) err(`max/day exceeded ${T[t].name}`); }
+  // Activities: periods placed never exceed the weekly total; daily max, non-consecutive and the
+  // opt-in share of the teacher's max periods/day are read straight from the placements.
+  const nextTeach = (p) => { let q = p + 1; while (q < P && ptype(q) === 'break') q++; return q < P && ptype(q) === 'teaching' ? q : -1; };
+  for (const k in tActLoad) { const [t] = k.split(':'); if (T[t].maxPerDay && (tTeach[k] || 0) + tActLoad[k] > T[t].maxPerDay) err(`max/day exceeded with activities ${T[t].name}`); }
+  for (const act of s.activities || []) {
+    const ps = actPlaced[act.id] || [];
+    if (ps.length > act.periods) err(`activity ${act.name} has ${ps.length} periods placed, ${act.periods} wanted`);
+    for (let d = 0; d < D; d++) {
+      const day = ps.filter((x) => x.day === d).map((x) => x.period).sort((x, y) => x - y);
+      if (act.maxPerDay && day.length > act.maxPerDay) err(`activity ${act.name}: ${day.length} periods on day ${d}, max ${act.maxPerDay}`);
+      if (act.nonConsecutive) for (let i = 1; i < day.length; i++) if (nextTeach(day[i - 1]) === day[i]) err(`activity ${act.name}: consecutive periods ${day[i - 1]},${day[i]} on day ${d}`);
+    }
+  }
   // Teacher week rules, read straight from the placements: lesson days off (hard) and strict presence (lessons only).
   for (const t of s.teachers) {
     const worked = new Set(Object.keys(tTeach).filter((k) => k.startsWith(t.id + ':')).map((k) => Number(k.split(':')[1])));
@@ -426,7 +457,7 @@ function classGaps(s, placements) {
   const ptype = (p) => s.settings.periods[p].type || 'teaching';
   const general = new Set(s.settings.blocked || []);
   for (const pl of placements) {
-    const base = pl.unitId.split('#')[0]; if (base.startsWith('m:') || base.startsWith('d:')) continue;
+    const base = pl.unitId.split('#')[0]; if (base.startsWith('m:') || base.startsWith('d:') || base.startsWith('a:')) continue;
     for (const lid of base.split('+')) {
       const l = s.lessons.find((x) => x.id === lid);
       const cells = []; for (let p = pl.period; p < P && cells.length < pl.len; p++) if (!(l.allowBreakInside && ptype(p) === 'break')) cells.push(p);
@@ -509,6 +540,7 @@ for (const [key, s] of scenarios) {
   if (unplaced.length) console.log(`  not placed: ${[...new Set(unplaced.map((u) => u.key))].slice(0, 6).map((k) => {
     if (k.startsWith('m:')) return 'meeting ' + s.meetings.find((m) => m.id === k.slice(2)).name;
     if (k.startsWith('d:')) return 'duty hours of ' + s.teachers.find((t) => t.id === k.split(':')[2]).name;
+    if (k.startsWith('a:')) return 'activity ' + s.activities.find((x) => x.id === k.slice(2)).name;
     return 'lesson ' + k.split('+').map((lid) => { const l = s.lessons.find((x) => x.id === lid); return `${s.subjects.find((x) => x.id === l.subjectId).name}/${l.classIds.map((c) => s.classes.find((x) => x.id === c).name).join('+')}`; }).join(' ∥ ');
   }).join('; ')}`);
 

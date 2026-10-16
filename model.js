@@ -11,6 +11,7 @@
     dispreferred: 'Lesson in a non-preferred period', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
+    activityMin: 'Activity day with fewer periods than its minimum (per period short)',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
     balance: 'Teacher load uneven across days (per period off)', consecutive: 'Teacher over their max periods in a row (per period)',
     presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s last period then first period next day',
@@ -40,7 +41,7 @@
         weights: { ...TT().DEFAULT_WEIGHTS },
         attempts: 3,
       },
-      teachers: [], classes: [], grades: [], rooms: [], subjects: [], lessons: [], meetings: [], duties: [],
+      teachers: [], classes: [], grades: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [],
       timetable: { placements: [], generatedAt: null, difficulty: null },
     };
   }
@@ -110,6 +111,8 @@
       id: uid(), name: 'Playground supervision', kind: 'break', maxPerSlot: 3, allowed: [],
       assignments: [T.m1, T.m2, T.e1, T.e2, T.s1, T.s2].map((x) => ({ teacherId: x.id, hours: 2 })),
     }];
+    // A complementary activity: teacher-only periods, at most two a day and never back to back.
+    s.activities = [{ id: uid(), name: 'Lab preparation', teacherId: T.s1.id, periods: 3, minPerDay: 0, maxPerDay: 1, nonConsecutive: true, countLoad: false, allowed: [] }];
     // One grade per year; its curriculum is what the year's first class is taught.
     s.grades = [['Year 6', '6'], ['Year 7', '7'], ['Year 8', '8']].map(([name, y]) => {
       const classes = s.classes.filter((c) => c.name.startsWith(y));
@@ -317,6 +320,14 @@
     dropDeadRelations(s);
     symmetrizeRelations(s);
     s.meetings = s.meetings || [];
+    s.activities = (Array.isArray(s.activities) ? s.activities : []).filter((a) => a && a.id);
+    s.activities.forEach((a) => {
+      a.name = typeof a.name === 'string' ? a.name : 'Activity';
+      a.teacherId = typeof a.teacherId === 'string' ? a.teacherId : '';
+      for (const k of ['periods', 'minPerDay', 'maxPerDay']) a[k] = Math.max(0, Math.floor(Number(a[k])) || 0);
+      a.nonConsecutive = !!a.nonConsecutive; a.countLoad = !!a.countLoad;
+      a.allowed = Array.isArray(a.allowed) ? a.allowed : [];
+    });
     s.duties = s.duties || [];
     s.duties.forEach((d) => { if (d.kind !== 'break') d.kind = 'teaching'; });
     s.timetable = s.timetable || base.timetable;
@@ -393,6 +404,11 @@
       tl[l.teacherId] = (tl[l.teacherId] || 0) + n;
     }
     for (const m of s.meetings) for (const id of new Set(m.teacherIds || [])) t[id] = (t[id] || 0) + (Number(m.sessions) || 0) * (Number(m.length) || 1);
+    for (const a of s.activities) {
+      const n = Number(a.periods) || 0;
+      t[a.teacherId] = (t[a.teacherId] || 0) + n;
+      if (a.countLoad) tl[a.teacherId] = (tl[a.teacherId] || 0) + n;
+    }
     for (const d of s.duties) {
       const tgt = dutyKind(d) === 'break' ? tb : t;
       for (const a of d.assignments || []) tgt[a.teacherId] = (tgt[a.teacherId] || 0) + (Number(a.hours) || 0);
@@ -434,6 +450,7 @@
     for (const list of ['teachers', 'classes', 'rooms']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, unusable); x.dispreferred = keep(x.dispreferred, unusable); }
     s.settings.blocked = keep(s.settings.blocked, byKind('teaching'));
     for (const m of s.meetings) m.allowed = keep(m.allowed, byKind('teaching'));
+    for (const a of s.activities) a.allowed = keep(a.allowed, byKind('teaching'));
     for (const d of s.duties) d.allowed = keep(d.allowed, byKind(dutyKind(d)));
     return n;
   }
@@ -455,6 +472,7 @@
   function describeUnit(s, unitId) {
     const base = unitId.split('#')[0];
     if (base.startsWith('m:')) { const m = find(s, 'meetings', base.slice(2)); return `${m?.name || 'Meeting'} · ${(m?.teacherIds || []).length} teacher(s)`; }
+    if (base.startsWith('a:')) { const a = find(s, 'activities', base.slice(2)); return `${a?.name || 'Activity'} · ${find(s, 'teachers', a?.teacherId)?.name || '?'}`; }
     if (base.startsWith('d:')) { const [, did, tid] = base.split(':'); return `${find(s, 'duties', did)?.name || 'Duty'} · ${find(s, 'teachers', tid)?.name || '?'}`; }
     return base.split('+').map((id) => describeLesson(s, id)).join('  ∥  ');
   }
@@ -464,7 +482,7 @@
     const issues = [];
     const D = s.settings.days.length;
     const e = new (TT().Engine)(s);
-    e.problems.forEach((p) => issues.push({ lvl: 'err', msg: `${p.meetingId ? `Meeting “${find(s, 'meetings', p.meetingId)?.name}”` : p.lessonIds.map((id) => describeLesson(s, id)).join(' & ')} ${p.msg}.` }));
+    e.problems.forEach((p) => issues.push({ lvl: 'err', msg: `${p.activityId ? `Activity “${find(s, 'activities', p.activityId)?.name}”` : p.meetingId ? `Meeting “${find(s, 'meetings', p.meetingId)?.name}”` : p.lessonIds.map((id) => describeLesson(s, id)).join(' & ')} ${p.msg}.` }));
     const w = workload(s);
     s.teachers.forEach((t) => {
       const n = w.t[t.id] || 0;
@@ -509,6 +527,16 @@
         const pl = (n) => `${n} period${n === 1 ? '' : 's'}`;
         issues.push({ lvl: 'warn', msg: gap.have ? `${c.name} has ${pl(gap.have)} of ${subj} but the ${g.name} curriculum asks for ${gap.want}.` : `${c.name} has no ${subj} lessons but the ${g.name} curriculum asks for ${pl(gap.want)}.` });
       }
+    });
+    // Activities: the per-day limits must be able to hold the weekly periods.
+    s.activities.forEach((a) => {
+      const t = find(s, 'teachers', a.teacherId);
+      if (!t || !(a.periods > 0)) return;     // the engine already reports these
+      const slots = a.allowed && a.allowed.length ? a.allowed.filter((k) => !slotDisabled(s, k) && !(t.unavailable || []).includes(k)) : selectableKeys(s).filter((k) => !(t.unavailable || []).includes(k));
+      const days = new Set(slots.map((k) => keyParts(k)[0])).size;
+      if (a.minPerDay && a.maxPerDay && a.minPerDay > a.maxPerDay) issues.push({ lvl: 'warn', msg: `Activity “${a.name}”: min/day is above max/day.` });
+      if (a.maxPerDay && a.periods > a.maxPerDay * days) issues.push({ lvl: 'err', msg: `Activity “${a.name}” has ${a.periods} periods but max ${a.maxPerDay}/day over the ${days} day(s) ${t.name} can be there holds only ${a.maxPerDay * days}.` });
+      if (slots.length < a.periods) issues.push({ lvl: 'err', msg: `Activity “${a.name}” has ${a.periods} periods but only ${slots.length} usable slot(s) for ${t.name}.` });
     });
     // Homerooms: a room shared by several classes, and parallel rows that all want the same homeroom.
     const homeUsers = {};

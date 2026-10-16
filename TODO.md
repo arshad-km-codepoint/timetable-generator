@@ -37,7 +37,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [x] **(core) Grades/courses** with a curriculum (subject × weekly sessions) used to filter subject and class drop-downs and to warn when a class lacks a curriculum subject. Curriculum is subject × weekly *periods*; the Lessons subject drop-down lists the grade's subjects first (others stay selectable), Lessons can be filtered by grade, and the class picker groups classes by grade.
 - [ ] Departments (teacher and subject membership; filters in the lesson editor).
 - [ ] Tasks / activity types (teaching, on-call, meeting, management) assignable to lessons, meetings, duties and activities, with their own availability template.
-- [ ] **(core) Complementary activities:** teacher-only load with weekly periods, daily min/max and optional non-consecutive daily periods.
+- [x] **(core) Complementary activities:** teacher-only load with weekly periods, daily min/max and optional non-consecutive daily periods. Max/day and non-consecutive are hard, min/day is a weighted preference (`activityMin`); an activity may also count toward its teacher's max periods/day; allowed periods can be restricted.
 - [ ] Elective subject sets (subjects of one class allowed to overlap, with a max-overlap limit and incompatible pairs).
 - [ ] Group assistant (4-step wizard: electives per grade → enrolment per combination → groups → shared rooms).
 - [ ] Individual students and subgroups profile (music schools, universities).
@@ -73,7 +73,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Mutually exclusive periods: last period then first next day (n periods apart), first and last on the same day, morning/afternoon combinations, Friday→Monday option. *Done:* last period then first period of the next day (soft, `noLastFirst`). *Open:* the rest.
 - [ ] Concentrate load in the fewest days.
 - [ ] Associated timetables (a named set of teachers who should start and finish together).
-- [ ] Count meetings, duties and activities toward daily min/max load (per item).
+- [ ] Count meetings, duties and activities toward daily min/max load (per item). *Done:* activities can opt in to the teacher's max periods/day (`Counts`). *Open:* meetings and duties, and the min/day side.
 - [ ] Auto-calculated daily min/max from weekly load and available days, with per-teacher override.
 - [ ] Teacher priority for timetable choice (university profile).
 

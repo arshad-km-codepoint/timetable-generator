@@ -2,14 +2,15 @@
 // (place a unit, evict whatever clashes, re-queue it) and a simulated-annealing
 // pass that improves the weighted soft criteria without breaking any hard rule.
 //
-// A "unit" is one session to place. Lessons that share a parallel-group tag are
+// A "unit" is one session to place (a lesson session, a meeting, a duty hour or one period of a
+// complementary activity). Lessons that share a parallel-group tag are
 // merged into one unit with several parts (e.g. a class split across two teachers
 // and rooms at the same time); each part keeps its own teacher, classes and room.
 // A lesson row yields one unit per entry of its `lengths` (or a distribution the engine
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
@@ -207,6 +208,19 @@ class Engine {
       this.addUnits('m:' + m.id, 'meeting', parts, Array.from({ length: sessions }, () => len), { maxOne: sessions > 1, allowed: allowedSet(m.allowed) });
     }
 
+    // Complementary activities: teacher-only periods (no class, no room), one unit per period.
+    // maxPerDay and nonConsecutive are hard; minPerDay (on days the activity is used) is soft.
+    for (const a of data.activities || []) {
+      const n = (v) => Math.max(0, Math.floor(Number(v)) || 0);
+      const periods = n(a.periods);
+      const bad = !this.teachers[a.teacherId] ? 'has no teacher' : !periods ? 'has no periods per week' : null;
+      if (bad) { this.problems.push({ activityId: a.id, msg: bad }); continue; }
+      const parts = [{ kind: 'activity', ref: a.id, teacher: a.teacherId, classes: [], roomCands: null }];
+      this.addUnits('a:' + a.id, 'activity', parts, Array.from({ length: periods }, () => 1), {
+        allowed: allowedSet(a.allowed), maxDay: n(a.maxPerDay), minDay: n(a.minPerDay), nonAdj: !!a.nonConsecutive, countLoad: !!a.countLoad,
+      });
+    }
+
     // On-call duties: one unit per assigned hour; capacity per period is hard, coverage is soft.
     // kind 'break' duties live on break periods; teaching duties on teaching periods outside the template.
     this.services = {};
@@ -247,8 +261,10 @@ class Engine {
 
   // One unit per entry of `lengths` (unit k has that many periods); units of one group may differ
   // in length. Options: maxOne (one unit per day), allowed (slot set), service (duty id),
-  // allowBreak, ends (penalise first/last period of a day), avoidAdj (penalise adjacent days).
-  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false } = {}) {
+  // allowBreak, ends (penalise first/last period of a day), avoidAdj (penalise adjacent days), and for
+  // activities maxDay (hard cap per day), minDay (soft floor on used days), nonAdj (no two adjacent
+  // periods on one day) and countLoad (counts toward the teacher's max periods/day).
+  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false, maxDay = 0, minDay = 0, nonAdj = false, countLoad = false } = {}) {
     const teachers = [...new Set(parts.map((p) => p.teacher))];
     const classes = [...new Set(parts.flatMap((p) => p.classes))];
     // Legal starts, the teaching cells each occupies and the full span it holds (cells plus any
@@ -282,7 +298,7 @@ class Engine {
     const idxs = [];
     lengths.forEach((len, k) => {
       idxs.push(this.units.length);
-      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, maxOne, allowBreak, ends, avoidAdj, ...geometry(len) });
+      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, countLoad, ...geometry(len) });
     });
     this.groupUnits[gkey] = idxs;
   }
@@ -401,6 +417,21 @@ class Engine {
     if (u.maxOne) {
       for (const vi of this.groupUnits[u.key]) if (vi !== ui && this.pos[vi] && this.dayOf(this.pos[vi].s) === d) out.add(vi);
     }
+    // Activities: at most maxDay periods a day and (nonAdj) none next to another of the same activity.
+    if (u.maxDay || u.nonAdj) {
+      const cl = this.cellsAt(ui, s);
+      const same = this.groupUnits[u.key].filter((vi) => vi !== ui && this.pos[vi] && !out.has(vi) && this.dayOf(this.pos[vi].s) === d);
+      for (const vi of same) if (u.nonAdj && this.adjacent(cl, this.pos[vi].cells)) { if (this.locked[vi]) return null; out.add(vi); }
+      if (u.maxDay) {
+        const stay = same.filter((vi) => !out.has(vi));
+        const need = stay.length - u.maxDay + 1;
+        if (need > 0) {
+          const movable = stay.filter((vi) => !this.locked[vi]);
+          if (movable.length < need) return null;
+          movable.slice(0, need).forEach((vi) => out.add(vi));
+        }
+      }
+    }
     // Relations with other rows: every placed unit of the related group that the start would
     // violate must leave; a locked one makes the start impossible.
     const cells = this.cellsAt(ui, s);
@@ -430,8 +461,8 @@ class Engine {
         movable.slice(0, need).forEach((o) => out.add(o));
       }
     }
-    // Max periods/day limits teaching only; meetings and duties don't count.
-    for (const t of u.kind === 'lesson' ? u.teachers : []) {
+    // Max periods/day limits teaching only; meetings and duties don't count (an activity may opt in).
+    for (const t of this.isLoad(u) ? u.teachers : []) {
       const max = this.tMax[t];
       if (!max) continue;
       if (u.len > max) return null;
@@ -441,7 +472,7 @@ class Engine {
         const k = d * this.P + p;
         if (!this.teach[k]) continue; // a break held inside a straddling double is not a period
         const o = occ[k];
-        if (o >= 0 && o !== ui && !out.has(o) && this.units[o].kind === 'lesson') onDay.set(o, (onDay.get(o) || 0) + 1);
+        if (o >= 0 && o !== ui && !out.has(o) && this.isLoad(this.units[o])) onDay.set(o, (onDay.get(o) || 0) + 1);
       }
       let load = [...onDay.values()].reduce((a, b) => a + b, 0) + u.len;
       for (const [o, n] of [...onDay].sort((a, b) => a[1] - b[1])) {
@@ -513,6 +544,9 @@ class Engine {
     }
     return true;
   }
+
+  // Units that count toward a teacher's max periods/day: lessons, and activities that opt in.
+  isLoad(u) { return u.kind === 'lesson' || u.countLoad; }
 
   roomsValid(ui, s, rooms) {
     const u = this.units[ui];
@@ -770,10 +804,15 @@ class Engine {
   // rows with 2–3 units only).
   groupStats(key) {
     const uis = this.groupUnits[key]; const u = this.units[uis[0]];
-    let roomSame = 0, consecutiveDays = 0;
-    if (!u || u.kind !== 'lesson') return { roomSame, consecutiveDays };
+    let roomSame = 0, consecutiveDays = 0, activityMin = 0;
+    if (u && u.kind === 'activity' && u.minDay) {
+      const perDay = {};
+      for (const vi of uis) if (this.pos[vi]) { const d = this.dayOf(this.pos[vi].s); perDay[d] = (perDay[d] || 0) + 1; }
+      for (const d in perDay) if (perDay[d] < u.minDay) activityMin += u.minDay - perDay[d];
+    }
+    if (!u || u.kind !== 'lesson') return { roomSame, consecutiveDays, activityMin };
     const placed = uis.filter((vi) => this.pos[vi]);
-    if (placed.length < 2) return { roomSame, consecutiveDays };
+    if (placed.length < 2) return { roomSame, consecutiveDays, activityMin };
     for (let k = 0; k < u.parts.length; k++) {
       if (!u.parts[k].roomCands) continue;
       const rs = new Set(); for (const vi of placed) if (this.pos[vi].rooms[k]) rs.add(this.pos[vi].rooms[k]);
@@ -783,12 +822,12 @@ class Engine {
       const days = placed.map((vi) => this.dayOf(this.pos[vi].s));
       for (let i = 0; i < days.length; i++) for (let j = i + 1; j < days.length; j++) if (Math.abs(days[i] - days[j]) === 1) consecutiveDays++;
     }
-    return { roomSame, consecutiveDays };
+    return { roomSame, consecutiveDays, activityMin };
   }
 
   groupCost(key) {
     const g = this.groupStats(key);
-    return this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays;
+    return this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays + this.W.activityMin * g.activityMin;
   }
 
   // Soft cost restricted to the entities/days a unit touches.
@@ -823,12 +862,12 @@ class Engine {
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
-      st.roomSame += g.roomSame; st.consecutiveDays += g.consecutiveDays;
-      c += this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays;
+      st.roomSame += g.roomSame; st.consecutiveDays += g.consecutiveDays; st.activityMin += g.activityMin;
+      c += this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays + this.W.activityMin * g.activityMin;
     }
     for (const t in this.teachers) {
       const r = this.tRule[t]; const b = this.teacherBalance(t);
