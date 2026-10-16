@@ -12,6 +12,7 @@
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
     activityMin: 'Activity day with fewer periods than its minimum (per period short)',
+    roomSize: 'Lesson in a room that seats fewer than the class',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
     balance: 'Teacher load uneven across days (per period off)', consecutive: 'Teacher over their max periods in a row (per period)',
     presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s last period then first period next day',
@@ -70,11 +71,11 @@
       fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
     };
     s.teachers = Object.values(T);
-    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '' }));
+    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '', size: 26 }));
     s.rooms = [
-      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [] })),
-      ...[['Science Lab 1', 'Lab'], ['Science Lab 2', 'Lab'], ['Sports Hall', 'Gym'], ['Art Studio', 'Art'], ['Computer Lab', 'Computer']]
-        .map(([name, type]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [] })),
+      ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30 })),
+      ...[['Science Lab 1', 'Lab', 28], ['Science Lab 2', 'Lab', 28], ['Sports Hall', 'Gym', 60], ['Art Studio', 'Art', 28], ['Computer Lab', 'Computer', 28]]
+        .map(([name, type, capacity]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [], dispreferred2: [], capacity })),
     ];
     const L = (subject, teacher, classes, sessions, length, room, parallel = '') => ({
       ...lessonDefaults(), id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), lengths: Array(sessions).fill(length), room, parallel,
@@ -97,7 +98,7 @@
     // Year-8 language elective: 8A+8B students split into French and Spanish at the same time.
     const y8 = s.classes.slice(4);
     s.lessons.push(L(S.fre, T.fr, y8, 2, 1, 'type:Classroom', 'Y8 languages'), L(S.spa, T.sp, y8, 2, 1, 'type:Classroom', 'Y8 languages'));
-    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [] });
+    s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0 });
     const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-7`, `${d}-8`]);
     s.meetings = [
       { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo },
@@ -307,7 +308,8 @@
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
       for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
     });
-    s.classes.forEach((c) => { if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = ''; });
+    s.classes.forEach((c) => { if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = ''; c.size = Math.max(0, Math.floor(Number(c.size)) || 0); });
+    s.rooms.forEach((r) => { r.capacity = Math.max(0, Math.floor(Number(r.capacity)) || 0); });
     s.subjects = s.subjects || [];
     s.grades = Array.isArray(s.grades) ? s.grades.filter((g) => g && g.id) : [];
     s.grades.forEach((g) => {
@@ -596,6 +598,16 @@
       // Near-full room sets leave no freedom to keep class days compact — but only when several
       // classes (or meetings) compete for them; one class filling its own homeroom is fine.
       else if (r.users > 1 && r.demand > 0.9 * r.capacity) issues.push({ lvl: 'warn', msg: `${Label} ${be} ${Math.round(r.demand / r.capacity * 100)}% booked (${r.demand} of ${r.capacity} periods, ${r.users} classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.` });
+    }
+    // Room size: a lesson whose every possible room seats fewer students than the class(es) have.
+    const small = new Set();
+    for (const u of e.units) for (const part of u.parts) {
+      if (!part.size || !part.roomCands || !part.roomCands.length || small.has(part.ref)) continue;
+      if (part.roomCands.every((r) => e.tooSmall(part, r))) {
+        small.add(part.ref);
+        const best = part.roomCands.map((r) => find(s, 'rooms', r)).sort((a, b) => b.capacity - a.capacity)[0];
+        issues.push({ lvl: 'warn', msg: `${describeLesson(s, part.ref)} has ${part.size} students but ${part.roomCands.length > 1 ? `no room it can use seats that many (largest: ${best.name}, ${best.capacity})` : `${best.name} seats only ${best.capacity}`}.` });
+      }
     }
     // Curriculum: each class should have exactly the periods its grade lists for every subject.
     s.classes.forEach((c) => {

@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
@@ -123,6 +123,10 @@ class Engine {
     const specs = []; // [gkey, lesson rows] for relations, resolved once every group exists
     for (const [key, lessons] of groups) {
       const parts = []; const rows = [];
+      // Rows of one parallel group that share a class split it between them (French ∥ Spanish for
+      // 8A+8B): each row gets its share of that class's students.
+      const sharing = {};
+      for (const l of lessons) for (const c of new Set(l.classIds || [])) sharing[c] = (sharing[c] || 0) + 1;
       for (const l of lessons) {
         const classes = (l.classIds || []).filter((id) => this.classes[id]);
         // 'home' = the class homeroom: one room shared by all the row's classes, from the class record.
@@ -138,7 +142,8 @@ class Engine {
               : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
         if (bad) { this.problems.push({ lessonIds: [l.id], msg: bad }); continue; }
         const prefRoom = spec && !String(spec).startsWith('type:') && this.rooms[spec] ? spec : null;
-        parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, subject: l.subjectId, teacher: l.teacherId, classes, roomCands, prefRoom, sameRoom: !!l.sameRoom });
+        const size = Math.round(classes.reduce((a, c) => a + (Number(this.classes[c].size) || 0) / (sharing[c] || 1), 0));
+        parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, subject: l.subjectId, teacher: l.teacherId, classes, size, roomCands, prefRoom, sameRoom: !!l.sameRoom });
         rows.push({ l, lengths, flex });
       }
       if (!parts.length) continue;
@@ -394,6 +399,17 @@ class Engine {
     return { room: homes[0] };
   }
 
+  // True when room r seats fewer students than the lesson part has (both sizes must be known).
+  tooSmall(part, r) {
+    const cap = Number(this.rooms[r] && this.rooms[r].capacity) || 0;
+    return !!(part.size && cap && part.size > cap);
+  }
+  roomSizeCount(ui) {
+    const u = this.units[ui]; const p = this.pos[ui];
+    if (!p || u.kind !== 'lesson') return 0;
+    return u.parts.filter((part, k) => p.rooms[k] && this.tooSmall(part, p.rooms[k])).length;
+  }
+
   // Room part k of another placed unit of ui's group uses (sameRoom rows must follow it), or null.
   groupRoom(ui, k) {
     for (const vi of this.groupUnits[this.units[ui].key]) {
@@ -601,6 +617,7 @@ class Engine {
         let soft = 0; for (const c of cells) if (this.soft['r' + r].has(c)) soft++;
         let score = extra.size * 10 + soft;
         if (part.prefRoom && r !== part.prefRoom) score += this.W.roomPref;
+        if (this.tooSmall(part, r)) score += this.W.roomSize;
         if (groupRooms && groupRooms.size && !groupRooms.has(r)) score += this.W.roomSame;
         if (!best || score < best.score) best = { r, extra, score };
         if (score === 0) break;
@@ -833,7 +850,7 @@ class Engine {
       for (const r of p.rooms) if (r) { if (this.soft['r' + r].has(k)) soft++; if (this.soft2['r' + r].has(k)) soft2++; }
     }
     return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft + this.W.dispreferred2 * soft2
-      + this.W.roomPref * this.roomPrefCount(ui) + (u.ends && this.atDayEnd(p.cells) ? this.W.ends : 0);
+      + this.W.roomPref * this.roomPrefCount(ui) + this.W.roomSize * this.roomSizeCount(ui) + (u.ends && this.atDayEnd(p.cells) ? this.W.ends : 0);
   }
 
   // Group-level counts over the placed units of a lesson group: roomSame = extra distinct rooms
@@ -899,7 +916,7 @@ class Engine {
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
@@ -930,7 +947,7 @@ class Engine {
     this.units.forEach((u, i) => {
       const p = this.pos[i]; if (!p) return;
       c += this.unitCost(i);
-      st.roomPref += this.roomPrefCount(i);
+      st.roomPref += this.roomPrefCount(i); st.roomTooSmall += this.roomSizeCount(i);
       if (u.ends && this.atDayEnd(p.cells)) st.ends++;
       for (const k of p.cells) {
         const any = (kind, id) => this.soft[kind + id].has(k) || this.soft2[kind + id].has(k);

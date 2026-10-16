@@ -48,7 +48,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 
 - [x] **(core) Class homeroom** assigned once and applied to all its lessons. A class has a `homeroom`; a lesson row whose room is “Class homeroom” follows it (with an optional “Any <type>” fallback). “Use in lessons” on the class converts its own rows with no room, or with “Any <type>” of the homeroom's type; new rows for a class start in its homeroom.
 - [ ] Tutor/advisory teacher per class, "add class units with tutor" (primary), and tutor-every-day / early / late preferences.
-- [ ] Class size and room capacity, with a validation warning when the assigned room is too small.
+- [x] Class size and room capacity, with a validation warning when the assigned room is too small. Classes have a size and rooms a capacity (0 = unknown); a lesson avoids rooms that seat fewer than its classes (soft `roomSize`, default 3) and validation warns when no room it can use is big enough. Rows of a parallel group share the size of a class they split.
 - [ ] Max daily occupancy per class; strict "no gaps" per class; force free periods into non-preferred slots.
 - [ ] Dedicated-room flag and anonymous (unnamed) general-purpose rooms counted by number only.
 - [x] **(core) Preferred room with an alternative set as fallback** (today: a specific room or any of a type, never both).

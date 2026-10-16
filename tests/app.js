@@ -645,6 +645,21 @@ check('(n) strongly non-preferred lists migrate, count in slot arithmetic and ar
   eq(t.dispreferred2, ['0-0'], 'lunch and out-of-week keys are dropped from ~~ too');
   assert.strictEqual(typeof M.WEIGHT_LABELS.dispreferred2, 'string');
 });
+check('(o) migrate sets sizes and capacities; validate warns only when no usable room seats the class', () => {
+  const s = school('tttt', 3);
+  const subj = add.subject(s), t = add.teacher(s), u = add.teacher(s, 'U'); const a = add.cls(s, 'A'); a.size = '28.6';
+  const r1 = addRoom(s, 'R1'), r2 = addRoom(s, 'R2'); r1.capacity = 20; r2.capacity = undefined;
+  M.migrate(s);
+  eq([a.size, r1.capacity, r2.capacity], [28, 20, 0]);
+  add.lesson(s, subj, t, [a], 2, 1, { room: 'type:Classroom' });
+  assert.ok(!hasMsg(s, /students/), 'R2 has no capacity set, so it may be big enough');
+  r2.capacity = 25;
+  assert.ok(hasMsg(s, /warn: Subject · A · Teacher has 28 students but no room it can use seats that many \(largest: R2, 25\)\./), msgs(s).join('\n'));
+  const l2 = add.lesson(s, subj, u, [a], 2, 1, { room: r1.id });
+  assert.ok(hasMsg(s, /Subject · A · U has 28 students but R1 seats only 20\./), msgs(s).join('\n'));
+  r2.capacity = 40; l2.room = r2.id;
+  assert.ok(!hasMsg(s, /students/));
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

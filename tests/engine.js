@@ -1073,6 +1073,42 @@ check('two non-preferred levels: ~~ costs W.dispreferred2 and is avoided before 
   assert.ok(solveAll(s).placements[0].period !== 3);
 });
 
+check('room size: a lesson avoids rooms that seat fewer than its classes; parallel rows share a class size', () => {
+  const s = school({ days: 2, periods: 4 });
+  const subj = add.subject(s), t = add.teacher(s, 'T'), u = add.teacher(s, 'U');
+  const a = add.cls(s, 'A', { size: 30 }), b = add.cls(s, 'B', { size: 20 }), none = add.cls(s, 'N');
+  const small = add.room(s, 'Small', 'Room'), big = add.room(s, 'Big', 'Room'), free = add.room(s, 'Free', 'Room');
+  small.capacity = 25; big.capacity = 35; free.capacity = 0;
+  const la = add.lesson(s, subj, t, [a], 4, 1, { room: 'type:Room', maxOnePerDay: false });
+  const e = new Engine(s, []);
+  assert.strictEqual(e.units[0].parts[0].size, 30);
+  assert.ok(e.tooSmall(e.units[0].parts[0], small.id) && !e.tooSmall(e.units[0].parts[0], big.id) && !e.tooSmall(e.units[0].parts[0], free.id), 'unknown capacity (0) never counts as too small');
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  assert.ok(r.placements.every((p) => p.rooms[0] !== small.id), 'never the room that is too small while others are free');
+  assert.strictEqual(r.engine.totalCost().roomTooSmall, 0);
+  // Forced into the small room (only one room): counted and costed.
+  const s2 = school({ days: 1, periods: 2 });
+  const sub2 = add.subject(s2), t2 = add.teacher(s2, 'T'), c2 = add.cls(s2, 'A', { size: 30 });
+  const r2 = add.room(s2, 'Only', 'Room'); r2.capacity = 20;
+  const l2 = add.lesson(s2, sub2, t2, [c2], 0, 1, { lengths: [1], room: r2.id });
+  const e2 = new Engine(s2, [pl(l2, 0, 0, 0, 1, [r2.id])]);
+  assert.strictEqual(e2.totalCost().roomTooSmall, 1);
+  assert.strictEqual(e2.unitCost(0) - e2.W.late * 0, e2.W.roomSize);
+  // A class with no size (0) is never too big for a room.
+  const e3 = new Engine({ ...s2, classes: [{ ...c2, size: 0 }] }, [pl(l2, 0, 0, 0, 1, [r2.id])]);
+  assert.strictEqual(e3.totalCost().roomTooSmall, 0);
+  // French ∥ Spanish for A+B: each row gets half of each class.
+  const s3 = school({ days: 1, periods: 2 });
+  const sub3 = add.subject(s3), A = add.cls(s3, 'A', { size: 30 }), B = add.cls(s3, 'B', { size: 20 });
+  const lf = add.lesson(s3, sub3, add.teacher(s3, 'F'), [A, B], 1, 1, { parallel: 'Lang', room: 'type:Room' });
+  const ls = add.lesson(s3, sub3, add.teacher(s3, 'S'), [A, B], 1, 1, { parallel: 'Lang', room: 'type:Room' });
+  add.room(s3, 'R1', 'Room'); add.room(s3, 'R2', 'Room');
+  const e4 = new Engine(s3, []);
+  eq(e4.units[0].parts.map((p) => p.size), [25, 25], 'a share each, not 50');
+  void none; void la; void lf; void ls; void b;
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

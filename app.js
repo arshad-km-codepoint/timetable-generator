@@ -199,11 +199,12 @@ function renderTeachers(root) {
 
 function renderClasses(root) {
   const cols = [textCol('Name', 'name', 'e.g. 7B'),
+    numCol('Size', 'size', 'Number of students. A lesson avoids rooms that seat fewer (when a room capacity is set).', 500),
     { label: '<span title="The grade (year group) this class belongs to. Its curriculum lists the subjects and weekly periods the class should have — see the Grades tab.">Grade</span>',
       input: (x) => `<select data-f="gradeId" aria-label="Grade"><option value="">— none —</option>${state.grades.map((g) => `<option value="${g.id}" ${x.gradeId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` },
     { label: '<span title="The room this class normally sits in. Lessons set to “Class homeroom” use it, and follow it when it changes.">Homeroom</span>',
       input: (x) => `<select data-f="homeroom" aria-label="Homeroom"><option value="">— none —</option>${state.rooms.map((r) => `<option value="${r.id}" ${x.homeroom === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` }];
-  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '' });
+  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], dispreferred2: [], homeroom: '', gradeId: '', size: 0 });
   cols.rerender = ['homeroom'];
   const extra = {
     label: 'Lessons', act: 'homeApply',
@@ -218,8 +219,8 @@ function renderClasses(root) {
 }
 
 function renderRooms(root) {
-  const cols = [textCol('Name', 'name'), textCol('Type', 'type', 'Classroom, Lab…')];
-  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [] });
+  const cols = [textCol('Name', 'name'), textCol('Type', 'type', 'Classroom, Lab…'), numCol('Capacity', 'capacity', 'Seats. A lesson avoids a room that seats fewer than its classes have (when class sizes are set).', 999)];
+  cols.newItem = () => ({ id: uid(), name: `Room ${state.rooms.length + 1}`, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0 });
   entityEditor(root, { list: 'rooms', title: 'Rooms', hint: 'Rooms of the same type form a set of alternatives — a lesson asking for “Any Lab” gets whichever lab is free.', cols });
 }
 
@@ -861,6 +862,7 @@ function renderStats(box) {
     <div class="stat"><b>${s.teacherMin}</b><span>teacher days below minimum</span></div>
     ${state.duties.length ? `<div class="stat"><b>${s.dutyUncovered}</b><span>duty periods uncovered</span></div>` : ''}
     ${s.ends ? `<div class="stat"><b>${s.ends}</b><span>lessons in a first/last period</span></div>` : ''}
+    ${s.roomTooSmall ? `<div class="stat"><b>${s.roomTooSmall}</b><span>lessons in a room that is too small</span></div>` : ''}
     ${s.roomPref ? `<div class="stat"><b>${s.roomPref}</b><span>lessons not in their preferred room</span></div>` : ''}
     ${s.roomSame ? `<div class="stat"><b>${s.roomSame}</b><span>room changes within one lesson</span></div>` : ''}
     ${s.consecutiveDays ? `<div class="stat"><b>${s.consecutiveDays}</b><span>sessions on consecutive days</span></div>` : ''}
