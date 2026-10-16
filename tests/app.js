@@ -864,6 +864,15 @@ check('(y) free half-days migrate and are checked against the half-days a teache
   t.unavailable = ['0-0', '0-1', '0-3', '0-4'];
   assert.ok(hasMsg(s, /can only teach in 2 half-days/), msgs(s).join('\n'));
 });
+check('(z) exclusive-period settings migrate with safe defaults', () => {
+  const s = school('tttt', 2);
+  const t = add.teacher(s);
+  t.exclusiveWindow = '0'; t.exclusiveWrap = 1; delete t.noFirstLast; t.noSplitDay = 'x';
+  M.migrate(s);
+  eq([t.exclusiveWindow, t.exclusiveWrap, t.noFirstLast, t.noSplitDay], [1, true, false, true]);
+  t.exclusiveWindow = '3.9'; M.migrate(s);
+  assert.strictEqual(t.exclusiveWindow, 3);
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

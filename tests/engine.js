@@ -1019,6 +1019,40 @@ check('free half-days: the wish counts mornings or afternoons without lessons, a
   assert.strictEqual(r.engine.totalCost().freeHalves, 0);
 });
 
+check('exclusive periods: window of n at each end, Friday→Monday wrap, first+last of a day, morning+afternoon of a day', () => {
+  const s = school({ days: 3, periods: 'tttlttt' });     // morning 0-2, lunch, afternoon 4-6
+  const subj = add.subject(s), c = add.cls(s, 'A'), t = add.teacher(s, 'T', { noLastFirst: true });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1] });
+  const at = (cells) => new Engine(s, cells.map(([d, p], k) => pl(l, k, d, p, 1)));
+  assert.strictEqual(at([[0, 6], [1, 0]]).teacherExclusive(t.id), 1, 'Mon last, Tue first');
+  assert.strictEqual(at([[0, 5], [1, 1]]).teacherExclusive(t.id), 0, 'one period inside the window of 1 at each end');
+  t.exclusiveWindow = 2;
+  assert.strictEqual(at([[0, 5], [1, 1]]).teacherExclusive(t.id), 1, 'with a window of 2 the last two and first two periods count');
+  assert.strictEqual(at([[0, 4], [1, 2]]).teacherExclusive(t.id), 0, 'period 4 is outside the last two (5, 6)');
+  assert.strictEqual(at([[2, 6], [0, 0]]).teacherExclusive(t.id), 0, 'Wednesday → Monday is not a pair…');
+  t.exclusiveWrap = true;
+  assert.strictEqual(at([[2, 6], [0, 0]]).teacherExclusive(t.id), 1, '…unless the week wraps');
+  t.exclusiveWindow = 1; t.exclusiveWrap = false; t.noLastFirst = false;
+  assert.strictEqual(at([[0, 6], [1, 0]]).teacherExclusive(t.id), 0, 'rule off');
+  t.noFirstLast = true;
+  assert.strictEqual(at([[1, 0], [1, 6]]).teacherExclusive(t.id), 1, 'first and last period of Tuesday');
+  assert.strictEqual(at([[1, 0], [1, 5]]).teacherExclusive(t.id), 0);
+  t.noFirstLast = false; t.noSplitDay = true;
+  assert.strictEqual(at([[1, 1], [1, 5], [2, 0], [2, 1]]).teacherExclusive(t.id), 1, 'Tuesday has both halves, Wednesday only the morning');
+  // All three at once, and the cost / statistics.
+  t.noLastFirst = true; t.noFirstLast = true;
+  const e = at([[0, 6], [1, 0], [1, 6], [2, 1]]);
+  assert.strictEqual(e.teacherExclusive(t.id), 3 + 0, 'Mon→Tue pair, Tue first+last, Tue am+pm');
+  assert.strictEqual(e.totalCost().exclusive, 3);
+  // The annealer finds a week with none of them when there is room.
+  const s2 = school({ days: 3, periods: 'tttlttt' }); s2.settings.weights = { exclusive: 10, late: 0, balance: 0 };
+  const sj = add.subject(s2), c2 = add.cls(s2, 'A'), t2 = add.teacher(s2, 'T', { noLastFirst: true, noFirstLast: true, noSplitDay: true });
+  add.lesson(s2, sj, t2, [c2], 0, 1, { lengths: [1, 1, 1, 1, 1, 1] });
+  const r = solveAll(s2);
+  assert.strictEqual(r.placed, r.total);
+  assert.strictEqual(r.engine.totalCost().exclusive, 0, `${r.placements.map((p) => `${p.day}/${p.period}`)}`);
+});
+
 // ---------- complementary activities ----------
 const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
 const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });
@@ -1527,7 +1561,7 @@ check('teachers without week rules cost and behave as before', () => {
   const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T');
   const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1] });
   const e = new Engine(s, [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1), pl(l, 2, 0, 2, 1)]);
-  eq(Object.entries(e.tRule[t.id]).filter(([k, v]) => v && k !== 'priority'), [], 'every week rule is off by default');
+  eq(Object.entries(e.tRule[t.id]).filter(([k, v]) => v && !['priority', 'exWindow'].includes(k)), [], 'every week rule is off by default');
   const st = e.totalCost();
   assert.strictEqual(st.consecutive + st.presence + st.exclusive, 0);
 });

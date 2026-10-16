@@ -18,7 +18,7 @@
     tutorDaily: 'Class day without a lesson from its tutor', tutorEnds: 'Class day whose first / last lesson is not the tutor’s',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
     balance: 'Teacher load uneven across days (per period off)', consecutive: 'Teacher over their max periods in a row (per period)',
-    presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s last period then first period next day',
+    presence: 'Teacher present longer than allowed (per period)', exclusive: 'Teacher’s excluded period combinations (last→first next day, first+last, morning+afternoon)',
   };
   const RELATION_TYPES = {
     differentDays: 'On different days', notSameTime: 'Not at the same time', nonConsecutive: 'Not in consecutive periods',
@@ -28,7 +28,7 @@
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
   const classDefaults = () => ({ code: '', extKey: '', homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
-  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, freeHalves: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
+  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, freeHalves: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false, exclusiveWindow: 1, exclusiveWrap: false, noFirstLast: false, noSplitDay: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
   // ---------- State ----------
@@ -364,6 +364,8 @@
     s.teachers.forEach((t) => {
       for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays', 'freeHalves']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
+      t.exclusiveWindow = Math.max(1, Math.floor(Number(t.exclusiveWindow)) || 1);
+      for (const k of ['exclusiveWrap', 'noFirstLast', 'noSplitDay']) t[k] = !!t[k];
       for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
     });
     s.classes.forEach((c) => {

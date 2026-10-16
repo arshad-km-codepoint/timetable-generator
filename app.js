@@ -125,7 +125,7 @@ function availLabel(x) {
   return `Availability${b || s || s2 ? ` (${[b && `${b} ✕`, s2 && `${s2} ~~`, s && `${s} ~`].filter(Boolean).join(', ')})` : ''}`;
 }
 
-function entityEditor(root, { list, title, hint, cols, loadKey, extra }) {
+function entityEditor(root, { list, title, hint, cols, loadKey, extra, cellActs = {} }) {
   const p = panel(root, title, hint);
   p.querySelector('[data-slot=actions]').innerHTML = `<button data-add>+ Add</button>`;
   const load = loadKey ? workload(state)[loadKey] : null;
@@ -155,6 +155,8 @@ function entityEditor(root, { list, title, hint, cols, loadKey, extra }) {
       cleanupRefs(); changed(); render();
     } else if (extra && Object.keys(extra.acts).some((a) => e.target.dataset[a] !== undefined)) {
       extra.acts[Object.keys(extra.acts).find((a) => e.target.dataset[a] !== undefined)](x);
+    } else if (Object.keys(cellActs).some((a) => e.target.dataset[a] !== undefined)) {
+      cellActs[Object.keys(cellActs).find((a) => e.target.dataset[a] !== undefined)](x);
     } else if (e.target.dataset.avail !== undefined) {
       editAvailability(x, `${title.replace(/es$|s$/, '')}: ${x.name}`);
     }
@@ -199,9 +201,23 @@ function renderTeachers(root) {
     numCol('Presence/day', 'maxPresenceDay', 'Time at school in a day, first to last period including free periods. Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state)),
     numCol('Presence/week', 'maxPresenceWeek', 'Time at school in the week (sum of the daily presence). Preference, or a hard limit when “Strict” is ticked', teachingPeriods(state) * state.settings.days.length),
     boolCol('Strict', 'presenceStrict', 'Make the presence limits hard rules instead of preferences'),
-    boolCol('No last→first', 'noLastFirst', 'Preference: not the last period of one day and the first period of the next')];
+    { label: '<span title="Combinations of periods the teacher should not have together">Exclusive</span>', input: (x) => `<button class="ghost small ${x.noLastFirst || x.noFirstLast || x.noSplitDay ? 'on' : ''}" data-exclusive>${[x.noLastFirst && 'last→first', x.noFirstLast && 'first+last', x.noSplitDay && 'am+pm'].filter(Boolean).join(', ') || 'none'}</button>` }];
   cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], dispreferred2: [], ...teacherDefaults() });
-  entityEditor(root, { list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and teaching-period duties (break supervision is counted against break periods instead); red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
+  entityEditor(root, { cellActs: { exclusive: editExclusive }, list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and teaching-period duties (break supervision is counted against break periods instead); red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
+}
+
+// Period combinations a teacher should not have together (soft, weighted by “excluded period combinations”).
+function editExclusive(t) {
+  openModal(`Exclusive periods — ${t.name}`, `<div class="opts">
+    <label><input type="checkbox" id="exLF" ${t.noLastFirst ? 'checked' : ''}> <span>Last period of a day and first period of the next<small class="hint">Teaching late one day and early the next.</small></span></label>
+    <label class="row" style="gap:6px;margin-left:24px">Periods at each end <input type="number" id="exWin" min="1" max="${teachingPeriods(state)}" value="${t.exclusiveWindow || 1}" style="width:64px"> <label style="margin-left:12px"><input type="checkbox" id="exWrap" ${t.exclusiveWrap ? 'checked' : ''}> also the last day → first day (Friday → Monday)</label></label>
+    <label><input type="checkbox" id="exFL" ${t.noFirstLast ? 'checked' : ''}> <span>First and last period of the same day<small class="hint">A long day with free time in the middle.</small></span></label>
+    <label><input type="checkbox" id="exSplit" ${t.noSplitDay ? 'checked' : ''}> <span>Both morning and afternoon on the same day<small class="hint">Prefer teaching in only one half of a day.</small></span></label></div>`, (v) => {
+    if (v !== 'save') return;
+    t.noLastFirst = $('#exLF').checked; t.exclusiveWindow = Math.max(1, Math.floor(Number($('#exWin').value)) || 1); t.exclusiveWrap = $('#exWrap').checked;
+    t.noFirstLast = $('#exFL').checked; t.noSplitDay = $('#exSplit').checked;
+    changed(); render();
+  }, '<button value="cancel" class="ghost">Cancel</button><button value="save">Save</button>');
 }
 
 function renderClasses(root) {

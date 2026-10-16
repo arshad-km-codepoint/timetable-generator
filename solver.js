@@ -127,7 +127,8 @@ class Engine {
     this.tRule = {};
     for (const t of data.teachers) {
       const n = (v) => Math.max(0, Math.floor(Number(v)) || 0);
-      const r = { maxCons: n(t.maxConsecutive), presDay: n(t.maxPresenceDay), presWeek: n(t.maxPresenceWeek), strict: !!t.presenceStrict, free: n(t.freeDays), exclusive: !!t.noLastFirst, freeHalves: n(t.freeHalves) };
+      const r = { maxCons: n(t.maxConsecutive), presDay: n(t.maxPresenceDay), presWeek: n(t.maxPresenceWeek), strict: !!t.presenceStrict, free: n(t.freeDays), exclusive: !!t.noLastFirst, exWindow: n(t.exclusiveWindow) || 1, exWrap: !!t.exclusiveWrap, noFirstLast: !!t.noFirstLast, noSplitDay: !!t.noSplitDay, freeHalves: n(t.freeHalves) };
+      r.exAny = r.exclusive || r.noFirstLast || r.noSplitDay;
       r.day = !!(r.maxCons || r.presDay); r.week = !!(r.presWeek || r.exclusive);
       r.hard = !!(r.free || (r.strict && (r.presDay || r.presWeek)));
       this.tRule[t.id] = r;
@@ -857,14 +858,31 @@ class Engine {
     return { consecutive, presence };
   }
 
-  // Days where the last schedulable period is held and the first one of the next day too.
+  // Mutually exclusive periods of teacher t, counted once each: the last `exWindow` periods of a day
+  // together with the first `exWindow` of the next (optionally the last day with the first one of the
+  // next week), the first and the last period of one day, and a morning and an afternoon of one day.
   teacherExclusive(t) {
-    const occ = this.occ['t' + t]; let n = 0;
-    for (let d = 0; d + 1 < this.D; d++) {
-      const a = this.segments[d], b = this.segments[d + 1];
-      if (!a.length || !b.length) continue;
-      const a1 = a[a.length - 1]; const last = a1[a1.length - 1];
-      if (occ[last] >= 0 && occ[b[0][0]] >= 0) n++;
+    const r = this.tRule[t]; const occ = this.occ['t' + t]; let n = 0;
+    const slotsOf = (d) => this.segments[d].flat();
+    const held = (ks) => ks.some((k) => occ[k] >= 0);
+    if (r.exclusive) {
+      const w = Math.max(1, r.exWindow);
+      for (let d = 0; d < this.D; d++) {
+        const nd = d + 1 < this.D ? d + 1 : r.exWrap && this.D > 1 ? 0 : -1;
+        if (nd < 0) continue;
+        const a = slotsOf(d), b = slotsOf(nd);
+        if (a.length && b.length && held(a.slice(-w)) && held(b.slice(0, w))) n++;
+      }
+    }
+    if (r.noFirstLast || r.noSplitDay) {
+      for (let d = 0; d < this.D; d++) {
+        const ks = slotsOf(d); if (ks.length < 2) continue;
+        if (r.noFirstLast && occ[ks[0]] >= 0 && occ[ks[ks.length - 1]] >= 0) n++;
+        if (r.noSplitDay) {
+          const am = ks.filter((k) => !this.afternoonP[k % this.P]), pm = ks.filter((k) => this.afternoonP[k % this.P]);
+          if (am.length && pm.length && held(am) && held(pm)) n++;
+        }
+      }
     }
     return n;
   }
@@ -890,7 +908,7 @@ class Engine {
   teacherWeekCost(t) {
     const r = this.tRule[t]; let c = 0;
     if (this.W.balance) c += this.W.balance * this.teacherBalance(t);
-    if (r.exclusive && this.W.exclusive) c += this.W.exclusive * this.teacherExclusive(t);
+    if (r.exAny && this.W.exclusive) c += this.W.exclusive * this.teacherExclusive(t);
     if (r.presWeek && this.W.presence) c += this.W.presence * this.teacherPresenceWeek(t);
     if (r.freeHalves && this.W.freeHalves) c += this.W.freeHalves * this.teacherFreeHalvesMissing(t);
     return c;
@@ -1066,7 +1084,7 @@ class Engine {
     for (const t in this.teachers) {
       const r = this.tRule[t]; const b = this.teacherBalance(t);
       st.balance += b; c += this.W.balance * b;
-      if (r.exclusive) { const x = this.teacherExclusive(t); st.exclusive += x; c += this.W.exclusive * x; }
+      if (r.exAny) { const x = this.teacherExclusive(t); st.exclusive += x; c += this.W.exclusive * x; }
       if (r.presWeek) { const x = this.teacherPresenceWeek(t); st.presence += x; c += this.W.presence * x; }
       if (r.freeHalves) { const x = this.teacherFreeHalvesMissing(t); st.freeHalves += x; c += this.W.freeHalves * x; }
     }
