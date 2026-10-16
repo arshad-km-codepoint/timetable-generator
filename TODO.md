@@ -73,7 +73,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [x] Mutually exclusive periods: last period then first next day (n periods apart), first and last on the same day, morning/afternoon combinations, Friday→Monday option. The teacher's Exclusive dialog offers last→first with a window of n periods at each end and an optional last-day → first-day wrap, first + last period of one day, and morning + afternoon of one day; all are soft (`exclusive`).
 - [x] Concentrate load in the fewest days. A teacher flagged “Few days” pays `concentrate` (default 1) for every working day beyond the fewest their lesson load needs at their daily maximum (or the most periods a day offers); the balanced-week cost is switched off for them.
 - [x] Associated timetables (a named set of teachers who should start and finish together). Sets are defined under the Teachers table; on each day the generator charges `association` (default 0.5) per period of spread between the members' first periods plus the spread of their last periods.
-- [ ] Count meetings, duties and activities toward daily min/max load (per item). *Done:* activities can opt in to the teacher's max periods/day (`Counts`). *Open:* meetings and duties, and the min/day side.
+- [x] Count meetings, duties and activities toward daily min/max load (per item). Activities, meetings and teaching-period duties have a Counts box that adds them to the teacher's max periods/day (hard); every occupied teaching period already counts toward min/day. Break supervision never counts (it sits outside the teaching periods).
 - [ ] Auto-calculated daily min/max from weekly load and available days, with per-teacher override.
 - [ ] Teacher priority for timetable choice (university profile).
 

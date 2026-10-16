@@ -765,13 +765,14 @@ function slotsLabel(keys) { return keys && keys.length ? `${keys.length} period(
 function renderStaff(root) {
   const m = panel(root, 'Teacher meetings', 'All members must be free at the same time. The generator fits lessons around meetings; if no common period can be found the meeting is reported as not placed. Restrict “When” to the periods the meeting may use.');
   m.querySelector('[data-slot=actions]').innerHTML = '<button data-add-meeting>+ Add meeting</button>';
-  m.insertAdjacentHTML('beforeend', state.meetings.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Members</th><th>Sessions/wk</th><th>Length</th><th>Room</th><th>When</th><th></th><th></th></tr></thead><tbody>
+  m.insertAdjacentHTML('beforeend', state.meetings.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Members</th><th>Sessions/wk</th><th>Length</th><th>Room</th><th title="Counts toward each member’s max periods/day">Counts</th><th>When</th><th></th><th></th></tr></thead><tbody>
     ${state.meetings.map((x) => `<tr data-id="${x.id}">
       <td><input data-f="name" value="${esc(x.name)}" aria-label="Meeting name"></td>
       <td><button class="ghost" data-members>${(x.teacherIds || []).length === state.teachers.length && state.teachers.length ? 'All teachers' : `${(x.teacherIds || []).length} teacher(s)`}</button></td>
       <td><input type="number" min="1" max="${D()}" data-f="sessions" value="${x.sessions}" style="max-width:80px" aria-label="Sessions per week"></td>
       <td><select data-f="length" aria-label="Length">${[1, 2].map((n) => `<option value="${n}" ${+x.length === n ? 'selected' : ''}>${n === 1 ? 'Single' : 'Double'}</option>`).join('')}</select></td>
       <td><select data-f="room" aria-label="Room">${roomOptions(x.room)}</select></td>
+      <td><input type="checkbox" data-f="countLoad" ${x.countLoad ? 'checked' : ''} aria-label="Counts toward max periods per day"></td>
       <td><button class="ghost" data-when>${slotsLabel(x.allowed)}</button></td>
       <td>${pinButton('meeting', x)}</td>
       <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
@@ -779,7 +780,7 @@ function renderStaff(root) {
   m.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const x = find('meetings', tr.dataset.id); const f = e.target.dataset.f;
-    x[f] = f === 'sessions' || f === 'length' ? Number(e.target.value) : e.target.value;
+    x[f] = f === 'countLoad' ? e.target.checked : f === 'sessions' || f === 'length' ? Number(e.target.value) : e.target.value;
     changed();
   });
   m.addEventListener('click', (e) => {
@@ -832,7 +833,7 @@ function renderStaff(root) {
 
   const d = panel(root, 'On-call duties', 'Services such as library or corridor supervision. Mark the duty periods under “When”, set how many teachers may be on call at once, and give each teacher weekly hours. The engine tries to cover every duty period with at least one teacher. Kind <b>Teaching periods</b> uses free teaching periods and counts toward a teacher’s load; <b>Break supervision</b> (playground, corridors) uses only the periods typed “Break” on the Week tab and is counted separately.');
   d.querySelector('[data-slot=actions]').innerHTML = '<button data-add-duty>+ Add duty</button>';
-  d.insertAdjacentHTML('beforeend', state.duties.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Service</th><th title="Teaching periods, or supervision during breaks">Kind</th><th title="Hard limit">Max teachers / period</th><th>When</th><th>Teachers &amp; hours</th><th>Hours / duty periods</th><th></th></tr></thead><tbody>
+  d.insertAdjacentHTML('beforeend', state.duties.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Service</th><th title="Teaching periods, or supervision during breaks">Kind</th><th title="Hard limit">Max teachers / period</th><th title="Teaching-period duty hours count toward the teacher’s max periods/day">Counts</th><th>When</th><th>Teachers &amp; hours</th><th>Hours / duty periods</th><th></th></tr></thead><tbody>
     ${state.duties.map((x) => {
       const hours = (x.assignments || []).reduce((a, y) => a + (Number(y.hours) || 0), 0);
       const periods = dutySlots(state, x);
@@ -840,6 +841,7 @@ function renderStaff(root) {
       <td><input data-f="name" value="${esc(x.name)}" aria-label="Duty name"></td>
       <td><select data-f="kind" aria-label="Duty kind"><option value="teaching" ${dutyKind(x) === 'teaching' ? 'selected' : ''}>Teaching periods</option><option value="break" ${dutyKind(x) === 'break' ? 'selected' : ''}>Break supervision</option></select></td>
       <td><input type="number" min="1" data-f="maxPerSlot" value="${x.maxPerSlot || 1}" style="max-width:80px" aria-label="Max teachers per period"></td>
+      <td><input type="checkbox" data-f="countLoad" ${x.countLoad ? 'checked' : ''} ${dutyKind(x) === 'break' ? 'disabled title="Break supervision happens outside the teaching periods"' : ''} aria-label="Counts toward max periods per day"></td>
       <td><button class="ghost" data-when>${slotsLabel(x.allowed)}</button></td>
       <td><button class="ghost" data-assign>${(x.assignments || []).length} teacher(s)</button></td>
       <td class="load ${hours > periods * (x.maxPerSlot || 1) ? 'over' : ''}">${hours} / ${periods}</td>
@@ -849,7 +851,7 @@ function renderStaff(root) {
   d.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const x = find('duties', tr.dataset.id); const f = e.target.dataset.f;
-    x[f] = f === 'maxPerSlot' ? Math.max(1, Number(e.target.value) || 1) : e.target.value;
+    x[f] = f === 'countLoad' ? e.target.checked : f === 'maxPerSlot' ? Math.max(1, Number(e.target.value) || 1) : e.target.value;
     // A new kind means a different set of usable periods; "When" keys that no longer apply are dropped.
     if (f === 'kind') pruneDeadKeys(state);
     changed(); if (f === 'maxPerSlot' || f === 'kind') render();

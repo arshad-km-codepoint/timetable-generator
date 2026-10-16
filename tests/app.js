@@ -887,6 +887,22 @@ check('(aa) associations: migrate drops unknown teachers; a set with fewer than 
   eq(M.migrate({ settings: M.emptyState().settings, teachers: [], classes: [], rooms: [], subjects: [], lessons: [] }).associations, []);
   assert.ok(M.sampleState().associations.length === 1);
 });
+check('(ab) meetings and duties with Counts add to the teacher’s load against max periods/day', () => {
+  const s = school('tttt', 2);
+  const subj = add.subject(s), t = add.teacher(s, 'T'), c = add.cls(s);
+  t.maxPerDay = 2;
+  add.lesson(s, subj, t, [c], 3, 1);
+  s.meetings.push({ id: 'm1', name: 'Sync', teacherIds: [t.id], sessions: 1, length: 1, room: '', allowed: [] });
+  s.duties.push({ id: 'd1', name: 'Library', kind: 'teaching', maxPerSlot: 1, allowed: [], assignments: [{ teacherId: t.id, hours: 1 }] });
+  M.migrate(s);
+  eq([s.meetings[0].countLoad, s.duties[0].countLoad], [false, false]);
+  eq([M.workload(s).tl[t.id]], [3]);
+  s.meetings[0].countLoad = true; s.duties[0].countLoad = true;
+  eq([M.workload(s).tl[t.id]], [5], '3 lessons + a meeting + a duty hour');
+  assert.ok(hasMsg(s, /err: T teaches 5 periods but max 2\/day allows only 4/), msgs(s).join('\n'));
+  s.duties[0].kind = 'break'; s.settings.periods[1].type = 'break'; s.settings.periods[1].label = 'Break'; M.migrate(s);
+  eq([M.workload(s).tl[t.id]], [4], 'break supervision does not count');
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

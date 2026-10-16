@@ -285,7 +285,7 @@ class Engine {
       const sessions = Number(m.sessions) || 0;
       const parts = members.map((t, k) => ({ kind: 'meeting', ref: m.id, teacher: t, classes: [], roomCands: k === 0 ? roomCands : null }));
       const len = Math.max(1, Math.min(P, Number(m.length) || 1));
-      this.addUnits('m:' + m.id, 'meeting', parts, Array.from({ length: sessions }, () => len), { maxOne: sessions > 1, allowed: allowedSet(m.allowed) });
+      this.addUnits('m:' + m.id, 'meeting', parts, Array.from({ length: sessions }, () => len), { maxOne: sessions > 1, allowed: allowedSet(m.allowed), countLoad: !!m.countLoad });
     }
 
     // Complementary activities: teacher-only periods (no class, no room), one unit per period.
@@ -312,7 +312,7 @@ class Engine {
       for (const a of svc.assignments || []) {
         if (!this.teachers[a.teacherId] || !(Number(a.hours) > 0)) continue;
         const parts = [{ kind: 'duty', ref: svc.id, teacher: a.teacherId, classes: [], roomCands: null }];
-        this.addUnits(`d:${svc.id}:${a.teacherId}`, 'duty', parts, Array.from({ length: Number(a.hours) }, () => 1), { allowed, service: svc.id });
+        this.addUnits(`d:${svc.id}:${a.teacherId}`, 'duty', parts, Array.from({ length: Number(a.hours) }, () => 1), { allowed, service: svc.id, countLoad: kind === 'teaching' && !!svc.countLoad });
       }
     }
 

@@ -1108,6 +1108,29 @@ check('associated timetables: members start and finish together; the spread is c
   assert.strictEqual(r.engine.totalCost().association, 0, r.placements.map((p) => `${p.unitId.slice(0, 3)}${p.day}/${p.period}`).join(' '));
 });
 
+check('countLoad on meetings and duties: they count toward a teacher\'s max periods/day only when the item opts in', () => {
+  const s = school({ days: 1, periods: 5 });
+  const subj = add.subject(s), t = add.teacher(s, 'T', { maxPerDay: 2 }), c = add.cls(s, 'A');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1] });
+  const m = add.meeting(s, 'Sync', [t], { sessions: 1 });
+  const d = add.duty(s, 'Yard', [[t, 1]]);
+  const placed = [pl(l, 0, 0, 0, 1), pl(l, 1, 0, 1, 1)];
+  let e = new Engine(s, placed);
+  const mi = e.unitById[`m:${m.id}#0`].i, di = e.unitById[`d:${d.id}:${t.id}#0`].i;
+  assert.strictEqual(e.baseConflicts(mi, 2).size, 0, 'a meeting without Counts may be a third period of the day');
+  assert.strictEqual(e.baseConflicts(di, 3).size, 0, 'so may a duty hour');
+  m.countLoad = true; d.countLoad = true;
+  e = new Engine(s, placed);
+  assert.strictEqual(e.units[e.unitById[`m:${m.id}#0`].i].countLoad, true);
+  assert.ok(e.baseConflicts(e.unitById[`m:${m.id}#0`].i, 2).size >= 1, 'with Counts a lesson makes way (3 > max 2)');
+  assert.ok(e.baseConflicts(e.unitById[`d:${d.id}:${t.id}#0`].i, 3).size >= 1);
+  // Break supervision never counts (it is outside the teaching periods).
+  const sb = school({ days: 1, periods: 'ttbtt' }); const tb = add.teacher(sb, 'T', { maxPerDay: 1 });
+  const yard = add.duty(sb, 'Yard', [[tb, 1]], { kind: 'break', countLoad: true });
+  assert.strictEqual(new Engine(sb, []).units[0].countLoad, false);
+  void yard;
+});
+
 // ---------- complementary activities ----------
 const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
 const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });

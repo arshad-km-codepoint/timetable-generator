@@ -115,15 +115,15 @@
     s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 0, code: 'Staff Room', extKey: '', count: 1, dedicated: false });
     const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-7`, `${d}-8`]);
     s.meetings = [
-      { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo },
-      { id: uid(), name: 'Science department', teacherIds: [T.s1.id, T.s2.id], sessions: 1, length: 1, room: '', allowed: [] },
+      { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo, countLoad: false },
+      { id: uid(), name: 'Science department', teacherIds: [T.s1.id, T.s2.id], sessions: 1, length: 1, room: '', allowed: [], countLoad: false },
     ];
     s.duties = [{
-      id: uid(), name: 'Library supervision', kind: 'teaching', maxPerSlot: 1,
+      id: uid(), countLoad: false, name: 'Library supervision', kind: 'teaching', maxPerSlot: 1,
       allowed: s.settings.days.flatMap((_, d) => [`${d}-4`, `${d}-5`]),
       assignments: [T.h1, T.ic, T.ar, T.fr, T.sp].map((x) => ({ teacherId: x.id, hours: 2 })),
     }, {
-      id: uid(), name: 'Playground supervision', kind: 'break', maxPerSlot: 3, allowed: [],
+      id: uid(), countLoad: false, name: 'Playground supervision', kind: 'break', maxPerSlot: 3, allowed: [],
       assignments: [T.m1, T.m2, T.e1, T.e2, T.s1, T.s2].map((x) => ({ teacherId: x.id, hours: 2 })),
     }];
     // A complementary activity: teacher-only periods, at most two a day and never back to back.
@@ -404,6 +404,7 @@
     dropDeadRelations(s);
     symmetrizeRelations(s);
     s.meetings = s.meetings || [];
+    s.meetings.forEach((m) => { m.countLoad = !!m.countLoad; });
     s.activities = (Array.isArray(s.activities) ? s.activities : []).filter((a) => a && a.id);
     s.activities.forEach((a) => {
       a.name = typeof a.name === 'string' ? a.name : 'Activity';
@@ -414,7 +415,7 @@
     });
     s.duties = s.duties || [];
     dropDeadPins(s);
-    s.duties.forEach((d) => { if (d.kind !== 'break') d.kind = 'teaching'; });
+    s.duties.forEach((d) => { if (d.kind !== 'break') d.kind = 'teaching'; d.countLoad = !!d.countLoad; });
     s.timetable = s.timetable || base.timetable;
     // v1 placements stored a single roomId; v2 stores one room per parallel part.
     s.timetable.placements = (s.timetable.placements || []).map((p) => (p.rooms ? p : { ...p, rooms: [p.roomId || null] }));
@@ -493,7 +494,11 @@
       t[l.teacherId] = (t[l.teacherId] || 0) + n;
       tl[l.teacherId] = (tl[l.teacherId] || 0) + n;
     }
-    for (const m of s.meetings) for (const id of new Set(m.teacherIds || [])) t[id] = (t[id] || 0) + (Number(m.sessions) || 0) * (Number(m.length) || 1);
+    for (const m of s.meetings) for (const id of new Set(m.teacherIds || [])) {
+      const n = (Number(m.sessions) || 0) * (Number(m.length) || 1);
+      t[id] = (t[id] || 0) + n;
+      if (m.countLoad) tl[id] = (tl[id] || 0) + n;
+    }
     for (const a of s.activities) {
       const n = Number(a.periods) || 0;
       t[a.teacherId] = (t[a.teacherId] || 0) + n;
@@ -501,7 +506,10 @@
     }
     for (const d of s.duties) {
       const tgt = dutyKind(d) === 'break' ? tb : t;
-      for (const a of d.assignments || []) tgt[a.teacherId] = (tgt[a.teacherId] || 0) + (Number(a.hours) || 0);
+      for (const a of d.assignments || []) {
+        tgt[a.teacherId] = (tgt[a.teacherId] || 0) + (Number(a.hours) || 0);
+        if (d.countLoad && dutyKind(d) === 'teaching') tl[a.teacherId] = (tl[a.teacherId] || 0) + (Number(a.hours) || 0);
+      }
     }
     // Parallel lessons share the same periods, so count each group once per class.
     const seen = new Set();
