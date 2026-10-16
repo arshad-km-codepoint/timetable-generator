@@ -457,7 +457,7 @@ for (const [key, s] of scenarios) {
   console.log(`\n=== ${s.settings.name}`);
   console.log(`  size: ${s.classes.length} classes, ${s.teachers.length} teachers, ${s.rooms.length} rooms, ${s.lessons.length} lesson rows, ${e0.units.length} units to place (${e0.problems.length} data problems)`);
   console.log(`  result: ${best.placed}/${best.total} placed in ${secs}s (2 attempts) · lesson sessions ${a.placedLessons}/${a.expectedLessons} (periods ${a.placedPeriods}/${a.expectedPeriods}) · unplaced by kind ${JSON.stringify(unplacedKinds)}`);
-  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}`);
+  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}`);
   console.log(`  AUDIT: ${a.overlaps} overlaps, ${a.errs.length} rule violations across ${a.cellsChecked} entity-periods${a.errs.length ? '\n   ' + [...new Set(a.errs)].slice(0, 8).join('\n   ') : ''}`);
   if (a.errs.length) allClean = false;
   if (unplaced.length) console.log(`  not placed: ${[...new Set(unplaced.map((u) => u.key))].slice(0, 6).map((k) => {

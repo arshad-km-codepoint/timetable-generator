@@ -20,7 +20,7 @@ Data autosaves in the browser; **Save file / Open…** keep JSON backups. Files 
 
 **Hard:** no teacher/class/room double-booking; ✕ periods; teacher max/day; contiguous multi-period lessons; "1/day"; parallel-group lessons share a slot with distinct rooms; meetings only in allowed periods with all members free; duty capacity per period; locked items stay.
 
-**Soft (weights editable in the UI):** class gaps, teacher gaps, same lesson twice a day, non-preferred periods, teacher below min/day, late periods, uncovered duty periods.
+**Soft (weights editable in the UI):** class gaps, teacher gaps, same lesson twice a day, non-preferred periods, teacher below min/day, late periods, uncovered duty periods, uneven teacher week (periods above/below an even spread over the days the teacher can work).
 
 Meetings and duties are placed by the same engine (most-constrained first); they may displace a lesson, which is then re-placed elsewhere, but at three times the price of the reverse, so lessons keep priority when something has to give.
 
@@ -45,4 +45,4 @@ The sample school (6 classes, 12 teachers, 12 rooms, 140 lesson sessions includi
 
 ## Not implemented (GHC has these)
 
-Break-time supervision between periods (duties use teaching periods), complementary activities, multi-week and overlapping time frames, fractional periods, flexible weekly distributions (e.g. 4 = 2-2 or 3-1), group-assignment assistant, import from school-management systems / XML-GHC exchange.
+Complementary activities, multi-week and overlapping time frames, fractional periods, explicit alternative weekly distributions and daily block limits, group-assignment assistant, import from school-management systems / XML-GHC exchange.

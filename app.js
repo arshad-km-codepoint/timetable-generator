@@ -671,6 +671,7 @@ function renderStats(box) {
     ${s.roomPref ? `<div class="stat"><b>${s.roomPref}</b><span>lessons not in their preferred room</span></div>` : ''}
     ${s.roomSame ? `<div class="stat"><b>${s.roomSame}</b><span>room changes within one lesson</span></div>` : ''}
     ${s.consecutiveDays ? `<div class="stat"><b>${s.consecutiveDays}</b><span>sessions on consecutive days</span></div>` : ''}
+    ${s.balance ? `<div class="stat"><b>${s.balance}</b><span>teacher periods off an even week</span></div>` : ''}
     <div class="stat"><b>${s.cost}</b><span>weighted score (lower is better)</span></div>
   </div>
   ${unplaced.length ? `<div class="unplaced"><h3>Not placed (${unplaced.length})</h3><ul class="issues">${unplaced.map((u) => `<li class="err">${esc(describeUnit(state, u.id))}</li>`).join('')}</ul>

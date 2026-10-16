@@ -12,6 +12,7 @@
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
     roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
+    balance: 'Teacher load uneven across days (per period off)',
   };
   const RELATION_TYPES = {
     differentDays: 'On different days', notSameTime: 'Not at the same time', nonConsecutive: 'Not in consecutive periods',

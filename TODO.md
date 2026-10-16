@@ -18,7 +18,6 @@ Open tasks from the code review of the solver-hardening and scenario commits (`c
 ## Known limitations (not bugs)
 
 - Scenario B keeps 2–5 free periods inside class days: its option blocks need four teachers free at once and three of them teach in both grades' blocks. Needs different teachers per grade or allowing a block twice on some days.
-- Duties use teaching periods only; break-time supervision between periods needs the breaks added as periods.
 
 ## GHC feature gaps (compared against GHC 20.8.71.0, 2026-10-16)
 
@@ -26,7 +25,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 
 ### Time frame
 
-- [ ] **(core) Breaks and lunch break as frame elements.** GHC periods have a type (`lectivo`, `recreo`, `mediodia`). Breaks drive the after-break, afternoon and midday-gap rules and break-time supervision duties. Today duties use teaching periods only.
+- [x] **(core) Breaks and lunch break as frame elements.** Periods have a type (teaching / break / lunch) plus a general template; breaks hold break-time supervision, lunch splits the day and optionally counts as a gap (`countMiddayGap`). Not built: the after-break and afternoon criteria.
 - [ ] **(core) Different schedule per weekday** (e.g. Saturday half day expressed in the frame rather than by prohibiting periods).
 - [ ] Overlapping time frames (up to 4), each class assigned to one frame.
 - [ ] Fractional periods (½, ¾) and class units with fractional duration.
@@ -52,16 +51,16 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 - [ ] Class size and room capacity, with a validation warning when the assigned room is too small.
 - [ ] Max daily occupancy per class; strict "no gaps" per class; force free periods into non-preferred slots.
 - [ ] Dedicated-room flag and anonymous (unnamed) general-purpose rooms counted by number only.
-- [ ] **(core) Preferred room with an alternative set as fallback** (today: a specific room or any of a type, never both).
-- [ ] "All units of this subject in the same room" as a hard rule, with a soft "room changes" criterion.
+- [x] **(core) Preferred room with an alternative set as fallback** (today: a specific room or any of a type, never both).
+- [x] "All units of this subject in the same room" as a hard rule, with a soft "room changes" criterion. (Per lesson row: `sameRoom` and the `roomSame` weight.)
 
 ### Lessons (class units)
 
-- [ ] **(core) Mixed lengths in one row** (GHC "221" = one single and two doubles) instead of one row per length.
-- [ ] **(core) Flexible weekly distributions:** 4 periods as 2-2 or 3-1, daily min/max block length with optional penalties, discontinuous daily blocks, up to 4 explicit alternative distributions, blocks up to 7 periods.
-- [ ] Relations between lesson rows: must be on different days, consecutive (with order and "breaks divide consecutive"), non-consecutive, non-overlapping, min/max days apart, before/after.
+- [x] **(core) Mixed lengths in one row** (GHC "221" = one single and two doubles) instead of one row per length.
+- [ ] **(core) Flexible weekly distributions:** 4 periods as 2-2 or 3-1, daily min/max block length with optional penalties, discontinuous daily blocks, up to 4 explicit alternative distributions, blocks up to 7 periods. *Done:* a flexible row (total, min and max block) that the engine splits per attempt. *Open:* daily min/max block length and penalties, discontinuous daily blocks, explicit alternative distributions.
+- [ ] Relations between lesson rows: must be on different days, consecutive (with order and "breaks divide consecutive"), non-consecutive, non-overlapping, min/max days apart, before/after. *Done:* different days, consecutive (same day, adjacent in teaching order), non-consecutive, non-overlapping, min/max days apart. *Open:* order within consecutive, "breaks divide consecutive", before/after.
 - [ ] Interchangeable teachers (teachers P and Q may swap between rows A and B).
-- [ ] Per-row soft options: penalise concentration in first/last periods, after the break, in the afternoon; avoid or promote same-hour coincidence; no break inside a double; penalise consecutive days for 2–3 session subjects.
+- [ ] Per-row soft options: penalise concentration in first/last periods, after the break, in the afternoon; avoid or promote same-hour coincidence; no break inside a double; penalise consecutive days for 2–3 session subjects. *Done:* first/last period of the day, break inside a double (off by default), consecutive days. *Open:* after the break, afternoon, same-hour coincidence.
 - [ ] Preset positions before generation (pin a session to a slot in the planner, shown with a thumbtack); today locking only exists on an already generated timetable.
 - [ ] Two non-preferred levels (lower and higher weight) in all templates.
 - [ ] Copy all lessons from one class to another.
@@ -80,18 +79,19 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 
 ### Meetings and duties
 
-- [ ] **(core) Break-time supervision duties** on break periods with their own template.
+- [x] **(core) Break-time supervision duties** on break periods with their own template.
 - [ ] Per-period teacher count for a duty (detail per hour instead of one number).
 - [ ] "No teaching on both sides of a break duty" criterion.
 - [ ] Option to discard unplaceable duty hours instead of failing.
 - [ ] Meetings 1–5 times per week placed on distinct days; task type per meeting.
 - [ ] Teacher-by-duty-position detail view.
 
-### Weighted criteria (GHC has ~20, app has 7)
+### Weighted criteria (GHC has ~20, app has 12)
 
 - [ ] Non-preferred positions in subject/task templates and in lesson templates (separate weights).
-- [ ] Consecutive days; non-preferred room; same room; first/last-period concentration; afternoon coincidence; same-hour coincidence; elective overlap.
-- [ ] Teacher: exclusive periods, balanced week (more lessons one day than another), continuous hours, presence, followed by the same group, duties at the ends of the day, priority order.
+- [ ] Consecutive days; non-preferred room; same room; first/last-period concentration; afternoon coincidence; same-hour coincidence; elective overlap. *Done:* the first four (`consecutiveDays`, `roomPref`, `roomSame`, `ends`). *Open:* afternoon coincidence, same-hour coincidence, elective overlap.
+- [x] Teacher balanced week (engine `W.balance`: periods above/below an even spread over the days the teacher can work; counts lessons, meetings and duties like min/day).
+- [ ] Teacher: exclusive periods, continuous hours, presence, followed by the same group, duties at the ends of the day, priority order.
 - [ ] Priority warnings (e.g. class gaps) minimised before the global weight.
 
 ### Engine controls

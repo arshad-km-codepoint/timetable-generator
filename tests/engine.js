@@ -734,5 +734,39 @@ check('placements round-trip with mixed and flexible lengths', () => {
   void r2; void c;
 });
 
+check('balance: periods off an even week over the days a teacher can work; carried by localCost/areaCost/totalCost', () => {
+  const s = school({ days: 5, periods: 4, blocked: ['4-0', '4-1', '4-2', '4-3'] });
+  const subj = add.subject(s), c = add.cls(s), t = add.teacher(s, 'T', { unavailable: keys(s, (d) => d === 3) }), u = add.teacher(s, 'U');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1, 1, 1] });
+  const e0 = new Engine(s, []);
+  eq(e0.balDays[t.id], [0, 1, 2], 'general-blocked Friday and ✕ Thursday are not working days');
+  eq(e0.balDays[u.id], [0, 1, 2, 3], 'only the general-blocked day is dropped');
+  assert.strictEqual(e0.teacherBalance(t.id), 0, 'empty week');
+  const at = (days) => new Engine(s, days.map((d, k) => pl(l, k, d, k % 4, 1)));
+  const bal = (days) => at(days).teacherBalance(t.id);
+  assert.strictEqual(bal([0, 0, 1, 1, 2, 2]), 0, '2/2/2');
+  assert.strictEqual(bal([0, 0, 0, 1, 1, 2]), 2, '3/2/1 around a mean of 2: one period above, one below');
+  assert.strictEqual(bal([0, 0, 0, 0, 1, 2]), 4, '4/1/1 around a mean of 2: two periods above, two below');
+  assert.strictEqual(new Engine(s, [0, 0, 1, 1, 2].map((d, k) => pl(l, k, d, k % 4, 1))).teacherBalance(t.id), 0, '2/2/1: uneven but as even as 5 periods allow');
+  // Counted in totalCost / localCost / areaCost with the weight, and off at weight 0.
+  const e = at([0, 0, 0, 1, 1, 2]);
+  const st = e.totalCost();
+  assert.strictEqual(st.balance, 2);
+  const flat = new Engine({ ...s, settings: { ...s.settings, weights: { balance: 0 } } }, e.placements());
+  assert.strictEqual(flat.totalCost().balance, 2, 'the count is reported even when unweighted');
+  assert.ok(Math.abs(st.cost - flat.totalCost().cost - 2 * e.W.balance) < 0.11, 'cost carries W.balance × imbalance');
+  const ui = e.unitById[`${l.id}#0`].i;
+  assert.ok(Math.abs(e.localCost(ui, [0]) - flat.localCost(ui, [0]) - 2 * e.W.balance) < 1e-9, 'localCost');
+  assert.ok(Math.abs(e.areaCost([ui], [0]) - flat.areaCost([ui], [0]) - 2 * e.W.balance) < 1e-9, 'areaCost');
+  // Over a solve the annealer evens the week out: 6 sessions on 3 days → 2/2/2.
+  const s2 = school({ days: 3, periods: 4 });
+  const subj2 = add.subject(s2), ca = add.cls(s2, 'A'), cb = add.cls(s2, 'B'), t2 = add.teacher(s2, 'T');
+  s2.settings.weights = { balance: 5 };
+  add.lesson(s2, subj2, t2, [ca], 3, 1); add.lesson(s2, subj2, t2, [cb], 3, 1);
+  const { engine, placed, total } = solveAll(s2);
+  assert.strictEqual(placed, total);
+  assert.strictEqual(engine.totalCost().balance, 0, `teacher load per day ${[0, 1, 2].map((d) => engine.dayStats(engine.occ['t' + t2.id], d).n)}`);
+});
+
 console.log(`\nPASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);

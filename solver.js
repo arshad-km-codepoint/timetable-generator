@@ -9,7 +9,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart']);
 
 class Engine {
@@ -71,6 +71,18 @@ class Engine {
     }
     this.tMax = {}; this.tMin = {};
     data.teachers.forEach((t) => { this.tMax[t.id] = Number(t.maxPerDay) || 0; this.tMin[t.id] = Number(t.minPerDay) || 0; });
+    // Days a teacher could work (at least one teaching slot outside the general template and their
+    // own ✕ periods): the week the balance criterion spreads their load over.
+    this.balDays = {};
+    for (const t of data.teachers) {
+      this.balDays[t.id] = [];
+      for (let d = 0; d < D; d++) {
+        for (let p = 0; p < P; p++) {
+          const s = d * P + p;
+          if (this.teach[s] && !this.general.has(s) && !this.blocked['t' + t.id].has(s)) { this.balDays[t.id].push(d); break; }
+        }
+      }
+    }
 
     this.problems = [];
     const groups = new Map();
@@ -524,6 +536,25 @@ class Engine {
     return this.W.teacherGap * gaps + (min && n > 0 && n < min ? this.W.teacherMin * (min - n) : 0);
   }
 
+  // Imbalance of a teacher's week: periods above ceil(mean) or below floor(mean) of the load
+  // (lessons, meetings and duties, as for min/day) over the days they can work. 0 when the load
+  // is as even as whole periods allow, so a perfect week costs nothing.
+  teacherBalance(t) {
+    const days = this.balDays[t];
+    if (days.length < 2) return 0;
+    const occ = this.occ['t' + t]; const loads = [];
+    let total = 0;
+    for (const d of days) {
+      let n = 0;
+      for (let p = 0; p < this.P; p++) { const k = d * this.P + p; if (this.teach[k] && occ[k] >= 0) n++; }
+      loads.push(n); total += n;
+    }
+    const lo = Math.floor(total / days.length), hi = Math.ceil(total / days.length);
+    let off = 0;
+    for (const n of loads) off += n > hi ? n - hi : n < lo ? lo - n : 0;
+    return off;
+  }
+
   // Duty periods on day d with nobody on call.
   uncovered(service, d) {
     const svc = this.services[service]; let n = 0;
@@ -606,6 +637,7 @@ class Engine {
       c += this.W.sameDay * Math.max(0, this.sameDayCount(u.key, d) - 1);
       if (u.service) c += this.W.dutyUncovered * this.uncovered(u.service, d);
     }
+    if (this.W.balance) for (const t of u.teachers) c += this.W.balance * this.teacherBalance(t);
     return c + this.unitCost(ui) + this.groupCost(u.key);
   }
 
@@ -621,18 +653,20 @@ class Engine {
       for (const sv of svcs) c += this.W.dutyUncovered * this.uncovered(sv, d);
     }
     for (const key of keys) c += this.groupCost(key);
+    if (this.W.balance) for (const t of ts) c += this.W.balance * this.teacherBalance(t);
     for (const ui of uis) c += this.unitCost(ui);
     return c;
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
       st.roomSame += g.roomSame; st.consecutiveDays += g.consecutiveDays;
       c += this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays;
     }
+    for (const t in this.teachers) { const b = this.teacherBalance(t); st.balance += b; c += this.W.balance * b; }
     for (let d = 0; d < this.D; d++) {
       for (const t in this.teachers) {
         c += this.teacherDayCost(t, d);
