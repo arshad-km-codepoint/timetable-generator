@@ -835,10 +835,22 @@ check('(w) alternatives and row day limits: migrate, pinning, validation', () =>
   assert.ok(hasMsg(s, /warn: .*min periods\/day \(3\) is above max \(1\)/), msgs(s).join('\n'));
   // Parallel rows with the same alternatives agree; different ones do not.
   const a = add.lesson(s, subj, add.teacher(s, 'U'), [c], 2, 1, { parallel: 'G', alternatives: [[2], [1, 1]] }), b = add.lesson(s, subj, add.teacher(s, 'V'), [c], 2, 1, { parallel: 'G', alternatives: [[1, 1], [2]] });
-  assert.ok(!hasMsg(s, /parallel group “G” but have different distributions/));
+  assert.ok(!hasMsg(s, /parallel group “G” but have different distributions/), 'identical alternative lists agree');
   b.alternatives = [[1, 1], [2, 0]]; M.migrate(s);
   b.alternatives = [[1, 1], [1, 2]];
-  assert.ok(hasMsg(s, /parallel group “G” but have different distributions/), msgs(s).join('\n'));
+  assert.ok(hasMsg(s, /parallel group “G” but have different (distributions|session lengths)/), msgs(s).join('\n'));   // reported by validation or, when its random pick cannot agree, by the engine
+});
+check('(x) row options: migrate normalises, validation notes options with no effect', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  const l = add.lesson(s, subj, t, [c], 1, 1, { penalizeAfterBreak: 1, penalizeAfternoon: 'yes', sameHour: 'sometimes' });
+  M.migrate(s);
+  eq([l.penalizeAfterBreak, l.penalizeAfternoon, l.sameHour], [true, true, '']);
+  l.sameHour = 'avoid';
+  assert.ok(hasMsg(s, /warn: .*“Same hour” needs a row with at least two sessions/), msgs(s).join('\n'));
+  assert.ok(hasMsg(s, /warn: .*“Avoid the first period after a break” has no effect — no period is typed “Break”/), msgs(s).join('\n'));
+  l.lengths = [1, 1]; s.settings.periods[1].type = 'break'; s.settings.periods[1].label = 'Break';
+  assert.ok(!hasMsg(s, /Same hour|first period after a break/), msgs(s).join('\n'));
 });
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();

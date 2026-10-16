@@ -961,6 +961,42 @@ check('row day limits: max periods a day (blocks count by length), min periods o
   void row;
 });
 
+check('row options: first period after a break, afternoon and same-hour wishes are costed and met by the annealer', () => {
+  const s = school({ days: 4, periods: 'ttbttlttt' });       // 0,1 | break | 3,4 | lunch | 6,7,8
+  const subj = add.subject(s), c = add.cls(s, 'A'), t = add.teacher(s, 'T');
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1], penalizeAfterBreak: true, penalizeAfternoon: true });
+  const e0 = new Engine(s, []);
+  eq([e0.afterBreakP.map(Number), e0.afternoonP.map(Number)], [[0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 1, 1, 1]], 'after-break = period 3; afternoon = after the lunch period');
+  const cost = (p) => { const e = new Engine(s, [pl(l, 0, 0, p, 1)]); return e.unitCost(0) - e.W.late * p; };
+  assert.strictEqual(cost(0), 0); assert.strictEqual(cost(3), e0.W.afterBreak); assert.strictEqual(cost(7), e0.W.afternoon); assert.strictEqual(cost(4), 0);
+  const e = new Engine(s, [pl(l, 0, 0, 3, 1), pl(l, 1, 1, 7, 1), pl(l, 2, 2, 0, 1)]);
+  assert.strictEqual(e.totalCost().afterBreak, 1); assert.strictEqual(e.totalCost().afternoon, 1);
+  const r = solveAll(s);
+  assert.strictEqual(r.engine.totalCost().afterBreak + r.engine.totalCost().afternoon, 0, 'the lessons sit in the morning, not right after the break');
+  // Without a lunch period the afternoon is the second half of the day.
+  const nl = new Engine(school({ days: 1, periods: 6 }), []);
+  eq(nl.afternoonP.map(Number), [0, 0, 0, 1, 1, 1]);
+  // same hour: avoid charges repeated start periods, promote charges each extra distinct one.
+  const s2 = school({ days: 4, periods: 4 });
+  const sj = add.subject(s2), c2 = add.cls(s2, 'A'), t2 = add.teacher(s2, 'T');
+  const row = add.lesson(s2, sj, t2, [c2], 0, 1, { lengths: [1, 1, 1], sameHour: 'avoid' });
+  const at = (ps) => new Engine(s2, ps.map(([d, p], k) => pl(row, k, d, p, 1)));
+  assert.strictEqual(at([[0, 1], [1, 1], [2, 1]]).groupStats(row.id).sameHour, 2, 'three sessions in period 2: two repeats');
+  assert.strictEqual(at([[0, 1], [1, 2], [2, 3]]).groupStats(row.id).sameHour, 0);
+  assert.strictEqual(at([[0, 1], [1, 1], [2, 2]]).groupStats(row.id).sameHour, 1);
+  row.sameHour = 'promote';
+  assert.strictEqual(at([[0, 1], [1, 1], [2, 1]]).groupStats(row.id).sameHour, 0, 'always the same hour: nothing to pay');
+  assert.strictEqual(at([[0, 1], [1, 2], [2, 3]]).groupStats(row.id).sameHour, 2);
+  const x = at([[0, 1], [1, 2], [2, 3]]);
+  const cx = x.totalCost().cost, flat = new Engine({ ...s2, settings: { ...s2.settings, weights: { sameHour: 0 } } }, x.placements()).totalCost().cost;
+  assert.ok(Math.abs(cx - flat - 2 * x.W.sameHour) < 0.11, 'carried by the cost');
+  assert.ok(Math.abs(x.localCost(0, [0]) - new Engine({ ...s2, settings: { ...s2.settings, weights: { sameHour: 0 } } }, x.placements()).localCost(0, [0]) - 2 * x.W.sameHour) < 1e-9, 'and by localCost');
+  const r2 = solveAll(s2);
+  assert.strictEqual(new Set(r2.placements.map((p) => p.period)).size, 1, 'the annealer keeps the same hour every time when promoted');
+  row.sameHour = 'avoid';
+  assert.strictEqual(new Set(solveAll(s2).placements.map((p) => p.period)).size, 3, 'and varies it when avoided');
+});
+
 // ---------- complementary activities ----------
 const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
 const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });

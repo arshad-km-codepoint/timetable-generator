@@ -11,6 +11,7 @@
     dispreferred: 'Lesson in a non-preferred period (~)', dispreferred2: 'Lesson in a strongly non-preferred period (~~)', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
+    afterBreak: 'Lesson in the first period after a break', afternoon: 'Lesson in the afternoon (after lunch)', sameHour: 'Same hour of the day repeated (or varied) across a lesson row’s sessions',
     activityMin: 'Day below the minimum periods of an activity or lesson row (per period short)',
     roomSize: 'Lesson in a room that seats fewer than the class', classGapStrict: 'Free gap in the day of a “no gaps” class',
     tutorDaily: 'Class day without a lesson from its tutor', tutorEnds: 'Class day whose first / last lesson is not the tutor’s',
@@ -186,7 +187,7 @@
   // ---------- Lessons ----------
   // Every field a lesson row carries besides its identity and references.
   function lessonDefaults() {
-    return { room: '', roomAlt: '', sameRoom: false, lengths: [1], flexible: null, alternatives: [], dayMax: 0, dayMin: 0, dayBlocks: '', maxOnePerDay: true, parallel: '', allowBreakInside: false, penalizeEnds: false, avoidConsecutiveDays: false, relations: [] };
+    return { room: '', roomAlt: '', sameRoom: false, lengths: [1], flexible: null, alternatives: [], dayMax: 0, dayMin: 0, dayBlocks: '', maxOnePerDay: true, parallel: '', allowBreakInside: false, penalizeEnds: false, penalizeAfterBreak: false, penalizeAfternoon: false, sameHour: '', avoidConsecutiveDays: false, relations: [] };
   }
   // A new row for one class that has a homeroom starts in it (pass the state `s` to enable that).
   function newLesson(subjectId, classIds = [], s = null) {
@@ -263,7 +264,8 @@
     for (const k of ['room', 'roomAlt', 'parallel']) if (typeof l[k] !== 'string') l[k] = d[k];
     // An alternative set without a room is just "any room of that type".
     if (!l.room && l.roomAlt) { l.room = l.roomAlt; l.roomAlt = ''; }
-    for (const k of ['sameRoom', 'allowBreakInside', 'penalizeEnds', 'avoidConsecutiveDays']) l[k] = !!l[k];
+    for (const k of ['sameRoom', 'allowBreakInside', 'penalizeEnds', 'penalizeAfterBreak', 'penalizeAfternoon', 'avoidConsecutiveDays']) l[k] = !!l[k];
+    l.sameHour = l.sameHour === 'avoid' || l.sameHour === 'promote' ? l.sameHour : '';
     l.maxOnePerDay = l.maxOnePerDay === undefined ? d.maxOnePerDay : !!l.maxOnePerDay;
     l.classIds = Array.isArray(l.classIds) ? l.classIds : [];
     l.relations = (Array.isArray(l.relations) ? l.relations : []).filter((r) => r && RELATION_TYPES[r.type] && r.lessonId && r.lessonId !== l.id).map((r) => relationOf(r.type, r.lessonId, r));
@@ -741,6 +743,8 @@
       if (l.maxOnePerDay && n > D) issues.push({ lvl: 'err', msg: `${who} has ${n} sessions marked “1/day” but the week has only ${D} days — untick 1/day or reduce sessions.` });
       if (l.flexible && !canPartition(l.flexible.total, l.flexible.min, l.flexible.max) && !flagged(/flexible/, [l.id])) issues.push({ lvl: 'err', msg: `${who}: ${l.flexible.total} periods cannot be split into blocks of ${l.flexible.min}–${l.flexible.max} periods.` });
       // The longest block the engine may build: the longest explicit one, or the flexible maximum.
+      if (l.penalizeAfterBreak && !s.settings.periods.some((pp) => pp.type === 'break')) issues.push({ lvl: 'warn', msg: `${who}: “Avoid the first period after a break” has no effect — no period is typed “Break” on the Week tab.` });
+      if (l.sameHour && n < 2) issues.push({ lvl: 'warn', msg: `${who}: “Same hour” needs a row with at least two sessions.` });
       const alts = l.alternatives || [];
       const longest = Math.max(...l.lengths, l.flexible ? l.flexible.max : 0, ...alts.flat());
       if (alts.length && new Set(alts.map((a) => a.reduce((x, y) => x + y, 0))).size > 1) issues.push({ lvl: 'warn', msg: `${who}: the alternative distributions add up to different numbers of periods (${alts.map((a) => a.reduce((x, y) => x + y, 0)).join(' / ')}).` });

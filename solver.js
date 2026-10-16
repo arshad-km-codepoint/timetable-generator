@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart', 'before', 'after']);
 
 // A room record with count N > 1 stands for N identical unnamed rooms ("20 general classrooms"):
@@ -47,6 +47,11 @@ class Engine {
     this.teach = new Uint8Array(this.N);
     for (let s = 0; s < this.N; s++) this.teach[s] = this.periodTypes[s % P] === 'teaching' ? 1 : 0;
     this.general = slots(data.settings.blocked);
+    // Period positions used by row options: the first teaching period after a break, and the
+    // afternoon (after the lunch period; without one, the second half of the day).
+    const lunchAt = this.periodTypes.indexOf('lunch');
+    this.afterBreakP = this.periodTypes.map((ty, p) => ty === 'teaching' && p > 0 && this.periodTypes[p - 1] === 'break');
+    this.afternoonP = this.periodTypes.map((ty, p) => ty === 'teaching' && (lunchAt >= 0 ? p > lunchAt : p >= Math.ceil(P / 2)));
     this.options = { countMiddayGap: false, ...(data.settings.options || {}) };
     // Gap segments per day: runs of schedulable teaching slots. Breaks and template-blocked
     // slots are skipped; lunch splits the day, or counts as a gap slot when countMiddayGap is on.
@@ -207,6 +212,8 @@ class Engine {
       this.addUnits(gkey, 'lesson', parts, lengths, {
         maxOne: rows.some((r) => r.l.maxOnePerDay), allowBreak: rows.every((r) => r.l.allowBreakInside),
         maxDay: dayMaxes.length ? Math.min(...dayMaxes) : 0,
+        afterBreak: rows.some((r) => r.l.penalizeAfterBreak), afternoon: rows.some((r) => r.l.penalizeAfternoon),
+        sameHour: rows.some((r) => r.l.sameHour === 'avoid') ? 'avoid' : rows.some((r) => r.l.sameHour === 'promote') ? 'promote' : '',
         minDay: Math.max(0, ...rows.map((r) => Math.max(0, Math.floor(Number(r.l.dayMin)) || 0))), nonAdj: rows.some((r) => r.l.dayBlocks === 'apart'), together: rows.some((r) => r.l.dayBlocks === 'together'),
         ends: rows.some((r) => r.l.penalizeEnds), avoidAdj: rows.some((r) => r.l.avoidConsecutiveDays) && lengths.length >= 2 && lengths.length <= 3,
       });
@@ -315,7 +322,7 @@ class Engine {
   // allowBreak, ends (penalise first/last period of a day), avoidAdj (penalise adjacent days), and for
   // activities maxDay (hard cap per day), minDay (soft floor on used days), nonAdj (no two adjacent
   // periods on one day) and countLoad (counts toward the teacher's max periods/day).
-  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false, maxDay = 0, minDay = 0, nonAdj = false, together = false, countLoad = false } = {}) {
+  addUnits(gkey, kind, parts, lengths, { maxOne = false, allowed = null, service = null, allowBreak = false, ends = false, avoidAdj = false, maxDay = 0, minDay = 0, nonAdj = false, together = false, countLoad = false, afterBreak = false, afternoon = false, sameHour = '' } = {}) {
     const teachers = [...new Set(parts.map((p) => p.teacher))];
     const classes = [...new Set(parts.flatMap((p) => p.classes))];
     const subjects = [...new Set(parts.map((p) => p.subject).filter(Boolean))]; // subject templates apply to lessons
@@ -351,7 +358,7 @@ class Engine {
     const idxs = [];
     lengths.forEach((len, k) => {
       idxs.push(this.units.length);
-      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, subjects, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, together, countLoad, ...geometry(len) });
+      this.units.push({ i: this.units.length, id: `${gkey}#${k}`, key: gkey, k, kind, service, len, parts, teachers, classes, subjects, maxOne, allowBreak, ends, avoidAdj, maxDay, minDay, nonAdj, together, countLoad, afterBreak, afternoon, sameHour, ...geometry(len) });
     });
     this.groupUnits[gkey] = idxs;
   }
@@ -954,7 +961,8 @@ class Engine {
       for (const r of p.rooms) if (r) { if (this.soft['r' + r].has(k)) soft++; if (this.soft2['r' + r].has(k)) soft2++; }
     }
     return this.W.late * (p.cells[p.cells.length - 1] % this.P) + this.W.dispreferred * soft + this.W.dispreferred2 * soft2
-      + this.W.roomPref * this.roomPrefCount(ui) + this.W.roomSize * this.roomSizeCount(ui) + (u.ends && this.atDayEnd(p.cells) ? this.W.ends : 0);
+      + this.W.roomPref * this.roomPrefCount(ui) + this.W.roomSize * this.roomSizeCount(ui) + (u.ends && this.atDayEnd(p.cells) ? this.W.ends : 0)
+      + (u.afterBreak && this.afterBreakP[p.cells[0] % this.P] ? this.W.afterBreak : 0) + (u.afternoon && this.afternoonP[p.cells[0] % this.P] ? this.W.afternoon : 0);
   }
 
   // Group-level counts over the placed units of a lesson group: roomSame = extra distinct rooms
@@ -968,9 +976,16 @@ class Engine {
       for (const vi of uis) if (this.pos[vi]) { const d = this.dayOf(this.pos[vi].s); perDay[d] = (perDay[d] || 0) + this.units[vi].len; }
       for (const d in perDay) if (perDay[d] < u.minDay) activityMin += u.minDay - perDay[d];
     }
-    if (!u || u.kind !== 'lesson') return { roomSame, consecutiveDays, activityMin };
+    let sameHour = 0;
+    if (u && u.sameHour) {
+      // Start periods of the row's sessions: `avoid` charges repeats of a start period, `promote` charges each distinct one beyond the first.
+      const starts = uis.filter((vi) => this.pos[vi]).map((vi) => this.pos[vi].cells[0] % this.P);
+      const distinct = new Set(starts).size;
+      sameHour = u.sameHour === 'avoid' ? starts.length - distinct : Math.max(0, distinct - 1);
+    }
+    if (!u || u.kind !== 'lesson') return { roomSame, consecutiveDays, activityMin, sameHour };
     const placed = uis.filter((vi) => this.pos[vi]);
-    if (placed.length < 2) return { roomSame, consecutiveDays, activityMin };
+    if (placed.length < 2) return { roomSame, consecutiveDays, activityMin, sameHour };
     for (let k = 0; k < u.parts.length; k++) {
       if (!u.parts[k].roomCands) continue;
       const rs = new Set(); for (const vi of placed) if (this.pos[vi].rooms[k]) rs.add(this.pos[vi].rooms[k]);
@@ -980,12 +995,12 @@ class Engine {
       const days = placed.map((vi) => this.dayOf(this.pos[vi].s));
       for (let i = 0; i < days.length; i++) for (let j = i + 1; j < days.length; j++) if (Math.abs(days[i] - days[j]) === 1) consecutiveDays++;
     }
-    return { roomSame, consecutiveDays, activityMin };
+    return { roomSame, consecutiveDays, activityMin, sameHour };
   }
 
   groupCost(key) {
     const g = this.groupStats(key);
-    return this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays + this.W.activityMin * g.activityMin;
+    return this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays + this.W.activityMin * g.activityMin + this.W.sameHour * g.sameHour;
   }
 
   // Soft cost restricted to the entities/days a unit touches.
@@ -1020,12 +1035,12 @@ class Engine {
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
-      st.roomSame += g.roomSame; st.consecutiveDays += g.consecutiveDays; st.activityMin += g.activityMin;
-      c += this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays + this.W.activityMin * g.activityMin;
+      st.roomSame += g.roomSame; st.consecutiveDays += g.consecutiveDays; st.activityMin += g.activityMin; st.sameHour += g.sameHour;
+      c += this.W.roomSame * g.roomSame + this.W.consecutiveDays * g.consecutiveDays + this.W.activityMin * g.activityMin + this.W.sameHour * g.sameHour;
     }
     for (const t in this.teachers) {
       const r = this.tRule[t]; const b = this.teacherBalance(t);
@@ -1056,6 +1071,8 @@ class Engine {
       c += this.unitCost(i);
       st.roomPref += this.roomPrefCount(i); st.roomTooSmall += this.roomSizeCount(i);
       if (u.ends && this.atDayEnd(p.cells)) st.ends++;
+      if (u.afterBreak && this.afterBreakP[p.cells[0] % this.P]) st.afterBreak++;
+      if (u.afternoon && this.afternoonP[p.cells[0] % this.P]) st.afternoon++;
       for (const k of p.cells) {
         const any = (kind, id) => this.soft[kind + id].has(k) || this.soft2[kind + id].has(k);
         if (u.teachers.some((t) => any('t', t)) || u.classes.some((x) => any('c', x)) || u.subjects.some((x) => any('s', x)) || p.rooms.some((r) => r && any('r', r))) st.dispreferred++;

@@ -377,6 +377,8 @@ function roomAltOptions(sel) {
 const ROW_OPTIONS = [
   ['sameRoom', 'Same room for all sessions', 'Hard rule: every session of this row uses one and the same room.'],
   ['penalizeEnds', 'Avoid the first and last period of the day', 'Soft: weighted by “Lesson in the first or last period of a day”.'],
+  ['penalizeAfterBreak', 'Avoid the first period after a break', 'Soft: weighted by “Lesson in the first period after a break”.'],
+  ['penalizeAfternoon', 'Avoid the afternoon', 'Soft: weighted by “Lesson in the afternoon” (after lunch; without a lunch period, the second half of the day).'],
   ['avoidConsecutiveDays', 'Avoid consecutive days', 'Soft, for rows with 2–3 sessions only: spread them across the week. Ignored for other rows.'],
   ['allowBreakInside', 'Break inside', 'A multi-period session may straddle a break (never lunch).'],
   ['maxOnePerDay', 'At most one session per day', 'Hard rule: the sessions of this row go on different days.'],
@@ -554,12 +556,13 @@ function editRowOptions(l) {
     <div class="form-grid">
       <label>Max periods of this row per day <input type="number" id="optDayMax" min="0" max="${max}" value="${l.dayMax || ''}" placeholder="—"></label>
       <label>Min periods on a day it is used <input type="number" id="optDayMin" min="0" max="${max}" value="${l.dayMin || ''}" placeholder="—"></label>
+      <label>Same hour on different days <select id="optSameHour"><option value="">no preference</option><option value="avoid" ${l.sameHour === 'avoid' ? 'selected' : ''}>avoid (vary the period)</option><option value="promote" ${l.sameHour === 'promote' ? 'selected' : ''}>promote (same period every time)</option></select></label>
       <label>Several sessions on one day <select id="optDayBlocks"><option value="">anywhere</option><option value="together" ${l.dayBlocks === 'together' ? 'selected' : ''}>next to each other</option><option value="apart" ${l.dayBlocks === 'apart' ? 'selected' : ''}>never next to each other</option></select></label>
     </div>
     <p class="hint">Max is a hard limit. Min is a preference (weighted by “Day below the minimum periods…”). “Next to each other” allows at most two sessions of the row on a day and puts them side by side; “never next to each other” keeps a day’s sessions apart.</p>`, () => {
     $('#modalContent').querySelectorAll('input[data-opt]').forEach((i) => { l[i.dataset.opt] = i.checked; });
     l.dayMax = Math.max(0, Math.floor(Number($('#optDayMax').value)) || 0); l.dayMin = Math.max(0, Math.floor(Number($('#optDayMin').value)) || 0);
-    l.dayBlocks = $('#optDayBlocks').value;
+    l.dayBlocks = $('#optDayBlocks').value; l.sameHour = $('#optSameHour').value;
     changed(); render();
   });
 }
@@ -978,6 +981,9 @@ function renderStats(box) {
     ${s.presence ? `<div class="stat"><b>${s.presence}</b><span>teacher presence periods over the limit</span></div>` : ''}
     ${s.exclusive ? `<div class="stat"><b>${s.exclusive}</b><span>teacher last→first period pairs</span></div>` : ''}
     ${s.activityMin ? `<div class="stat"><b>${s.activityMin}</b><span>activity periods short of the daily minimum</span></div>` : ''}
+    ${s.afterBreak ? `<div class="stat"><b>${s.afterBreak}</b><span>lessons right after a break they avoid</span></div>` : ''}
+    ${s.afternoon ? `<div class="stat"><b>${s.afternoon}</b><span>lessons in an afternoon they avoid</span></div>` : ''}
+    ${s.sameHour ? `<div class="stat"><b>${s.sameHour}</b><span>same-hour repeats / variations against a row’s wish</span></div>` : ''}
     ${s.balance ? `<div class="stat"><b>${s.balance}</b><span>teacher periods off an even week</span></div>` : ''}
     <div class="stat"><b>${s.cost}</b><span>weighted score (lower is better)</span></div>
   </div>
