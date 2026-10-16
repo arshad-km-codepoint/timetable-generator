@@ -11,6 +11,7 @@ const WEIGHT_LABELS = {
 };
 const MEETING_COLOR = '#64748b';
 const DUTY_COLOR = '#a16207';
+const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
 function emptyState() {
   return {
@@ -18,11 +19,13 @@ function emptyState() {
       name: 'My School',
       days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
       periods: [
-        { label: '1', start: '08:00', end: '08:45' }, { label: '2', start: '08:50', end: '09:35' },
-        { label: '3', start: '09:40', end: '10:25' }, { label: '4', start: '10:45', end: '11:30' },
-        { label: '5', start: '11:35', end: '12:20' }, { label: '6', start: '13:10', end: '13:55' },
-        { label: '7', start: '14:00', end: '14:45' },
+        { label: '1', start: '08:00', end: '08:45', type: 'teaching' }, { label: '2', start: '08:50', end: '09:35', type: 'teaching' },
+        { label: '3', start: '09:40', end: '10:25', type: 'teaching' }, { label: '4', start: '10:45', end: '11:30', type: 'teaching' },
+        { label: '5', start: '11:35', end: '12:20', type: 'teaching' }, { label: '6', start: '13:10', end: '13:55', type: 'teaching' },
+        { label: '7', start: '14:00', end: '14:45', type: 'teaching' },
       ],
+      blocked: [],
+      options: { countMiddayGap: false },
       weights: { ...Timetable.DEFAULT_WEIGHTS },
       attempts: 3,
     },
@@ -34,6 +37,9 @@ function emptyState() {
 function sampleState() {
   const s = emptyState();
   s.settings.name = 'Greenfield Secondary School';
+  // Nine periods a day: 1–3, morning break, 4–5, lunch, 6–7.
+  s.settings.periods.splice(3, 0, { label: 'Break', start: '10:25', end: '10:45', type: 'break' });
+  s.settings.periods.splice(6, 0, { label: 'Lunch', start: '12:20', end: '13:10', type: 'lunch' });
   const subj = (name, code, i) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length] });
   const S = {
     math: subj('Mathematics', 'MAT', 0), eng: subj('English', 'ENG', 1), sci: subj('Science', 'SCI', 2),
@@ -44,11 +50,11 @@ function sampleState() {
   s.subjects = Object.values(S);
   const t = (name, code, extra = {}) => ({ id: uid(), name, code, unavailable: [], dispreferred: [], maxPerDay: 6, minPerDay: 0, ...extra });
   const T = {
-    m1: t('Anita Rao', 'ARA'), m2: t('Brian Ochieng', 'BOC', { unavailable: ['4-5', '4-6'] }),
+    m1: t('Anita Rao', 'ARA'), m2: t('Brian Ochieng', 'BOC', { unavailable: ['4-7', '4-8'] }),
     e1: t('Chloe Martin', 'CMA'), e2: t('Daniel Kim', 'DKI', { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
     s1: t('Elena Petrova', 'EPE'), s2: t('Farid Haddad', 'FHA'),
-    h1: t('Grace Liu', 'GLI', { unavailable: ['2-5', '2-6'], minPerDay: 2 }), pe: t('Hassan Ali', 'HAL', { dispreferred: ['4-5', '4-6'] }),
-    ar: t('Isabel Costa', 'ICO', { unavailable: ['0-0', '0-1', '0-2', '0-3', '0-4', '0-5', '0-6'] }), ic: t('James Wright', 'JWR'),
+    h1: t('Grace Liu', 'GLI', { unavailable: ['2-7', '2-8'], minPerDay: 2 }), pe: t('Hassan Ali', 'HAL', { dispreferred: ['4-7', '4-8'] }),
+    ar: t('Isabel Costa', 'ICO', { unavailable: ['0-0', '0-1', '0-2', '0-4', '0-5', '0-7', '0-8'] }), ic: t('James Wright', 'JWR'),
     fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
   };
   s.teachers = Object.values(T);
@@ -59,7 +65,7 @@ function sampleState() {
       .map(([name, type]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [] })),
   ];
   const L = (subject, teacher, classes, sessions, length, room, parallel = '') => ({
-    id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), sessions, length, room, maxOnePerDay: true, parallel,
+    id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), sessions, length, room, maxOnePerDay: true, parallel, allowBreakInside: false,
   });
   s.classes.forEach((c, i) => {
     const half = i < 3;
@@ -80,15 +86,18 @@ function sampleState() {
   const y8 = s.classes.slice(4);
   s.lessons.push(L(S.fre, T.fr, y8, 2, 1, 'type:Classroom', 'Y8 languages'), L(S.spa, T.sp, y8, 2, 1, 'type:Classroom', 'Y8 languages'));
   s.rooms.push({ id: uid(), name: 'Staff Room', type: 'Staff', unavailable: [], dispreferred: [] });
-  const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-5`, `${d}-6`]);
+  const lastTwo = s.settings.days.flatMap((_, d) => [`${d}-7`, `${d}-8`]);
   s.meetings = [
     { id: uid(), name: 'Whole-staff meeting', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: 'type:Staff', allowed: lastTwo },
     { id: uid(), name: 'Science department', teacherIds: [T.s1.id, T.s2.id], sessions: 1, length: 1, room: '', allowed: [] },
   ];
   s.duties = [{
-    id: uid(), name: 'Library supervision', maxPerSlot: 1,
-    allowed: s.settings.days.flatMap((_, d) => [`${d}-3`, `${d}-4`]),
+    id: uid(), name: 'Library supervision', kind: 'teaching', maxPerSlot: 1,
+    allowed: s.settings.days.flatMap((_, d) => [`${d}-4`, `${d}-5`]),
     assignments: [T.h1, T.ic, T.ar, T.fr, T.sp].map((x) => ({ teacherId: x.id, hours: 2 })),
+  }, {
+    id: uid(), name: 'Playground supervision', kind: 'break', maxPerSlot: 3, allowed: [],
+    assignments: [T.m1, T.m2, T.e1, T.e2, T.s1, T.s2].map((x) => ({ teacherId: x.id, hours: 2 })),
   }];
   return s;
 }
@@ -97,9 +106,14 @@ function migrate(s) {
   const base = emptyState();
   s.settings.weights = { ...base.settings.weights, ...(s.settings.weights || {}) };
   s.settings.attempts = s.settings.attempts || base.settings.attempts;
+  (s.settings.periods || []).forEach((p) => { if (!PERIOD_TYPES[p.type]) p.type = 'teaching'; });
+  s.settings.blocked = Array.isArray(s.settings.blocked) ? s.settings.blocked : [];
+  s.settings.options = { ...base.settings.options, ...(s.settings.options || {}) };
   ['teachers', 'classes', 'rooms'].forEach((k) => s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; }));
+  s.lessons.forEach((l) => { l.allowBreakInside = !!l.allowBreakInside; });
   s.meetings = s.meetings || [];
   s.duties = s.duties || [];
+  s.duties.forEach((d) => { if (d.kind !== 'break') d.kind = 'teaching'; });
   s.timetable = s.timetable || base.timetable;
   // v1 placements stored a single roomId; v2 stores one room per parallel part.
   s.timetable.placements = (s.timetable.placements || []).map((p) => (p.rooms ? p : { ...p, rooms: [p.roomId || null] }));
@@ -121,6 +135,37 @@ let running = null;
 const D = () => state.settings.days.length;
 const P = () => state.settings.periods.length;
 const find = (list, id) => state[list].find((x) => x.id === id);
+const periodType = (p) => PERIOD_TYPES[state.settings.periods[p]?.type] ? state.settings.periods[p].type : 'teaching';
+const isTeachingPeriod = (p) => periodType(p) === 'teaching';
+const generalBlocked = () => new Set(state.settings.blocked || []);
+const dutyKind = (d) => (d && d.kind === 'break' ? 'break' : 'teaching');
+
+// Why slot key k cannot be used by something of `kind` ('teaching' work or 'break' supervision), or '' if it can.
+function slotDisabled(k, kind = 'teaching') {
+  const ty = periodType(+k.split('-')[1]);
+  if (kind === 'break') return ty === 'break' ? '' : `${PERIOD_TYPES[ty]} period — break supervision happens only in break periods`;
+  if (ty !== 'teaching') return `${PERIOD_TYPES[ty]} period — nothing is scheduled here`;
+  if ((state.settings.blocked || []).includes(k)) return 'Blocked for everyone in the general template';
+  return '';
+}
+// Every slot key usable by `kind`, in day-major order.
+function selectableKeys(kind = 'teaching') {
+  const st = state.settings; const out = [];
+  st.days.forEach((_, d) => st.periods.forEach((__, p) => { const k = `${d}-${p}`; if (!slotDisabled(k, kind)) out.push(k); }));
+  return out;
+}
+// Periods a block of `len` starting at period p would occupy, skipping a break if allowed; null if it does not fit.
+function spanPeriods(p, len, allowBreak) {
+  const out = [];
+  for (let q = p; out.length < len && q < P(); q++) {
+    const ty = periodType(q);
+    if (ty === 'teaching') out.push(q);
+    else if (!(allowBreak && ty === 'break' && out.length)) return null;
+  }
+  return out.length === len ? out : null;
+}
+// Slots a placed unit occupies; the engine reports `cells` once doubles may straddle a break.
+const cellsOf = (e, u) => e.pos[u.i].cells || Array.from({ length: u.len }, (_, q) => e.pos[u.i].s + q);
 
 function toast(msg, ms = 2600) {
   const el = $('#toast');
@@ -148,8 +193,10 @@ function panel(root, title, hint) {
 }
 
 function renderSetup(root) {
-  const p = panel(root, 'Week structure', 'Define teaching days and the periods in each day. Every lesson session occupies one or more consecutive periods.');
+  const p = panel(root, 'Week structure', 'Define teaching days and the periods in each day. Every lesson session occupies one or more consecutive teaching periods. Break and lunch periods are never used for lessons or meetings — only break supervision duties go there.');
   const st = state.settings;
+  const nBlocked = (st.blocked || []).length;
+  p.querySelector('[data-slot=actions]').innerHTML = `<button class="ghost" data-template title="Periods when nobody at all is scheduled (whole-school events, half days)">General template${nBlocked ? ` (${nBlocked} ✕)` : ''}</button>`;
   p.insertAdjacentHTML('beforeend', `
     <h3>Days</h3>
     <div class="table-wrap"><table class="edit"><thead><tr><th>#</th><th>Day name</th><th></th></tr></thead><tbody>
@@ -157,25 +204,32 @@ function renderSetup(root) {
     </tbody></table></div>
     <div class="row" style="margin:8px 0 16px"><button class="ghost" data-add-day>+ Add day</button></div>
     <h3>Periods</h3>
-    <div class="table-wrap"><table class="edit"><thead><tr><th>Label</th><th>Start</th><th>End</th><th></th></tr></thead><tbody>
-      ${st.periods.map((pp, i) => `<tr>
+    <div class="table-wrap"><table class="edit"><thead><tr><th>Label</th><th>Start</th><th>End</th><th title="Break and lunch periods hold no lessons">Type</th><th></th></tr></thead><tbody>
+      ${st.periods.map((pp, i) => `<tr class="${isTeachingPeriod(i) ? '' : 'brk'}">
         <td><input data-period="${i}" data-f="label" value="${esc(pp.label)}" aria-label="Period label"></td>
         <td><input type="time" data-period="${i}" data-f="start" value="${esc(pp.start)}" aria-label="Start"></td>
         <td><input type="time" data-period="${i}" data-f="end" value="${esc(pp.end)}" aria-label="End"></td>
+        <td><select data-period="${i}" data-f="type" aria-label="Period type">${Object.keys(PERIOD_TYPES).map((ty) => `<option value="${ty}" ${periodType(i) === ty ? 'selected' : ''}>${PERIOD_TYPES[ty]}</option>`).join('')}</select></td>
         <td><button class="danger" data-del-period="${i}" title="Remove period">✕</button></td></tr>`).join('')}
     </tbody></table></div>
-    <div class="row" style="margin-top:8px"><button class="ghost" data-add-period>+ Add period</button></div>`);
+    <div class="row" style="margin-top:8px"><button class="ghost" data-add-period>+ Add period</button></div>
+    <h3>Options</h3>
+    <label class="row" style="gap:6px"><input type="checkbox" data-midday ${st.options.countMiddayGap ? 'checked' : ''}> Count free periods across lunch as a gap</label>
+    <p class="hint" style="margin-top:4px">Off: a class or teacher who is free just before and just after lunch is not penalised for a gap. On: the gap counts like any other.</p>`);
   p.addEventListener('change', (e) => {
     const t = e.target;
     if (t.dataset.day) st.days[+t.dataset.day] = t.value;
     if (t.dataset.period) st.periods[+t.dataset.period][t.dataset.f] = t.value;
+    if (t.dataset.midday !== undefined) st.options.countMiddayGap = t.checked;
     changed();
+    if (t.dataset.f === 'type') render();
   });
   p.addEventListener('click', (e) => {
     const t = e.target;
+    if (t.dataset.template !== undefined) { editGeneralTemplate(); return; }
     if (t.dataset.addDay !== undefined) { st.days.push(`Day ${st.days.length + 1}`); resetTimetable('Week changed'); }
     else if (t.dataset.delDay) { if (st.days.length > 1) { st.days.splice(+t.dataset.delDay, 1); resetTimetable('Week changed'); } }
-    else if (t.dataset.addPeriod !== undefined) { st.periods.push({ label: String(st.periods.length + 1), start: '', end: '' }); resetTimetable('Week changed'); }
+    else if (t.dataset.addPeriod !== undefined) { st.periods.push({ label: String(st.periods.length + 1), start: '', end: '', type: 'teaching' }); resetTimetable('Week changed'); }
     else if (t.dataset.delPeriod) { if (st.periods.length > 1) { st.periods.splice(+t.dataset.delPeriod, 1); resetTimetable('Week changed'); } }
     else return;
     render();
@@ -185,20 +239,25 @@ function renderSetup(root) {
 // Changing the week shape invalidates slot indices, so availability and placements are cleared.
 function resetTimetable(reason) {
   ['teachers', 'classes', 'rooms'].forEach((k) => state[k].forEach((x) => { x.unavailable = []; x.dispreferred = []; }));
+  state.settings.blocked = [];
   state.timetable = { placements: [], generatedAt: null, difficulty: null };
   changed();
   toast(`${reason}: availability and timetable were reset.`);
 }
 
+// Per-teacher load in teaching periods (t: everything, tl: lessons only), per-class load (c), and break-supervision periods (tb).
 function workload() {
-  const t = {}, c = {}, tl = {};
+  const t = {}, c = {}, tl = {}, tb = {};
   for (const l of state.lessons) {
     const n = (Number(l.sessions) || 0) * (Number(l.length) || 1);
     t[l.teacherId] = (t[l.teacherId] || 0) + n;
     tl[l.teacherId] = (tl[l.teacherId] || 0) + n;
   }
   for (const m of state.meetings) for (const id of new Set(m.teacherIds || [])) t[id] = (t[id] || 0) + (Number(m.sessions) || 0) * (Number(m.length) || 1);
-  for (const d of state.duties) for (const a of d.assignments || []) t[a.teacherId] = (t[a.teacherId] || 0) + (Number(a.hours) || 0);
+  for (const d of state.duties) {
+    const tgt = dutyKind(d) === 'break' ? tb : t;
+    for (const a of d.assignments || []) tgt[a.teacherId] = (tgt[a.teacherId] || 0) + (Number(a.hours) || 0);
+  }
   // Parallel lessons share the same periods, so count each group once per class.
   const seen = new Set();
   for (const l of state.lessons) {
@@ -210,10 +269,21 @@ function workload() {
       c[id] = (c[id] || 0) + n;
     }
   }
-  return { t, c, tl };
+  return { t, c, tl, tb };
 }
 
-function availableSlots(ent) { return D() * P() - (ent.unavailable || []).length; }
+// Slots an entity can actually be scheduled in: teaching periods, not in the general template, not marked ✕.
+function availableSlots(ent, kind = 'teaching') {
+  const off = new Set(ent.unavailable || []);
+  return selectableKeys(kind).filter((k) => !off.has(k)).length;
+}
+// Duty periods of a duty: its allowed keys of the matching kind, or every slot of that kind.
+function dutySlots(d) {
+  const sel = selectableKeys(dutyKind(d));
+  if (!d.allowed || !d.allowed.length) return sel.length;
+  const set = new Set(sel);
+  return d.allowed.filter((k) => set.has(k)).length;
+}
 
 function availLabel(x) {
   const b = (x.unavailable || []).length, s = (x.dispreferred || []).length;
@@ -276,7 +346,7 @@ function renderTeachers(root) {
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day'),
     numCol('Min/day', 'minPerDay', 'Preference: on days they teach, at least this many periods')];
   cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], maxPerDay: 0, minPerDay: 0 });
-  entityEditor(root, { list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and duties; red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
+  entityEditor(root, { list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and teaching-period duties (break supervision is counted against break periods instead); red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
 }
 
 function renderClasses(root) {
@@ -328,7 +398,7 @@ function renderLessons(root) {
   const opt = (arr, sel, empty) => `${empty ? `<option value="">${empty}</option>` : ''}${arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
   const groups = [...new Set(state.lessons.map((l) => (l.parallel || '').trim()).filter(Boolean))];
   p.insertAdjacentHTML('beforeend', list.length ? `<datalist id="parallelGroups">${groups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
-    <div class="table-wrap"><table class="edit"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th>Room</th><th>Sessions/wk</th><th>Length</th><th title="At most one session per day">1/day</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table class="edit"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th>Room</th><th>Sessions/wk</th><th>Length</th><th title="At most one session per day">1/day</th><th title="A double period may straddle a break">Break inside</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th></tr></thead><tbody>
     ${list.map((l) => `<tr data-id="${l.id}">
       <td><select data-f="subjectId" aria-label="Subject">${opt(state.subjects, l.subjectId)}</select></td>
       <td><select data-f="teacherId" aria-label="Teacher">${opt(state.teachers, l.teacherId, '— choose —')}</select></td>
@@ -337,9 +407,10 @@ function renderLessons(root) {
       <td><input type="number" min="1" max="${D() * P()}" data-f="sessions" value="${l.sessions}" style="max-width:80px" aria-label="Sessions per week"></td>
       <td><select data-f="length" aria-label="Length">${[1, 2, 3].map((n) => `<option value="${n}" ${+l.length === n ? 'selected' : ''}>${n === 1 ? 'Single' : n === 2 ? 'Double' : 'Triple'}</option>`).join('')}</select></td>
       <td><input type="checkbox" data-f="maxOnePerDay" ${l.maxOnePerDay ? 'checked' : ''} aria-label="At most one per day"></td>
+      <td><input type="checkbox" data-f="allowBreakInside" ${l.allowBreakInside ? 'checked' : ''} title="A double period may straddle a break" aria-label="Break inside"></td>
       <td><input data-f="parallel" list="parallelGroups" value="${esc(l.parallel || '')}" placeholder="—" style="max-width:140px" aria-label="Parallel group"></td>
       <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
-    </tbody></table></div><p class="hint" style="margin-top:8px">${list.length} lesson rows${ui.lessonFilter ? ` · class load ${workload().c[ui.lessonFilter] || 0} of ${D() * P()} periods` : ''}</p>`
+    </tbody></table></div><p class="hint" style="margin-top:8px">${list.length} lesson rows${ui.lessonFilter ? ` · class load ${workload().c[ui.lessonFilter] || 0} of ${availableSlots(find('classes', ui.lessonFilter) || {})} periods` : ''}</p>`
     : '<p class="hint">No lessons yet. Add subjects, teachers and classes first, then click “+ Add lesson”.</p>');
   p.addEventListener('change', (e) => {
     if (e.target.dataset.filter !== undefined) { ui.lessonFilter = e.target.value; render(); return; }
@@ -352,7 +423,7 @@ function renderLessons(root) {
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.dataset.add !== undefined) {
       if (!state.subjects.length) { toast('Add a subject first.'); return; }
-      state.lessons.push({ id: uid(), subjectId: state.subjects[0].id, teacherId: '', classIds: ui.lessonFilter ? [ui.lessonFilter] : [], room: '', sessions: 1, length: 1, maxOnePerDay: true, parallel: '' });
+      state.lessons.push({ id: uid(), subjectId: state.subjects[0].id, teacherId: '', classIds: ui.lessonFilter ? [ui.lessonFilter] : [], room: '', sessions: 1, length: 1, maxOnePerDay: true, parallel: '', allowBreakInside: false });
       changed(); render(); return;
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
@@ -369,31 +440,57 @@ function pickClasses(l) {
   });
 }
 
+// Day × period picker shared by every template. `cell(k)` gives { cls, text } for a usable slot;
+// `disabled(k)` gives the reason a slot cannot be picked (rendered hatched, never clickable).
+function templateGrid(hint, cell, disabled) {
+  const st = state.settings;
+  return `<p class="hint">${hint} Hatched cells cannot be used here — hover for the reason.</p>
+    <div class="table-wrap"><table class="avail"><thead><tr><th></th>${st.days.map((d, di) => `<th data-col="${di}" style="cursor:pointer">${esc(d.slice(0, 3))}</th>`).join('')}</tr></thead><tbody>
+    ${st.periods.map((pp, pi) => `<tr><th data-row="${pi}" style="cursor:pointer">${esc(pp.label)}${isTeachingPeriod(pi) ? '' : `<small>${PERIOD_TYPES[periodType(pi)]}</small>`}</th>${st.days.map((_, di) => {
+      const k = `${di}-${pi}`; const why = disabled(k);
+      if (why) return `<td class="dis" title="${esc(why)}"></td>`;
+      const c = cell(k);
+      return `<td data-k="${k}" class="${c.cls}">${c.text}</td>`;
+    }).join('')}</tr>`).join('')}
+    </tbody></table></div>`;
+}
+// Cell and header clicks on a template grid: `apply(keys)` receives only usable keys, then the grid is redrawn.
+function bindTemplate(redraw, disabled, apply) {
+  const st = state.settings; const box = $('#modalContent');
+  box.onclick = (e) => {
+    const t = e.target.closest('[data-k], [data-col], [data-row]'); if (!t) return;
+    const keys = t.dataset.k ? [t.dataset.k]
+      : t.dataset.col ? st.periods.map((_, pi) => `${t.dataset.col}-${pi}`)
+        : st.days.map((_, di) => `${di}-${t.dataset.row}`);
+    const usable = keys.filter((k) => !disabled(k));
+    if (!usable.length) return;
+    apply(usable);
+    box.innerHTML = redraw();
+  };
+}
+
 // Three-state template like GHC: available → non-preferred (~) → prohibited (✕).
 function editAvailability(ent, title) {
-  const st = state.settings;
   const off = new Set(ent.unavailable || []);
   const soft = new Set(ent.dispreferred || []);
   const stateOf = (k) => (off.has(k) ? 2 : soft.has(k) ? 1 : 0);
   const setState = (k, v) => { off.delete(k); soft.delete(k); if (v === 2) off.add(k); if (v === 1) soft.add(k); };
-  const grid = () => `<p class="hint">Click to cycle: available → <b>~ non-preferred</b> → <b>✕ prohibited</b>. Click a day or period header to set the whole column/row.</p>
-    <div class="table-wrap"><table class="avail"><thead><tr><th></th>${st.days.map((d, di) => `<th data-col="${di}" style="cursor:pointer">${esc(d.slice(0, 3))}</th>`).join('')}</tr></thead><tbody>
-    ${st.periods.map((pp, pi) => `<tr><th data-row="${pi}" style="cursor:pointer">${esc(pp.label)}</th>${st.days.map((_, di) => {
-      const k = `${di}-${pi}`; const v = stateOf(k);
-      return `<td data-k="${k}" class="${['', 'pref', 'off'][v]}">${['', '~', '✕'][v]}</td>`;
-    }).join('')}</tr>`).join('')}
-    </tbody></table></div>`;
+  const disabled = (k) => slotDisabled(k, 'teaching');
+  const grid = () => templateGrid('Click to cycle: available → <b>~ non-preferred</b> → <b>✕ prohibited</b>. Click a day or period header to set the whole column/row.',
+    (k) => { const v = stateOf(k); return { cls: ['', 'pref', 'off'][v], text: ['', '~', '✕'][v] }; }, disabled);
   openModal(title, grid(), () => { ent.unavailable = [...off]; ent.dispreferred = [...soft]; changed(); render(); });
-  const box = $('#modalContent');
-  box.onclick = (e) => {
-    const t = e.target;
-    const cycle = (keys) => { const next = (stateOf(keys[0]) + 1) % 3; keys.forEach((k) => setState(k, next)); };
-    if (t.dataset.k) cycle([t.dataset.k]);
-    else if (t.dataset.col) cycle(st.periods.map((_, pi) => `${t.dataset.col}-${pi}`));
-    else if (t.dataset.row) cycle(st.days.map((_, di) => `${di}-${t.dataset.row}`));
-    else return;
-    box.innerHTML = grid();
-  };
+  bindTemplate(grid, disabled, (keys) => { const next = (stateOf(keys[0]) + 1) % 3; keys.forEach((k) => setState(k, next)); });
+}
+
+// General template: periods when nobody at all is scheduled (✕ only). Stored in settings.blocked.
+function editGeneralTemplate() {
+  const st = state.settings;
+  const off = new Set(st.blocked || []);
+  const disabled = (k) => (isTeachingPeriod(+k.split('-')[1]) ? '' : `${PERIOD_TYPES[periodType(+k.split('-')[1])]} period — nothing is scheduled here anyway`);
+  const grid = () => templateGrid('Click to toggle <b>✕ blocked for everyone</b> — no lesson, meeting or duty is placed there (whole-school events, half days). Click a day or period header to set the whole column/row.',
+    (k) => (off.has(k) ? { cls: 'off', text: '✕' } : { cls: '', text: '' }), disabled);
+  openModal('General template', grid(), () => { st.blocked = [...off].filter((k) => !disabled(k)); changed(); render(); });
+  bindTemplate(grid, disabled, (keys) => { const allOff = keys.every((k) => off.has(k)); keys.forEach((k) => (allOff ? off.delete(k) : off.add(k))); });
 }
 
 function openModal(title, html, onClose, actions) {
@@ -442,14 +539,15 @@ function renderStaff(root) {
     if (btn.dataset.when !== undefined) editSlots(`When can “${x.name}” take place?`, x);
   });
 
-  const d = panel(root, 'On-call duties', 'Services such as library or corridor supervision. Mark the duty periods under “When”, set how many teachers may be on call at once, and give each teacher weekly hours. The engine tries to cover every duty period with at least one teacher.');
+  const d = panel(root, 'On-call duties', 'Services such as library or corridor supervision. Mark the duty periods under “When”, set how many teachers may be on call at once, and give each teacher weekly hours. The engine tries to cover every duty period with at least one teacher. Kind <b>Teaching periods</b> uses free teaching periods and counts toward a teacher’s load; <b>Break supervision</b> (playground, corridors) uses only the periods typed “Break” on the Week tab and is counted separately.');
   d.querySelector('[data-slot=actions]').innerHTML = '<button data-add-duty>+ Add duty</button>';
-  d.insertAdjacentHTML('beforeend', state.duties.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Service</th><th title="Hard limit">Max teachers / period</th><th>When</th><th>Teachers &amp; hours</th><th>Hours / duty periods</th><th></th></tr></thead><tbody>
+  d.insertAdjacentHTML('beforeend', state.duties.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Service</th><th title="Teaching periods, or supervision during breaks">Kind</th><th title="Hard limit">Max teachers / period</th><th>When</th><th>Teachers &amp; hours</th><th>Hours / duty periods</th><th></th></tr></thead><tbody>
     ${state.duties.map((x) => {
       const hours = (x.assignments || []).reduce((a, y) => a + (Number(y.hours) || 0), 0);
-      const periods = (x.allowed || []).length || D() * P();
+      const periods = dutySlots(x);
       return `<tr data-id="${x.id}">
       <td><input data-f="name" value="${esc(x.name)}" aria-label="Duty name"></td>
+      <td><select data-f="kind" aria-label="Duty kind"><option value="teaching" ${dutyKind(x) === 'teaching' ? 'selected' : ''}>Teaching periods</option><option value="break" ${dutyKind(x) === 'break' ? 'selected' : ''}>Break supervision</option></select></td>
       <td><input type="number" min="1" data-f="maxPerSlot" value="${x.maxPerSlot || 1}" style="max-width:80px" aria-label="Max teachers per period"></td>
       <td><button class="ghost" data-when>${slotsLabel(x.allowed)}</button></td>
       <td><button class="ghost" data-assign>${(x.assignments || []).length} teacher(s)</button></td>
@@ -461,19 +559,21 @@ function renderStaff(root) {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const x = find('duties', tr.dataset.id); const f = e.target.dataset.f;
     x[f] = f === 'maxPerSlot' ? Math.max(1, Number(e.target.value) || 1) : e.target.value;
-    changed(); if (f === 'maxPerSlot') render();
+    // A new kind means a different set of usable periods; drop "When" keys that no longer apply.
+    if (f === 'kind') { const ok = new Set(selectableKeys(dutyKind(x))); x.allowed = (x.allowed || []).filter((k) => ok.has(k)); }
+    changed(); if (f === 'maxPerSlot' || f === 'kind') render();
   });
   d.addEventListener('click', (e) => {
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.dataset.addDuty !== undefined) {
-      state.duties.push({ id: uid(), name: `Duty ${state.duties.length + 1}`, maxPerSlot: 1, allowed: [], assignments: [] });
+      state.duties.push({ id: uid(), name: `Duty ${state.duties.length + 1}`, kind: 'teaching', maxPerSlot: 1, allowed: [], assignments: [] });
       changed(); render(); return;
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
     const x = find('duties', tr.dataset.id);
     if (btn.dataset.del !== undefined) { state.duties = state.duties.filter((y) => y !== x); changed(); render(); }
     if (btn.dataset.assign !== undefined) editAssignments(x);
-    if (btn.dataset.when !== undefined) editSlots(`Duty periods for “${x.name}”`, x);
+    if (btn.dataset.when !== undefined) editSlots(`Duty periods for “${x.name}”`, x, dutyKind(x));
   });
 }
 
@@ -500,29 +600,16 @@ function editAssignments(duty) {
   });
 }
 
-// Two-state template of allowed periods; stored empty when every period is allowed.
-function editSlots(title, obj) {
-  const st = state.settings;
-  const all = st.days.flatMap((_, d) => st.periods.map((__, p) => `${d}-${p}`));
-  const on = new Set(obj.allowed && obj.allowed.length ? obj.allowed : all);
-  const grid = () => `<p class="hint">✓ = allowed. Click a cell, or a day/period header to toggle the whole column/row.</p>
-    <div class="table-wrap"><table class="avail"><thead><tr><th></th>${st.days.map((d, di) => `<th data-col="${di}" style="cursor:pointer">${esc(d.slice(0, 3))}</th>`).join('')}</tr></thead><tbody>
-    ${st.periods.map((pp, pi) => `<tr><th data-row="${pi}" style="cursor:pointer">${esc(pp.label)}</th>${st.days.map((_, di) => {
-      const k = `${di}-${pi}`;
-      return `<td data-k="${k}" class="${on.has(k) ? 'yes' : ''}">${on.has(k) ? '✓' : ''}</td>`;
-    }).join('')}</tr>`).join('')}
-    </tbody></table></div>`;
-  openModal(title, grid(), () => { obj.allowed = on.size === all.length ? [] : [...on]; changed(); render(); });
-  const box = $('#modalContent');
-  box.onclick = (e) => {
-    const t = e.target;
-    const toggle = (keys) => { const allOn = keys.every((k) => on.has(k)); keys.forEach((k) => (allOn ? on.delete(k) : on.add(k))); };
-    if (t.dataset.k) toggle([t.dataset.k]);
-    else if (t.dataset.col) toggle(st.periods.map((_, pi) => `${t.dataset.col}-${pi}`));
-    else if (t.dataset.row) toggle(st.days.map((_, di) => `${di}-${t.dataset.row}`));
-    else return;
-    box.innerHTML = grid();
-  };
+// Two-state template of allowed periods; stored empty when every usable period is allowed.
+// `kind` is 'break' for break-supervision duties (only break periods are usable), else 'teaching'.
+function editSlots(title, obj, kind = 'teaching') {
+  const all = selectableKeys(kind); const usable = new Set(all);
+  const on = new Set((obj.allowed && obj.allowed.length ? obj.allowed : all).filter((k) => usable.has(k)));
+  const disabled = (k) => slotDisabled(k, kind);
+  const grid = () => templateGrid(`✓ = allowed${kind === 'break' ? ' (break periods only)' : ''}. Click a cell, or a day/period header to toggle the whole column/row.`,
+    (k) => (on.has(k) ? { cls: 'yes', text: '✓' } : { cls: '', text: '' }), disabled);
+  openModal(title, grid(), () => { obj.allowed = all.every((k) => on.has(k)) ? [] : [...on]; changed(); render(); });
+  bindTemplate(grid, disabled, (keys) => { const allOn = keys.every((k) => on.has(k)); keys.forEach((k) => (allOn ? on.delete(k) : on.add(k))); });
 }
 
 // ---------- Generate ----------
@@ -534,6 +621,8 @@ function validate() {
   state.teachers.forEach((t) => {
     const n = w.t[t.id] || 0;
     if (n > availableSlots(t)) issues.push({ lvl: 'err', msg: `${t.name} has ${n} periods but only ${availableSlots(t)} free slots.` });
+    const nb = w.tb[t.id] || 0;
+    if (nb > availableSlots(t, 'break')) issues.push({ lvl: 'err', msg: `${t.name} has ${nb} break-supervision periods but only ${availableSlots(t, 'break')} free break slots.` });
     const nl = w.tl[t.id] || 0;
     if (t.maxPerDay && nl > t.maxPerDay * D()) issues.push({ lvl: 'err', msg: `${t.name} teaches ${nl} periods but max ${t.maxPerDay}/day allows only ${t.maxPerDay * D()}.` });
     if (t.maxPerDay && t.minPerDay > t.maxPerDay) issues.push({ lvl: 'warn', msg: `${t.name}: min/day is above max/day.` });
@@ -555,12 +644,18 @@ function validate() {
   }
   const seen = new Set();
   e.units.forEach((u) => { if (!u.starts.length && !seen.has(u.key)) { seen.add(u.key); issues.push({ lvl: 'err', msg: `${describeUnit(u.id)} has no period where all its teachers and classes are available.` }); } });
+  // Longest run of consecutive teaching periods in a day (period types are the same every day).
+  let maxRun = 0, run = 0;
+  state.settings.periods.forEach((_, p) => { run = isTeachingPeriod(p) ? run + 1 : 0; maxRun = Math.max(maxRun, run); });
   state.lessons.forEach((l) => {
     if (l.maxOnePerDay && Number(l.sessions) > D()) issues.push({ lvl: 'err', msg: `${describeLesson(l.id)} has ${l.sessions} sessions marked “1/day” but the week has only ${D()} days — untick 1/day or reduce sessions.` });
+    if (!l.allowBreakInside && Number(l.length) > 1 && Number(l.length) > maxRun) issues.push({ lvl: 'err', msg: `${describeLesson(l.id)} needs ${l.length} consecutive teaching periods but no day has that many in a row — tick “Break inside” or change the period types on the Week tab.` });
   });
+  const hasBreak = state.settings.periods.some((pp) => pp.type === 'break');
   state.duties.forEach((d) => {
+    if (dutyKind(d) === 'break' && !hasBreak) { issues.push({ lvl: 'err', msg: `Duty “${d.name}” is break supervision but no period is typed “Break” on the Week tab.` }); return; }
     const hours = (d.assignments || []).reduce((a, x) => a + (Number(x.hours) || 0), 0);
-    const periods = (d.allowed || []).length || D() * P();
+    const periods = dutySlots(d);
     const cap = periods * Math.max(1, Number(d.maxPerSlot) || 1);
     if (hours > cap) issues.push({ lvl: 'err', msg: `Duty “${d.name}” has ${hours} assigned hours but only ${cap} places (${periods} periods × ${d.maxPerSlot || 1}); ${hours - cap} will stay unplaced.` });
     else if (hours < periods) issues.push({ lvl: 'warn', msg: `Duty “${d.name}”: ${hours} hours assigned for ${periods} duty periods — ${periods - hours} period(s) will be uncovered.` });
@@ -726,16 +821,28 @@ function blockHtml(e, u, mode, id) {
 }
 
 // Duty rota: every teacher on call in each period; empty duty periods are flagged.
+// Row header for period p: label, type for break/lunch rows, and the time.
+function periodHeader(p) {
+  const pp = state.settings.periods[p]; const ty = periodType(p);
+  const time = `${esc(pp.start)}${pp.end ? '–' + esc(pp.end) : ''}`;
+  return `<th class="pcol">${esc(pp.label)}<small>${ty === 'teaching' ? '' : `${PERIOD_TYPES[ty]}${time ? ' · ' : ''}`}${time}</small></th>`;
+}
+
 function dutyGridHtml(e, id) {
   const st = state.settings;
   const svc = e.services[id]; if (!svc) return '<p class="hint">Nothing to show.</p>';
+  const brkDuty = dutyKind(find('duties', id)) === 'break'; const gen = generalBlocked();
   let html = `<div class="table-wrap"><table class="tt duty"><thead><tr><th class="pcol">Period</th>${st.days.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>`;
   st.periods.forEach((pp, p) => {
-    html += `<tr><th class="pcol">${esc(pp.label)}<small>${esc(pp.start)}${pp.end ? '–' + esc(pp.end) : ''}</small></th>`;
+    const ty = periodType(p);
+    const usable = brkDuty ? ty === 'break' : ty === 'teaching';
+    html += `<tr class="${ty === 'teaching' ? '' : 'brk'}">${periodHeader(p)}`;
     st.days.forEach((_, d) => {
       const k = d * e.P + p;
       const on = [...svc.occ[k]];
-      const cls = !svc.allowed.has(k) ? 'off' : on.length ? '' : 'uncov';
+      // Rows of the wrong kind are shaded and are not drop targets (unless a stale placement sits there and must be movable).
+      if (!usable && !on.length) { html += `<td class="${ty === 'teaching' ? 'off' : 'brk'}"></td>`; return; }
+      const cls = !svc.allowed.has(k) || (!brkDuty && gen.has(`${d}-${p}`)) ? 'off' : on.length ? '' : 'uncov';
       html += `<td data-d="${d}" data-p="${p}" class="${cls}">${on.map((ui) => {
         const u = e.units[ui]; const t = find('teachers', u.teachers[0]);
         return `<div class="block mini" draggable="true" data-unit="${esc(u.id)}" style="--c:${DUTY_COLOR}" title="${esc(describeUnit(u.id))}">${e.locked[ui] ? '🔒 ' : ''}${esc(t?.name)}</div>`;
@@ -751,18 +858,25 @@ const gridFor = (e, mode, id) => (mode === 'duty' ? dutyGridHtml(e, id) : gridHt
 function gridHtml(e, mode, id) {
   const st = state.settings;
   const ent = find(MODES[mode], id);
-  const off = new Set(ent?.unavailable || []); const soft = new Set(ent?.dispreferred || []);
+  const off = new Set(ent?.unavailable || []); const soft = new Set(ent?.dispreferred || []); const gen = generalBlocked();
+  // at[slot] = { u, span } on the first cell of a block; 'cov' on every cell down to its last one (a straddled break row included).
   const at = {};
-  unitsFor(e, mode, id).forEach((u) => { const s = e.pos[u.i].s; at[s] = u; for (let q = 1; q < u.len; q++) at[s + q] = 'cov'; });
+  unitsFor(e, mode, id).forEach((u) => {
+    const cells = cellsOf(e, u); const first = cells[0], last = cells[cells.length - 1];
+    at[first] = { u, span: last - first + 1 };
+    for (let k = first + 1; k <= last; k++) at[k] = 'cov';
+  });
   let html = `<div class="table-wrap"><table class="tt"><thead><tr><th class="pcol">Period</th>${st.days.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>`;
   st.periods.forEach((pp, p) => {
-    html += `<tr><th class="pcol">${esc(pp.label)}<small>${esc(pp.start)}${pp.end ? '–' + esc(pp.end) : ''}</small></th>`;
+    const brk = !isTeachingPeriod(p);
+    html += `<tr class="${brk ? 'brk' : ''}">${periodHeader(p)}`;
     st.days.forEach((_, d) => {
-      const k = d * e.P + p; const u = at[k];
-      if (u === 'cov') return;
+      const k = d * e.P + p; const a = at[k];
+      if (a === 'cov') return;
+      if (brk && !a) { html += '<td class="brk"></td>'; return; }
       const key = `${d}-${p}`;
-      const cls = off.has(key) ? 'off' : soft.has(key) ? 'pref' : '';
-      html += u ? `<td rowspan="${u.len}" data-d="${d}" data-p="${p}" class="${cls}">${blockHtml(e, u, mode, id)}</td>`
+      const cls = off.has(key) || gen.has(key) ? 'off' : soft.has(key) ? 'pref' : '';
+      html += a ? `<td rowspan="${a.span}" data-d="${d}" data-p="${p}" class="${cls}">${blockHtml(e, a.u, mode, id)}</td>`
         : `<td data-d="${d}" data-p="${p}" class="${cls}"></td>`;
     });
     html += '</tr>';
@@ -773,14 +887,16 @@ function gridHtml(e, mode, id) {
 function masterHtml(e, kind = 'classes') {
   const st = state.settings;
   const mode = kind === 'classes' ? 'class' : 'teacher';
-  let html = `<div class="table-wrap"><table class="master"><thead><tr><th rowspan="2">${kind === 'classes' ? 'Class' : 'Teacher'}</th>${st.days.map((d) => `<th class="day-start" colspan="${e.P}">${esc(d)}</th>`).join('')}</tr><tr>${st.days.map(() => st.periods.map((pp, i) => `<th class="${i === 0 ? 'day-start' : ''}">${esc(pp.label)}</th>`).join('')).join('')}</tr></thead><tbody>`;
+  const gen = generalBlocked();
+  const colCls = (p) => `${p === 0 ? 'day-start' : ''}${isTeachingPeriod(p) ? '' : ' brk'}`;
+  let html = `<div class="table-wrap"><table class="master"><thead><tr><th rowspan="2">${kind === 'classes' ? 'Class' : 'Teacher'}</th>${st.days.map((d) => `<th class="day-start" colspan="${e.P}">${esc(d)}</th>`).join('')}</tr><tr>${st.days.map(() => st.periods.map((pp, i) => `<th class="${colCls(i)}" title="${esc(PERIOD_TYPES[periodType(i)])}">${esc(pp.label)}</th>`).join('')).join('')}</tr></thead><tbody>`;
   state[kind].forEach((x) => {
     const at = {};
-    unitsFor(e, mode, x.id).forEach((u) => { for (let q = 0; q < u.len; q++) at[e.pos[u.i].s + q] = u; });
+    unitsFor(e, mode, x.id).forEach((u) => { for (const k of cellsOf(e, u)) at[k] = u; });
     html += `<tr><td class="name">${esc(x.code || x.name)}</td>`;
     for (let d = 0; d < e.D; d++) for (let p = 0; p < e.P; p++) {
       const u = at[d * e.P + p];
-      if (!u) { html += `<td class="${p === 0 ? 'day-start' : ''}"></td>`; continue; }
+      if (!u) { html += `<td class="${colCls(p)}${gen.has(`${d}-${p}`) ? ' off' : ''}"></td>`; continue; }
       const parts = partsFor(e, u, mode, x.id);
       const info = partInfo(parts[0]);
       const label = parts.length > 1 ? parts.map((pp) => partInfo(pp).code).join('/')
@@ -849,8 +965,18 @@ function renderTimetable(root) {
 
 // Explain why unit u cannot start at s, or return null if it can.
 function blockReason(e, u, s) {
-  const p = s % e.P;
-  if (p + u.len > e.P) return 'A multi-period lesson does not fit there.';
+  const p = s % e.P, d = e.dayOf(s), ty = periodType(p);
+  const brkDuty = u.kind === 'duty' && dutyKind(find('duties', u.service)) === 'break';
+  if (brkDuty) { if (ty !== 'break') return 'Break supervision can only go on a break period.'; }
+  else {
+    if (ty !== 'teaching') return 'That is a break period.';
+    if (p + u.len > e.P) return 'A multi-period lesson does not fit there.';
+    const allowBreak = u.kind === 'lesson' && u.parts.every((pp) => find('lessons', pp.lessonId)?.allowBreakInside);
+    const span = spanPeriods(p, u.len, allowBreak);
+    if (!span) return 'A multi-period lesson would run into a break there — tick “Break inside” on the lesson to allow that.';
+    const gen = generalBlocked();
+    if (span.some((q) => gen.has(`${d}-${q}`))) return 'The general template blocks that time for everyone.';
+  }
   if (!u.starts.includes(s)) return 'A teacher or class is marked ✕ (prohibited) at that time.';
   const base = e.baseConflicts(u.i, s);
   if (base === null) return 'That would exceed a teacher’s maximum periods per day.';
@@ -885,17 +1011,18 @@ function lessonMenu(unitId) {
   if (!pos) return;
   const pl = state.timetable.placements.find((x) => x.unitId === unitId);
   const st = state.settings; const day = e.dayOf(pos.s); const per = pos.s % e.P;
+  const cells = cellsOf(e, u); const lastPer = cells[cells.length - 1] % e.P;
   e.remove(u.i);
   const roomRows = u.parts.map((part, k) => {
     if (!part.roomCands) return '';
     const opts = part.roomCands.map((r) => {
-      const busy = e.roomConflicts(u.i, pos.s, u.parts.map((_, j) => (j === k ? r : null))).size > 0 || [...Array(u.len).keys()].some((q) => e.blocked['r' + r].has(pos.s + q));
+      const busy = e.roomConflicts(u.i, pos.s, u.parts.map((_, j) => (j === k ? r : null))).size > 0 || cells.some((c) => e.blocked['r' + r].has(c));
       return `<option value="${r}" ${pos.rooms[k] === r ? 'selected' : ''} ${busy && pos.rooms[k] !== r ? 'disabled' : ''}>${esc(find('rooms', r)?.name)}${busy && pos.rooms[k] !== r ? ' (busy)' : ''}</option>`;
     }).join('');
     return `<label class="row" style="margin:6px 0">${esc(describePart(part))}: <select data-part="${k}">${opts}</select></label>`;
   }).join('');
   e.place(u.i, pos.s, pos.rooms);
-  openModal(describeUnit(unitId), `<p>${esc(st.days[day])}, period ${esc(st.periods[per].label)}${u.len > 1 ? `–${esc(st.periods[per + u.len - 1].label)}` : ''}</p>
+  openModal(describeUnit(unitId), `<p>${esc(st.days[day])}, period ${esc(st.periods[per].label)}${u.len > 1 ? `–${esc(st.periods[lastPer]?.label)}` : ''}</p>
     ${roomRows ? `<h4>Room</h4>${roomRows}` : '<p class="hint">No room needed.</p>'}
     <p class="hint">${pl.locked ? '🔒 Locked — kept in place when regenerating.' : 'Not locked — may move when regenerating.'}</p>`,
   (v) => {
@@ -916,12 +1043,13 @@ function exportCsv(e) {
   const st = state.settings;
   const ent = find(MODES[ui.ttMode], ui.ttEntity); if (!ent) return;
   const at = {};
-  unitsFor(e, ui.ttMode, ent.id).forEach((u) => { for (let q = 0; q < u.len; q++) at[e.pos[u.i].s + q] = u; });
+  unitsFor(e, ui.ttMode, ent.id).forEach((u) => { for (const k of cellsOf(e, u)) at[k] = u; });
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rows = [['Period', 'Time', ...st.days].map(q).join(',')];
   st.periods.forEach((pp, p) => {
+    const ty = periodType(p);
     rows.push([pp.label, `${pp.start}-${pp.end}`, ...st.days.map((_, d) => {
-      const u = at[d * e.P + p]; if (!u) return '';
+      const u = at[d * e.P + p]; if (!u) return ty === 'teaching' ? '' : PERIOD_TYPES[ty];
       return partsFor(e, u, ui.ttMode, ent.id).map((part) => [partInfo(part).title, find('teachers', part.teacher)?.name,
         part.classes.map((id) => find('classes', id)?.name).join('+'), part.room && find('rooms', part.room)?.name].filter(Boolean).join(' / ')).join(' | ');
     })].map(q).join(','));
