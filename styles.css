@@ -147,6 +147,23 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
   .block { border-left-width: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
+/* Lessons: distribution cell, row option and relation modals */
+table.edit.lessons td { white-space: nowrap; }
+button.small { padding: 4px 8px; font-size: 12px; }
+button.ghost.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.dist-cell { flex-wrap: nowrap; gap: 6px; }
+table.edit td input.dist { width: 110px; }
+table.edit td input.dist.flex { width: 200px; background: var(--hover); font-style: italic; }
+.dist-cell small { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 16px; }
+.form-grid label { display: flex; flex-direction: column; gap: 4px; }
+.opts { display: flex; flex-direction: column; gap: 10px; }
+.opts label { display: flex; gap: 8px; align-items: flex-start; }
+.opts label input { margin-top: 3px; flex: none; }
+.opts small { display: block; }
+table.edit.rel td:last-child { width: 1%; }
+.rel-add select { max-width: 100%; }
+
 /* Meetings & duties */
 .avail td.yes { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); color: var(--ok); font-weight: 700; }
 table.tt.duty td { height: auto; min-height: 40px; }

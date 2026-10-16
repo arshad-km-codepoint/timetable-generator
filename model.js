@@ -10,6 +10,12 @@
     classGap: 'Free gaps in a class day', teacherGap: 'Free gaps in a teacher day', sameDay: 'Same lesson twice on one day',
     dispreferred: 'Lesson in a non-preferred period', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
+    ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
+    roomSame: 'Sessions of one lesson in different rooms', consecutiveDays: 'Sessions of one lesson on consecutive days',
+  };
+  const RELATION_TYPES = {
+    differentDays: 'On different days', notSameTime: 'Not at the same time', nonConsecutive: 'Not in consecutive periods',
+    consecutive: 'In consecutive periods (same day)', daysApart: 'Days apart (min–max)',
   };
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
@@ -66,7 +72,7 @@
         .map(([name, type]) => ({ id: uid(), name, type, unavailable: [], dispreferred: [] })),
     ];
     const L = (subject, teacher, classes, sessions, length, room, parallel = '') => ({
-      id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), sessions, length, room, maxOnePerDay: true, parallel, allowBreakInside: false,
+      ...lessonDefaults(), id: uid(), subjectId: subject.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), lengths: Array(sessions).fill(length), room, parallel,
     });
     s.classes.forEach((c, i) => {
       const half = i < 3;
@@ -103,6 +109,105 @@
     return s;
   }
 
+  // ---------- Lessons ----------
+  // Every field a lesson row carries besides its identity and references.
+  function lessonDefaults() {
+    return { room: '', roomAlt: '', sameRoom: false, lengths: [1], flexible: null, maxOnePerDay: true, parallel: '', allowBreakInside: false, penalizeEnds: false, avoidConsecutiveDays: false, relations: [] };
+  }
+  function newLesson(subjectId, classIds = []) {
+    return { ...lessonDefaults(), id: uid(), subjectId, teacherId: '', classIds };
+  }
+  // "221", "2,2,1" or "2 2 1" → [2, 2, 1]; null when empty, non-numeric, zero or a block above `max`.
+  function parseLengths(text, max = Infinity) {
+    const t = String(text ?? '').trim();
+    if (!t) return null;
+    const parts = /[\s,;+]/.test(t) ? t.split(/[\s,;+]+/).filter(Boolean) : t.split('');
+    if (!parts.length || !parts.every((x) => /^\d+$/.test(x))) return null;
+    const out = parts.map(Number);
+    return out.every((n) => n >= 1 && n <= max) ? out : null;
+  }
+  // Can `total` periods be split into blocks of min..max periods each?
+  function canPartition(total, min, max) {
+    total = Number(total); min = Number(min); max = Number(max);
+    if (!(total >= 1 && min >= 1 && max >= min)) return false;
+    for (let k = 1; k * min <= total; k++) if (total <= k * max) return true;
+    return false;
+  }
+  // The most even split of `total` into the fewest blocks of min..max (largest first), or null.
+  function partition(total, min, max) {
+    if (!canPartition(total, min, max)) return null;
+    const k = Math.ceil(total / max); const base = Math.floor(total / k); const extra = total - base * k;
+    return Array.from({ length: k }, (_, i) => (i < extra ? base + 1 : base));
+  }
+  const isLengths = (a) => Array.isArray(a) && a.length > 0 && a.every((n) => Number.isInteger(n) && n >= 1);
+  const sessionsOf = (l) => (isLengths(l.lengths) ? l.lengths.length : 0);
+  const periodsOf = (l) => (isLengths(l.lengths) ? l.lengths.reduce((a, b) => a + b, 0) : 0);
+  const lengthsText = (lengths) => (isLengths(lengths) ? lengths.join(' ') : '');
+  // A valid flexible spec, or null.
+  function flexibleOf(f) {
+    if (!f || typeof f !== 'object') return null;
+    const total = Number(f.total), min = Number(f.min), max = Number(f.max);
+    return canPartition(total, min, max) ? { total, min, max } : null;
+  }
+  // Row defaults for files saved by older versions: sessions × length becomes `lengths`. A flexible
+  // row keeps `lengths` as one valid partition of its total, so session and period counts stay
+  // meaningful without the engine; the engine makes its own choice.
+  function migrateLesson(l) {
+    const d = lessonDefaults();
+    if (!isLengths(l.lengths)) l.lengths = Array(Math.max(1, Math.floor(Number(l.sessions)) || 1)).fill(Math.max(1, Math.floor(Number(l.length)) || 1));
+    delete l.sessions; delete l.length;
+    l.flexible = flexibleOf(l.flexible);
+    if (l.flexible && periodsOf(l) !== l.flexible.total) l.lengths = partition(l.flexible.total, l.flexible.min, l.flexible.max);
+    for (const k of ['room', 'roomAlt', 'parallel']) if (typeof l[k] !== 'string') l[k] = d[k];
+    // An alternative set without a room is just "any room of that type".
+    if (!l.room && l.roomAlt) { l.room = l.roomAlt; l.roomAlt = ''; }
+    for (const k of ['sameRoom', 'allowBreakInside', 'penalizeEnds', 'avoidConsecutiveDays']) l[k] = !!l[k];
+    l.maxOnePerDay = l.maxOnePerDay === undefined ? d.maxOnePerDay : !!l.maxOnePerDay;
+    l.classIds = Array.isArray(l.classIds) ? l.classIds : [];
+    l.relations = (Array.isArray(l.relations) ? l.relations : []).filter((r) => r && RELATION_TYPES[r.type] && r.lessonId && r.lessonId !== l.id).map((r) => relationOf(r.type, r.lessonId, r));
+    return l;
+  }
+  const relationOf = (type, lessonId, { min, max } = {}) => (type === 'daysApart'
+    ? { type, lessonId, min: Math.max(0, Math.floor(Number(min)) || 0), max: Math.max(0, Math.floor(Number(max)) || 0) } : { type, lessonId });
+  const sameRelation = (a, b) => a.type === b.type && a.lessonId === b.lessonId;
+  // Relations pointing at rows that no longer exist are removed. Returns how many were dropped.
+  function dropDeadRelations(s) {
+    const ids = new Set(s.lessons.map((l) => l.id)); let n = 0;
+    for (const l of s.lessons) {
+      const keep = (l.relations || []).filter((r) => ids.has(r.lessonId) && r.lessonId !== l.id);
+      n += (l.relations || []).length - keep.length; l.relations = keep;
+    }
+    return n;
+  }
+  // A relation is stored on both rows; whichever side is missing is added (min/max copied).
+  function symmetrizeRelations(s) {
+    for (const l of s.lessons) for (const r of l.relations || []) {
+      const o = find(s, 'lessons', r.lessonId); if (!o) continue;
+      o.relations = o.relations || [];
+      const mirror = { ...r, lessonId: l.id };
+      const i = o.relations.findIndex((x) => sameRelation(x, mirror));
+      if (i < 0) o.relations.push(mirror); else o.relations[i] = mirror;
+    }
+  }
+  // Add (or replace) a relation of `type` between rows a and b, on both of them.
+  function addRelation(s, aId, bId, type, opts) {
+    const a = find(s, 'lessons', aId), b = find(s, 'lessons', bId);
+    if (!a || !b || a === b || !RELATION_TYPES[type]) return false;
+    for (const [row, other] of [[a, bId], [b, aId]]) {
+      const r = relationOf(type, other, opts);
+      row.relations = (row.relations || []).filter((x) => !sameRelation(x, r)); row.relations.push(r);
+    }
+    return true;
+  }
+  function removeRelation(s, aId, bId, type) {
+    for (const [x, y] of [[aId, bId], [bId, aId]]) { const row = find(s, 'lessons', x); if (row) row.relations = (row.relations || []).filter((r) => !(r.type === type && r.lessonId === y)); }
+  }
+  // Delete a lesson row together with every relation that points at it.
+  function removeLesson(s, id) {
+    s.lessons = s.lessons.filter((l) => l.id !== id);
+    dropDeadRelations(s);
+  }
+
   // Backwards-compatible defaults for files saved by older versions.
   function migrate(s) {
     const base = emptyState();
@@ -114,7 +219,9 @@
     ['teachers', 'classes', 'rooms'].forEach((k) => { s[k] = s[k] || []; s[k].forEach((x) => { x.unavailable = x.unavailable || []; x.dispreferred = x.dispreferred || []; }); });
     s.subjects = s.subjects || [];
     s.lessons = s.lessons || [];
-    s.lessons.forEach((l) => { l.allowBreakInside = !!l.allowBreakInside; });
+    s.lessons.forEach((l) => migrateLesson(l));
+    dropDeadRelations(s);
+    symmetrizeRelations(s);
     s.meetings = s.meetings || [];
     s.duties = s.duties || [];
     s.duties.forEach((d) => { if (d.kind !== 'break') d.kind = 'teaching'; });
@@ -171,7 +278,7 @@
   function workload(s) {
     const t = {}, c = {}, tl = {}, tb = {};
     for (const l of s.lessons) {
-      const n = (Number(l.sessions) || 0) * (Number(l.length) || 1);
+      const n = periodsOf(l);
       t[l.teacherId] = (t[l.teacherId] || 0) + n;
       tl[l.teacherId] = (tl[l.teacherId] || 0) + n;
     }
@@ -183,7 +290,7 @@
     // Parallel lessons share the same periods, so count each group once per class.
     const seen = new Set();
     for (const l of s.lessons) {
-      const n = (Number(l.sessions) || 0) * (Number(l.length) || 1);
+      const n = periodsOf(l);
       for (const id of l.classIds || []) {
         const key = l.parallel && l.parallel.trim() ? `${id}|${l.parallel.trim().toLowerCase()}` : null;
         if (key && seen.has(key)) continue;
@@ -200,20 +307,24 @@
     return e.unitCost(ui) - e.W.late * (p.cells[p.cells.length - 1] % e.P) > 0;
   }
 
-  // Drop slot keys that no longer mean anything: keys outside the week, teaching-only keys on a
-  // break/lunch period, break-duty keys off a break period. Returns how many were removed.
+  // Drop slot keys that no longer mean anything: keys outside the week, template keys on a
+  // break/lunch period, break-duty keys off a break period. Teacher/class/room keys stay on break
+  // periods (a ✕ there keeps a teacher off break duty); only lunch and out-of-week keys go.
+  // Returns how many were removed.
   function pruneDeadKeys(s) {
     let n = 0;
-    const keep = (list, kind) => {
+    const keep = (list, dead) => {
       if (!Array.isArray(list)) return list;
-      const out = list.filter((k) => !slotDisabled(s, k, kind, { general: false }));
+      const out = list.filter((k) => !dead(k));
       n += list.length - out.length;
       return out;
     };
-    for (const list of ['teachers', 'classes', 'rooms']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, 'teaching'); x.dispreferred = keep(x.dispreferred, 'teaching'); }
-    s.settings.blocked = keep(s.settings.blocked, 'teaching');
-    for (const m of s.meetings) m.allowed = keep(m.allowed, 'teaching');
-    for (const d of s.duties) d.allowed = keep(d.allowed, dutyKind(d));
+    const byKind = (kind) => (k) => !!slotDisabled(s, k, kind, { general: false });
+    const unusable = (k) => slotDisabled(s, k, 'teaching', { general: false }) === 'Outside the week' || periodType(s, keyParts(k)[1]) === 'lunch';
+    for (const list of ['teachers', 'classes', 'rooms']) for (const x of s[list]) { x.unavailable = keep(x.unavailable, unusable); x.dispreferred = keep(x.dispreferred, unusable); }
+    s.settings.blocked = keep(s.settings.blocked, byKind('teaching'));
+    for (const m of s.meetings) m.allowed = keep(m.allowed, byKind('teaching'));
+    for (const d of s.duties) d.allowed = keep(d.allowed, byKind(dutyKind(d)));
     return n;
   }
   // Drop placements the engine can no longer restore (e.g. on a period that became a break).
@@ -274,10 +385,39 @@
     // Longest run of consecutive teaching periods in a day (period types are the same every day).
     let maxRun = 0, run = 0;
     s.settings.periods.forEach((_, p) => { run = isTeachingPeriod(s, p) ? run + 1 : 0; maxRun = Math.max(maxRun, run); });
+    const perDay = teachingPeriods(s);
+    // Problems the engine already reported (by message pattern and rows) are not reported twice.
+    const flagged = (re, ids) => e.problems.some((p) => re.test(p.msg) && ids.every((id) => (p.lessonIds || []).includes(id)));
+    const byTag = {};
     s.lessons.forEach((l) => {
-      if (l.maxOnePerDay && Number(l.sessions) > D) issues.push({ lvl: 'err', msg: `${describeLesson(s, l.id)} has ${l.sessions} sessions marked “1/day” but the week has only ${D} days — untick 1/day or reduce sessions.` });
-      if (!l.allowBreakInside && Number(l.length) > 1 && Number(l.length) > maxRun) issues.push({ lvl: 'err', msg: `${describeLesson(s, l.id)} needs ${l.length} consecutive teaching periods but no day has that many in a row — tick “Break inside” or change the period types on the Week tab.` });
+      const who = describeLesson(s, l.id);
+      if (!isLengths(l.lengths)) { issues.push({ lvl: 'err', msg: `${who} has no valid distribution — enter the session lengths, e.g. “2 2 1”.` }); return; }
+      const n = sessionsOf(l);
+      if (l.maxOnePerDay && n > D) issues.push({ lvl: 'err', msg: `${who} has ${n} sessions marked “1/day” but the week has only ${D} days — untick 1/day or reduce sessions.` });
+      if (l.flexible && !canPartition(l.flexible.total, l.flexible.min, l.flexible.max) && !flagged(/flexible/, [l.id])) issues.push({ lvl: 'err', msg: `${who}: ${l.flexible.total} periods cannot be split into blocks of ${l.flexible.min}–${l.flexible.max} periods.` });
+      // The longest block the engine may build: the longest explicit one, or the flexible maximum.
+      const longest = Math.max(...l.lengths, l.flexible ? l.flexible.max : 0);
+      if (longest > perDay && !flagged(/session length/, [l.id])) issues.push({ lvl: 'err', msg: `${who} has a block of ${longest} periods but a day has only ${perDay} teaching periods.` });
+      else if (!l.allowBreakInside && longest > 1 && longest > maxRun) issues.push({ lvl: 'err', msg: `${who} needs ${longest} consecutive teaching periods but no day has that many in a row — tick “Break inside” or change the period types on the Week tab.` });
+      const tag = (l.parallel || '').trim().toLowerCase();
+      if (tag) (byTag[tag] = byTag[tag] || []).push(l);
+      if (l.sameRoom && (l.room || '').startsWith('type:') && n > 1 && s.rooms.filter((r) => (r.type || '') === l.room.slice(5)).length < 2) issues.push({ lvl: 'warn', msg: `${who}: “Same room for all sessions” has no effect — there is only one ${l.room.slice(5)} room.` });
+      if (l.roomAlt && !l.room) issues.push({ lvl: 'warn', msg: `${who} has alternative rooms but no room — treated as “Any ${l.roomAlt.slice(5)}”.` });
+      for (const r of l.relations || []) {
+        const o = find(s, 'lessons', r.lessonId);
+        if (!o) { issues.push({ lvl: 'err', msg: `${who} has a relation (${RELATION_TYPES[r.type]}) to a lesson row that no longer exists.` }); continue; }
+        if (l.id > o.id) continue; // each pair once
+        const pair = `${who} and ${describeLesson(s, o.id)}`; const m = sessionsOf(o);
+        if (r.type === 'consecutive' && !l.flexible && !o.flexible && n !== m && !flagged(/consecutive/, [l.id, o.id])) issues.push({ lvl: 'err', msg: `${pair} must be in consecutive periods but have ${n} and ${m} sessions — consecutive rows need the same number of sessions.` });
+        if ((r.type === 'differentDays' || (r.type === 'daysApart' && r.min >= 1)) && n + m > D) issues.push({ lvl: 'err', msg: `${pair} must be on different days but have ${n} + ${m} sessions and the week has only ${D} days.` });
+        if (r.type === 'daysApart' && r.max && r.max < r.min) issues.push({ lvl: 'err', msg: `${pair}: days apart max (${r.max}) is below min (${r.min}).` });
+      }
     });
+    const signature = (l) => (l.flexible ? `flexible ${l.flexible.total} (${l.flexible.min}–${l.flexible.max})` : lengthsText([...l.lengths].sort((a, b) => b - a)));
+    for (const tag in byTag) {
+      const rows = byTag[tag];
+      if (new Set(rows.map(signature)).size > 1 && !flagged(/length|distribution/, rows.map((l) => l.id))) issues.push({ lvl: 'err', msg: `${rows.map((l) => describeLesson(s, l.id)).join(' & ')} are in parallel group “${byTag[tag][0].parallel.trim()}” but have different distributions (${rows.map(signature).join(' vs ')}).` });
+    }
     const hasBreak = s.settings.periods.some((pp) => pp.type === 'break');
     s.duties.forEach((d) => {
       if (dutyKind(d) === 'break' && !hasBreak) { issues.push({ lvl: 'err', msg: `Duty “${d.name}” is break supervision but no period is typed “Break” on the Week tab.` }); return; }
@@ -292,8 +432,10 @@
   }
 
   window.Model = {
-    uid, esc, PALETTE, WEIGHT_LABELS, PERIOD_TYPES,
+    uid, esc, PALETTE, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
+    lessonDefaults, newLesson, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
+    dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
     periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
     availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements,
     describeLesson, describeUnit, validate,

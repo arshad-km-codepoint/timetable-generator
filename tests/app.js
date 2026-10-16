@@ -26,8 +26,10 @@ const add = {
   subject: (s, name = 'Subject') => { const x = { id: id('s'), name, code: name.slice(0, 3).toUpperCase(), color: '#2f6fdb' }; s.subjects.push(x); return x; },
   teacher: (s, name = 'Teacher', extra = {}) => { const x = { id: id('t'), name, code: name.slice(0, 3).toUpperCase(), unavailable: [], dispreferred: [], maxPerDay: 0, minPerDay: 0, ...extra }; s.teachers.push(x); return x; },
   cls: (s, name = 'Class') => { const x = { id: id('c'), name, unavailable: [], dispreferred: [] }; s.classes.push(x); return x; },
+  // `sessions` may be a count (with `length`) or an explicit lengths array.
   lesson: (s, subj, teacher, classes, sessions, length = 1, extra = {}) => {
-    const x = { id: id('l'), subjectId: subj.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), sessions, length, room: '', maxOnePerDay: false, parallel: '', allowBreakInside: false, ...extra };
+    const lengths = Array.isArray(sessions) ? sessions : Array(sessions).fill(length);
+    const x = { ...M.lessonDefaults(), id: id('l'), subjectId: subj.id, teacherId: teacher.id, classIds: classes.map((c) => c.id), lengths, maxOnePerDay: false, ...extra };
     s.lessons.push(x); return x;
   },
   duty: (s, name, assignments, extra = {}) => {
@@ -39,8 +41,8 @@ const msgs = (s) => M.validate(s).issues.map((i) => `${i.lvl}: ${i.msg}`);
 const hasMsg = (s, re) => msgs(s).some((m) => re.test(m));
 
 // ---------- harness ----------
-// Model objects come from another vm realm, so compare by value (JSON) rather than by prototype.
-const eq = (a, b, msg) => assert.deepStrictEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)), msg);
+// Model objects come from another vm realm, so compare by value rather than by prototype.
+const eq = (a, b, msg) => assert.deepStrictEqual(structuredClone(a), structuredClone(b), msg);
 let pass = 0, fail = 0;
 function check(name, fn) {
   try { fn(); pass++; console.log(`  ok   ${name}`); }
@@ -73,6 +75,9 @@ check('(a) migrate() of a pre-1.2 file adds every default and keeps the rest', (
   eq(s.rooms[0].dispreferred, []);
   assert.strictEqual(s.lessons[0].allowBreakInside, false);
   assert.strictEqual(s.lessons[0].maxOnePerDay, true);
+  eq(s.lessons[0].lengths, [1, 1], 'sessions × length → lengths');
+  assert.ok(!('sessions' in s.lessons[0]) && !('length' in s.lessons[0]), 'legacy fields dropped');
+  eq([s.lessons[0].flexible, s.lessons[0].roomAlt, s.lessons[0].sameRoom, s.lessons[0].penalizeEnds, s.lessons[0].avoidConsecutiveDays, s.lessons[0].relations], [null, '', false, false, false, []]);
   assert.strictEqual(s.duties[0].kind, 'teaching');
   eq(s.duties[0].allowed, ['0-0']);
   assert.strictEqual(s.duties[0].maxPerSlot, 2);
@@ -175,9 +180,10 @@ check('(e) pruneDeadKeys removes keys on a period turned into a break and keeps 
   yard.allowed = ['0-3', '1-3'];
   s.settings.periods[4].type = 'break';
   const n = M.pruneDeadKeys(s);
-  assert.strictEqual(n, 2 + 1 + 1 + 1 + 5, 'Brian 2, Isabel 1, blocked 1, meeting 1, library 5');
-  eq(m2.unavailable, ['4-7', '4-8']);
-  eq(ar.unavailable, ['0-0', '0-1', '0-2', '0-5', '0-7', '0-8']);
+  assert.strictEqual(n, 1 + 1 + 5, 'blocked 1, meeting 1, library 5 — teacher ✕ on the new break survive (they keep a teacher off break duty)');
+  eq(m2.unavailable, ['4-7', '4-8', '0-4', '3-4']);
+  eq(ar.unavailable, ['0-0', '0-1', '0-2', '0-4', '0-5', '0-7', '0-8']);
+  assert.strictEqual(M.availableSlots(s, m2, 'break'), 2 * 5 - 2, 'the surviving ✕ count against break slots');
   eq(s.settings.blocked, ['1-0']);
   eq(s.meetings[1].allowed, ['2-5']);
   eq(library.allowed, s.settings.days.map((_, d) => `${d}-5`));
@@ -189,6 +195,164 @@ check('(e) pruneDeadKeys removes keys on a period turned into a break and keeps 
   yard.allowed.push('0-4');
   assert.strictEqual(M.pruneDeadKeys(s), 1);
   eq(yard.allowed, ['0-3', '1-3']);
+  // A lunch period is usable by nobody, so teacher keys on it do go; keys outside the week too.
+  s.settings.periods[4].type = 'lunch';
+  m2.dispreferred.push('9-0');
+  assert.strictEqual(M.pruneDeadKeys(s), 4, 'Brian ✕ 0-4 and 3-4 and Isabel ✕ 0-4 on lunch, ~ 9-0 outside the week');
+  eq(m2.unavailable, ['4-7', '4-8']);
+  eq(m2.dispreferred, []);
+  eq(ar.unavailable, ['0-0', '0-1', '0-2', '0-5', '0-7', '0-8']);
+});
+
+// ---------- (f) lesson distributions, flexible rows, relations ----------
+check('(f) parseLengths accepts 221, 2,2,1 and 2 2 1; rejects empty, text, zero and too-long blocks', () => {
+  eq(M.parseLengths('221'), [2, 2, 1]);
+  eq(M.parseLengths('2,2,1'), [2, 2, 1]);
+  eq(M.parseLengths(' 2 2  1 '), [2, 2, 1]);
+  eq(M.parseLengths('2, 2 ,1'), [2, 2, 1]);
+  eq(M.parseLengths('1'), [1]);
+  eq(M.parseLengths('10,1'), [10, 1], 'multi-digit blocks need a separator');
+  for (const bad of ['', '   ', 'abc', '2x1', '201', '0', '2-2', null, undefined]) assert.strictEqual(M.parseLengths(bad), null, `"${bad}" → null`);
+  assert.strictEqual(M.parseLengths('8', 7), null, 'a block above max is rejected');
+  eq(M.parseLengths('7', 7), [7]);
+  assert.strictEqual(M.parseLengths('3 1', 2), null);
+});
+check('(f) canPartition and partition', () => {
+  assert.strictEqual(M.canPartition(6, 1, 2), true);
+  assert.strictEqual(M.canPartition(7, 3, 3), false);
+  assert.strictEqual(M.canPartition(0, 1, 2), false);
+  assert.strictEqual(M.canPartition(5, 2, 3), true);
+  assert.strictEqual(M.canPartition(1, 2, 2), false);
+  assert.strictEqual(M.canPartition(4, 3, 2), false, 'min above max');
+  assert.strictEqual(M.canPartition('6', '2', '2'), true, 'numeric strings from inputs');
+  eq(M.partition(6, 1, 2), [2, 2, 2]);
+  eq(M.partition(7, 2, 3), [3, 2, 2]);
+  eq(M.partition(5, 1, 5), [5]);
+  assert.strictEqual(M.partition(7, 3, 3), null);
+});
+check('(f) migrate converts legacy rows, keeps lengths rows, mirrors relations and drops dangling ones', () => {
+  const base = M.emptyState();
+  base.subjects = [{ id: 's1', name: 'Maths', code: 'MAT', color: '#000' }];
+  base.teachers = [{ id: 't1', name: 'A', code: 'A' }];
+  base.classes = [{ id: 'c1', name: '7A' }];
+  base.lessons = [
+    { id: 'l1', subjectId: 's1', teacherId: 't1', classIds: ['c1'], sessions: 3, length: 2, room: '', maxOnePerDay: true, parallel: '' },
+    { id: 'l2', subjectId: 's1', teacherId: 't1', classIds: ['c1'], lengths: [1, 3], sessions: 9, length: 9, room: '', relations: [{ type: 'differentDays', lessonId: 'l1' }, { type: 'daysApart', lessonId: 'l3', min: 1, max: 2 }, { type: 'bogus', lessonId: 'l1' }, { type: 'notSameTime', lessonId: 'l2' }] },
+    { id: 'l3', subjectId: 's1', teacherId: 't1', classIds: ['c1'], lengths: [2], relations: [{ type: 'consecutive', lessonId: 'gone' }], flexible: { total: 5, min: 2, max: 3 }, roomAlt: 'type:Lab' },
+  ];
+  const s = M.migrate(clone(base));
+  const [l1, l2, l3] = s.lessons;
+  eq(l1.lengths, [2, 2, 2], 'sessions 3 × length 2');
+  assert.ok(!('sessions' in l1) && !('length' in l1));
+  eq(l2.lengths, [1, 3], 'an explicit lengths array wins over stale sessions/length');
+  assert.ok(!('sessions' in l2));
+  eq(l2.relations, [{ type: 'differentDays', lessonId: 'l1' }, { type: 'daysApart', lessonId: 'l3', min: 1, max: 2 }], 'unknown type and self-relation dropped');
+  eq(l1.relations, [{ type: 'differentDays', lessonId: 'l2' }], 'mirrored onto the other row');
+  eq(l3.relations, [{ type: 'daysApart', lessonId: 'l2', min: 1, max: 2 }], 'dangling relation dropped, mirror added with min/max');
+  eq(l3.flexible, { total: 5, min: 2, max: 3 });
+  eq(l3.lengths, [3, 2], 'a flexible row keeps one valid partition of its total');
+  assert.strictEqual(l3.room, 'type:Lab'); assert.strictEqual(l3.roomAlt, '', 'alternatives without a room become the room');
+  // Already-migrated data passes through unchanged.
+  eq(M.migrate(clone(s)), s);
+  const s2 = clone(s); s2.lessons[0].flexible = { total: 7, min: 3, max: 3 };
+  assert.strictEqual(M.migrate(s2).lessons[0].flexible, null, 'an impossible flexible spec is dropped');
+});
+check('(f) removeLesson / addRelation / removeRelation keep both rows in step', () => {
+  const s = school('ttttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  const a = add.lesson(s, subj, t, [c], 2), b = add.lesson(s, subj, t, [c], 2), d = add.lesson(s, subj, t, [c], 1);
+  assert.ok(M.addRelation(s, a.id, b.id, 'daysApart', { min: 1, max: '' }));
+  assert.ok(M.addRelation(s, a.id, d.id, 'notSameTime'));
+  assert.ok(!M.addRelation(s, a.id, a.id, 'notSameTime'), 'no self relation');
+  assert.ok(!M.addRelation(s, a.id, b.id, 'bogus'));
+  eq(b.relations, [{ type: 'daysApart', lessonId: a.id, min: 1, max: 0 }]);
+  eq(a.relations.map((r) => r.lessonId), [b.id, d.id]);
+  M.addRelation(s, b.id, a.id, 'daysApart', { min: 2, max: 3 });
+  eq(a.relations.find((r) => r.type === 'daysApart'), { type: 'daysApart', lessonId: b.id, min: 2, max: 3 }, 'same type replaces');
+  M.removeRelation(s, d.id, a.id, 'notSameTime');
+  eq(a.relations.length, 1); eq(d.relations, []);
+  M.removeLesson(s, b.id);
+  eq(s.lessons.map((l) => l.id), [a.id, d.id]); eq(a.relations, []);
+});
+check('(f) workload uses lengths', () => {
+  const s = school('ttttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s), c2 = add.cls(s, 'B');
+  add.lesson(s, subj, t, [c], [2, 2, 1]);
+  add.lesson(s, subj, add.teacher(s, 'U'), [c, c2], [3]);
+  const w = M.workload(s);
+  assert.strictEqual(w.t[t.id], 5); assert.strictEqual(w.c[c.id], 8); assert.strictEqual(w.c[c2.id], 3);
+});
+check('(f) validate: distribution and relation errors', () => {
+  const mk = () => { const s = school('tttbtt', 5); return { s, subj: add.subject(s), t: add.teacher(s), c: add.cls(s) }; };
+  let { s, subj, t, c } = mk();
+  const l = add.lesson(s, subj, t, [c], 2);
+  l.lengths = [];
+  assert.ok(hasMsg(s, /err: .*has no valid distribution/), msgs(s).join('\n'));
+  l.lengths = [2, 0];
+  assert.ok(hasMsg(s, /err: .*has no valid distribution/));
+  // A block longer than the longest run of teaching periods (3 here), unless it may straddle the break.
+  l.lengths = [4, 1];
+  assert.ok(hasMsg(s, /err: .*needs 4 consecutive teaching periods/), msgs(s).join('\n'));
+  l.allowBreakInside = true;
+  assert.ok(!hasMsg(s, /consecutive teaching periods/));
+  l.lengths = [6];
+  assert.ok(hasMsg(s, /err: .*block of 6 periods but a day has only 5 teaching periods/), msgs(s).join('\n'));
+  // Parallel rows need the same multiset of lengths.
+  ({ s, subj, t, c } = mk());
+  const p1 = add.lesson(s, subj, t, [c], [2, 1], 1, { parallel: 'G' });
+  const p2 = add.lesson(s, subj, add.teacher(s, 'U'), [c], [1, 2], 1, { parallel: 'g' });
+  assert.ok(!hasMsg(s, /different/), msgs(s).join('\n'));
+  p2.lengths = [1, 1, 1];
+  const m = msgs(s).filter((x) => /different (session lengths|distributions)/.test(x));
+  assert.strictEqual(m.length, 1, `reported exactly once:\n${msgs(s).join('\n')}`);
+  p2.lengths = [1, 2];
+  // Flexible total that no split reaches.
+  p1.flexible = { total: 7, min: 3, max: 3 }; p1.parallel = ''; p2.parallel = '';
+  assert.strictEqual(msgs(s).filter((x) => /cannot be split into blocks of 3–3/.test(x)).length, 1, msgs(s).join('\n'));
+  p1.flexible = { total: 4, min: 2, max: 2 };
+  assert.ok(!hasMsg(s, /cannot be split/), msgs(s).join('\n'));
+  // Relations.
+  ({ s, subj, t, c } = mk());
+  const a = add.lesson(s, subj, t, [c], 3), b = add.lesson(s, subj, t, [c], 2), d = add.lesson(s, subj, t, [c], 3);
+  M.addRelation(s, a.id, b.id, 'consecutive');
+  assert.strictEqual(msgs(s).filter((x) => /consecutive.*(have 3 and 2 sessions|different numbers of sessions)/.test(x)).length, 1, `reported once (by the engine or the model):\n${msgs(s).join('\n')}`);
+  M.removeRelation(s, a.id, b.id, 'consecutive');
+  M.addRelation(s, a.id, d.id, 'differentDays');
+  assert.ok(hasMsg(s, /err: .*different days but have 3 \+ 3 sessions and the week has only 5 days/), msgs(s).join('\n'));
+  M.removeRelation(s, a.id, d.id, 'differentDays');
+  M.addRelation(s, a.id, b.id, 'differentDays');
+  assert.ok(!hasMsg(s, /different days/), msgs(s).join('\n'));
+  M.addRelation(s, a.id, d.id, 'daysApart', { min: 1, max: 0 });
+  assert.ok(hasMsg(s, /err: .*different days but have 3 \+ 3 sessions/), msgs(s).join('\n'));
+  M.addRelation(s, a.id, d.id, 'daysApart', { min: 0, max: 2 });
+  assert.ok(!hasMsg(s, /different days but have 3 \+ 3/), 'a max-only daysApart does not need distinct days');
+  M.addRelation(s, a.id, d.id, 'daysApart', { min: 3, max: 2 });
+  assert.ok(hasMsg(s, /err: .*days apart max \(2\) is below min \(3\)/), msgs(s).join('\n'));
+  a.relations.push({ type: 'notSameTime', lessonId: 'nope' });
+  assert.ok(hasMsg(s, /err: .*relation \(Not at the same time\) to a lesson row that no longer exists/), msgs(s).join('\n'));
+  assert.strictEqual(M.dropDeadRelations(s), 1);
+  assert.ok(!hasMsg(s, /no longer exists/));
+});
+check('(f) validate: same-room and alternative-room warnings', () => {
+  const s = school('ttttt', 5);
+  const subj = add.subject(s), t = add.teacher(s), c = add.cls(s);
+  s.rooms.push({ id: 'r1', name: 'Lab', type: 'Lab', unavailable: [], dispreferred: [] }, { id: 'r2', name: 'Room', type: 'Classroom', unavailable: [], dispreferred: [] }, { id: 'r3', name: 'Room 2', type: 'Classroom', unavailable: [], dispreferred: [] });
+  const l = add.lesson(s, subj, t, [c], 2, 1, { room: 'type:Lab', sameRoom: true });
+  assert.ok(hasMsg(s, /warn: .*“Same room for all sessions” has no effect — there is only one Lab room/), msgs(s).join('\n'));
+  l.room = 'type:Classroom';
+  assert.ok(!hasMsg(s, /Same room/));
+  l.room = 'type:Lab'; l.lengths = [2];
+  assert.ok(!hasMsg(s, /Same room/), 'one session: nothing to keep together');
+  l.sameRoom = false; l.room = ''; l.roomAlt = 'type:Lab';
+  assert.ok(hasMsg(s, /warn: .*alternative rooms but no room — treated as “Any Lab”/), msgs(s).join('\n'));
+  l.room = 'r2';
+  assert.ok(!hasMsg(s, /warn/), msgs(s).join('\n'));
+});
+check('(f) sampleState() still validates clean and has lengths on every row', () => {
+  const s = M.sampleState();
+  assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
+  eq(msgs(s), []);
+  assert.strictEqual(M.validate(s).units, s.lessons.reduce((n, l) => n + l.lengths.length, 0) - 2 + s.meetings.length + 2 * 5 + 2 * 6, 'one unit per length (the parallel pair merges), plus meetings and duty hours');
 });
 check('(e) prunePlacements drops placements the engine cannot restore and reports how many', () => {
   const s = school('ttttt');

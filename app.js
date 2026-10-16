@@ -2,7 +2,8 @@
 // (state shape, migration, slot arithmetic, validation) lives in model.js as window.Model; every
 // Model function takes the state it works on. `state` is autosaved to localStorage.
 const {
-  uid, esc, PALETTE, WEIGHT_LABELS, PERIOD_TYPES, emptyState, sampleState, migrate,
+  uid, esc, PALETTE, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
+  newLesson, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -160,6 +161,7 @@ function cleanupRefs() {
     if (l.room && !l.room.startsWith('type:') && !r.has(l.room)) l.room = '';
   });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
+  dropDeadRelations(state);
   state.meetings.forEach((m) => {
     m.teacherIds = (m.teacherIds || []).filter((id) => t.has(id));
     if (m.room && !m.room.startsWith('type:') && !r.has(m.room)) m.room = '';
@@ -220,25 +222,50 @@ function roomOptions(sel) {
     <optgroup label="Specific room">${state.rooms.map((r) => `<option value="${r.id}" ${sel === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`;
 }
 
+// "Any <type>" choices for the alternative room set of a lesson row.
+function roomAltOptions(sel) {
+  const types = [...new Set(state.rooms.map((r) => r.type).filter(Boolean))];
+  return `<option value="" ${!sel ? 'selected' : ''}>— none —</option>${types.map((t) => `<option value="type:${esc(t)}" ${sel === 'type:' + t ? 'selected' : ''}>Any ${esc(t)}</option>`).join('')}`;
+}
+
+const ROW_OPTIONS = [
+  ['sameRoom', 'Same room for all sessions', 'Hard rule: every session of this row uses one and the same room.'],
+  ['penalizeEnds', 'Avoid the first and last period of the day', 'Soft: weighted by “Lesson in the first or last period of a day”.'],
+  ['avoidConsecutiveDays', 'Avoid consecutive days', 'Soft, for rows with 2–3 sessions only: spread them across the week. Ignored for other rows.'],
+  ['allowBreakInside', 'Break inside', 'A multi-period session may straddle a break (never lunch).'],
+  ['maxOnePerDay', 'At most one session per day', 'Hard rule: the sessions of this row go on different days.'],
+];
+
+// The distribution cell of a row: the session lengths, or — for a flexible row — the engine's
+// current choice when a timetable exists, else the flexible spec. `eng` is null without a timetable.
+function distributionCell(l, eng) {
+  if (!l.flexible) return `<input data-f="lengths" value="${esc(lengthsText(l.lengths))}" placeholder="e.g. 2 2 1" class="dist" aria-label="Distribution" title="Session lengths, e.g. “2 2 1” = two doubles and a single">`;
+  const f = l.flexible;
+  const chosen = eng && eng.groupLengths && eng.lessonGroup && eng.groupLengths[eng.lessonGroup[l.id]];
+  const text = chosen ? `${lengthsText(chosen)} (flexible ${f.total}, ${f.min}–${f.max})` : `flexible: total ${f.total} (${f.min}–${f.max})`;
+  return `<input value="${esc(text)}" readonly class="dist flex" aria-label="Distribution" title="The engine chooses blocks of ${f.min}–${f.max} periods adding up to ${f.total}">`;
+}
+
 function renderLessons(root) {
-  const p = panel(root, 'Lessons', 'Each row is “subject × teacher × class(es)” taught N times per week. Length 2 = double period. Several classes = joint lesson. Give rows the same <b>Parallel group</b> name to run them at the same time (split classes, electives, sets) — they need the same sessions and length.');
+  const p = panel(root, 'Lessons', 'Each row is “subject × teacher × class(es)”. <b>Distribution</b> lists the length of every weekly session: “2 2 1” = two doubles and a single; <b>Flexible</b> lets the engine choose the split. Several classes = joint lesson. Give rows the same <b>Parallel group</b> name to run them at the same time (split classes, electives, sets) — they need the same distribution. <b>Room</b> is the preferred (or only) room; <b>Alternatives</b> adds every room of a type as fallback. <b>Options</b> holds the per-row rules (1/day, break inside, same room, …); <b>Relations</b> ties rows together (different days, consecutive, …).');
   p.querySelector('[data-slot=actions]').innerHTML = `<select data-filter aria-label="Filter by class"><option value="">All classes</option>${state.classes.map((c) => `<option value="${c.id}" ${ui.lessonFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><button data-add>+ Add lesson</button>`;
   const list = state.lessons.filter((l) => !ui.lessonFilter || (l.classIds || []).includes(ui.lessonFilter));
   const opt = (arr, sel, empty) => `${empty ? `<option value="">${empty}</option>` : ''}${arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
   const groups = [...new Set(state.lessons.map((l) => (l.parallel || '').trim()).filter(Boolean))];
-  const maxSessions = D() * teachingPeriods(state);
+  const eng = state.lessons.some((l) => l.flexible) && state.timetable.placements.length ? currentEngine() : null;
+  const nOpts = (l) => ROW_OPTIONS.filter(([k]) => l[k]).length;
   p.insertAdjacentHTML('beforeend', list.length ? `<datalist id="parallelGroups">${groups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
-    <div class="table-wrap"><table class="edit"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th>Room</th><th>Sessions/wk</th><th>Length</th><th title="At most one session per day">1/day</th><th title="A double period may straddle a break">Break inside</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table class="edit lessons"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th title="Preferred room, or any room of a type">Room</th><th title="Fallback: any room of this type">Alternatives</th><th title="Length of every weekly session, e.g. 2 2 1">Distribution</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th><th></th><th></th></tr></thead><tbody>
     ${list.map((l) => `<tr data-id="${l.id}">
       <td><select data-f="subjectId" aria-label="Subject">${opt(state.subjects, l.subjectId)}</select></td>
       <td><select data-f="teacherId" aria-label="Teacher">${opt(state.teachers, l.teacherId, '— choose —')}</select></td>
       <td><button class="ghost" data-classes>${(l.classIds || []).map((id) => `<span class="chip">${esc(find('classes', id)?.name)}</span>`).join('') || '— choose —'}</button></td>
       <td><select data-f="room" aria-label="Room">${roomOptions(l.room)}</select></td>
-      <td><input type="number" min="1" max="${maxSessions}" data-f="sessions" value="${l.sessions}" style="max-width:80px" aria-label="Sessions per week"></td>
-      <td><select data-f="length" aria-label="Length">${[1, 2, 3].map((n) => `<option value="${n}" ${+l.length === n ? 'selected' : ''}>${n === 1 ? 'Single' : n === 2 ? 'Double' : 'Triple'}</option>`).join('')}</select></td>
-      <td><input type="checkbox" data-f="maxOnePerDay" ${l.maxOnePerDay ? 'checked' : ''} aria-label="At most one per day"></td>
-      <td><input type="checkbox" data-f="allowBreakInside" ${l.allowBreakInside ? 'checked' : ''} title="A double period may straddle a break" aria-label="Break inside"></td>
+      <td><select data-f="roomAlt" aria-label="Alternative rooms" ${l.room.startsWith('type:') ? 'disabled title="Room is already any room of a type"' : ''}>${roomAltOptions(l.roomAlt)}</select></td>
+      <td><div class="row dist-cell">${distributionCell(l, eng)}<small class="hint" title="Periods per week">= ${periodsOf(l)}</small><button class="ghost small ${l.flexible ? 'on' : ''}" data-flex title="Let the engine choose the distribution">Flexible</button></div></td>
       <td><input data-f="parallel" list="parallelGroups" value="${esc(l.parallel || '')}" placeholder="—" style="max-width:140px" aria-label="Parallel group"></td>
+      <td><button class="ghost small" data-options>Options${nOpts(l) ? ` (${nOpts(l)})` : ''}</button></td>
+      <td><button class="ghost small" data-relations>Relations (${(l.relations || []).length})</button></td>
       <td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div><p class="hint" style="margin-top:8px">${list.length} lesson rows${ui.lessonFilter ? ` · class load ${workload(state).c[ui.lessonFilter] || 0} of ${availableSlots(state, find('classes', ui.lessonFilter) || {})} periods` : ''}</p>`
     : '<p class="hint">No lessons yet. Add subjects, teachers and classes first, then click “+ Add lesson”.</p>');
@@ -246,21 +273,113 @@ function renderLessons(root) {
     if (e.target.dataset.filter !== undefined) { ui.lessonFilter = e.target.value; render(); return; }
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const l = find('lessons', tr.dataset.id); const f = e.target.dataset.f;
-    l[f] = e.target.type === 'checkbox' ? e.target.checked : (f === 'sessions' || f === 'length') ? Number(e.target.value) : e.target.value;
+    if (f === 'lengths') {
+      const max = teachingPeriods(state);
+      const lens = parseLengths(e.target.value, max);
+      if (!lens) { toast(`Enter the length of every session, e.g. “2 2 1” — whole numbers from 1 to ${max}.`, 4000); e.target.value = lengthsText(l.lengths); return; }
+      l.lengths = lens; changed(); render(); return;
+    }
+    l[f] = e.target.value;
+    // An alternative set without a room is just "any room of that type"; a type as room has no alternatives.
+    if (f === 'roomAlt' && !l.room) { l.room = l.roomAlt; l.roomAlt = ''; }
+    if (f === 'room' && l.room.startsWith('type:')) l.roomAlt = '';
     changed();
+    if (f === 'room' || f === 'roomAlt') render();
   });
   p.addEventListener('click', (e) => {
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.dataset.add !== undefined) {
       if (!state.subjects.length) { toast('Add a subject first.'); return; }
-      state.lessons.push({ id: uid(), subjectId: state.subjects[0].id, teacherId: '', classIds: ui.lessonFilter ? [ui.lessonFilter] : [], room: '', sessions: 1, length: 1, maxOnePerDay: true, parallel: '', allowBreakInside: false });
+      state.lessons.push(newLesson(state.subjects[0].id, ui.lessonFilter ? [ui.lessonFilter] : []));
       changed(); render(); return;
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
     const l = find('lessons', tr.dataset.id);
-    if (btn.dataset.del !== undefined) { state.lessons = state.lessons.filter((x) => x !== l); changed(); render(); }
+    if (btn.dataset.del !== undefined) { removeLesson(state, l.id); changed(); render(); }
     if (btn.dataset.classes !== undefined) pickClasses(l);
+    if (btn.dataset.flex !== undefined) editFlexible(l);
+    if (btn.dataset.options !== undefined) editRowOptions(l);
+    if (btn.dataset.relations !== undefined) editRelations(l);
   });
+}
+
+// Flexible distribution: the engine chooses blocks of min..max periods adding up to total.
+function editFlexible(l) {
+  const max = teachingPeriods(state);
+  const f = l.flexible || { total: periodsOf(l), min: Math.min(...l.lengths), max: Math.max(...l.lengths) };
+  openModal(`Flexible distribution — ${describeLesson(state, l.id)}`, `
+    <label class="row" style="gap:6px;margin-bottom:10px"><input type="checkbox" id="flexOn" ${l.flexible ? 'checked' : ''}> Let the engine choose the distribution</label>
+    <div class="form-grid" id="flexFields">
+      <label>Periods per week <input type="number" id="flexTotal" min="1" max="${max * D()}" value="${f.total}"></label>
+      <label>Shortest block <input type="number" id="flexMin" min="1" max="${max}" value="${f.min}"></label>
+      <label>Longest block <input type="number" id="flexMax" min="1" max="${max}" value="${f.max}"></label>
+    </div>
+    <p class="hint" id="flexHint"></p>`, (v) => {
+    if (v !== 'save') return;
+    const on = $('#flexOn').checked;
+    if (!on) { l.flexible = null; changed(); render(); return; }
+    const spec = { total: Number($('#flexTotal').value), min: Number($('#flexMin').value), max: Number($('#flexMax').value) };
+    l.flexible = spec;
+    // Keep `lengths` as one valid split so session and period counts stay meaningful.
+    l.lengths = partition(spec.total, spec.min, spec.max);
+    changed(); render();
+  }, '<button value="cancel" class="ghost">Cancel</button><button value="save">Save</button>');
+  const refresh = () => {
+    const on = $('#flexOn').checked;
+    $('#flexFields').querySelectorAll('input').forEach((i) => { i.disabled = !on; });
+    const total = Number($('#flexTotal').value), mn = Number($('#flexMin').value), mx = Number($('#flexMax').value);
+    const ok = !on || (Number.isInteger(total) && Number.isInteger(mn) && Number.isInteger(mx) && mn >= 1 && mx <= max && canPartition(total, mn, mx));
+    $('#flexHint').textContent = !on ? `Off — the row keeps its distribution “${lengthsText(l.lengths)}”.`
+      : ok ? `For example ${lengthsText(partition(total, mn, mx))}; the engine may pick any split into blocks of ${mn}–${mx} periods.`
+        : `${total || 0} periods cannot be split into blocks of ${mn || '?'}–${mx || '?'} periods (blocks of 1 to ${max}).`;
+    $('#flexHint').style.color = ok ? '' : 'var(--danger)';
+    return ok;
+  };
+  refresh();
+  $('#modalContent').onchange = refresh;
+  $('#modalForm').onsubmit = (ev) => { if (ev.submitter?.value === 'save' && !refresh()) { ev.preventDefault(); toast('Fix the flexible distribution first, or cancel.'); } };
+}
+
+function editRowOptions(l) {
+  openModal(`Options — ${describeLesson(state, l.id)}`, `<div class="opts">${ROW_OPTIONS.map(([k, label, hint]) => `<label><input type="checkbox" data-opt="${k}" ${l[k] ? 'checked' : ''}> <span>${label}<small class="hint">${hint}</small></span></label>`).join('')}</div>`, () => {
+    $('#modalContent').querySelectorAll('input[data-opt]').forEach((i) => { l[i.dataset.opt] = i.checked; });
+    changed(); render();
+  });
+}
+
+// Relations with other lesson rows; each is stored on both rows (model.addRelation / removeRelation).
+function editRelations(l) {
+  const mine = new Set(l.classIds || []);
+  const others = state.lessons.filter((x) => x !== l);
+  const same = others.filter((x) => (x.classIds || []).some((c) => mine.has(c))), rest = others.filter((x) => !same.includes(x));
+  const rowOpt = (x) => `<option value="${x.id}">${esc(describeLesson(state, x.id))}</option>`;
+  const listHtml = () => ((l.relations || []).length ? `<table class="edit rel"><tbody>${l.relations.map((r, i) => `<tr><td>${esc(REL_LABELS[r.type] || r.type)}${r.type === 'daysApart' ? ` <small class="hint">(${r.min}–${r.max || '∞'} days)</small>` : ''}</td><td>${esc(describeLesson(state, r.lessonId))}</td><td><button type="button" class="danger" data-del-rel="${i}" title="Remove on both rows">✕</button></td></tr>`).join('')}</tbody></table>`
+    : '<p class="hint">No relations yet.</p>');
+  openModal(`Relations — ${describeLesson(state, l.id)}`, `<div id="relList">${listHtml()}</div>
+    ${others.length ? `<h4>Add a relation</h4><div class="row rel-add">
+      <select id="relType" aria-label="Relation type">${Object.keys(REL_LABELS).map((k) => `<option value="${k}">${REL_LABELS[k]}</option>`).join('')}</select>
+      <select id="relOther" aria-label="Other lesson row">${same.length ? `<optgroup label="Same class">${same.map(rowOpt).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="${same.length ? 'Other rows' : 'All rows'}">${rest.map(rowOpt).join('')}</optgroup>` : ''}</select>
+      <label class="row" id="relRange" style="gap:4px" hidden>min <input type="number" id="relMin" min="0" max="${D()}" value="1" style="width:64px"> max <input type="number" id="relMax" min="0" max="${D()}" value="" placeholder="∞" style="width:64px"></label>
+      <button type="button" data-add-rel>Add</button></div>
+      <p class="hint">Relations are symmetric: they appear on both rows and are removed from both.</p>` : '<p class="hint">Add another lesson row to relate this one to.</p>'}`,
+  () => render());
+  const box = $('#modalContent');
+  box.onchange = (e) => { if (e.target.id === 'relType') $('#relRange').hidden = e.target.value !== 'daysApart'; };
+  box.onclick = (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.delRel !== undefined) {
+      const r = l.relations[+t.dataset.delRel];
+      removeRelation(state, l.id, r.lessonId, r.type);
+    } else if (t.dataset.addRel !== undefined) {
+      const type = $('#relType').value, other = $('#relOther').value;
+      const min = Number($('#relMin').value) || 0, max = $('#relMax').value === '' ? 0 : Number($('#relMax').value) || 0;
+      if (type === 'daysApart' && !min && !max) { toast('Give a minimum and/or maximum number of days apart.'); return; }
+      if (type === 'daysApart' && max && max < min) { toast('Max days apart is below min.'); return; }
+      addRelation(state, l.id, other, type, { min, max });
+    } else return;
+    changed();
+    $('#relList').innerHTML = listHtml();
+  };
 }
 
 function pickClasses(l) {
@@ -331,6 +450,8 @@ function openModal(title, html, onClose, actions) {
   $('#modalTitle').textContent = title;
   $('#modalContent').innerHTML = html;
   $('#modalContent').onclick = null;
+  $('#modalContent').onchange = null;
+  $('#modalForm').onsubmit = null;
   $('#modalActions').innerHTML = actions || '<button value="close">Done</button>';
   dlg.returnValue = '';
   dlg.onclose = () => { if (onClose) onClose(dlg.returnValue); };
@@ -425,7 +546,8 @@ function pickTeachers(meeting) {
 
 function editAssignments(duty) {
   const hours = Object.fromEntries((duty.assignments || []).map((a) => [a.teacherId, a.hours]));
-  const maxHours = Math.max(1, dutySlots(state, duty) * Math.max(1, Number(duty.maxPerSlot) || 1));
+  // One teacher can hold at most one unit per duty period.
+  const maxHours = Math.max(1, dutySlots(state, duty));
   openModal(`Teachers on “${duty.name}”`, `<p class="hint">Weekly on-call hours per teacher (0 = not on this duty).</p>
     <div class="table-wrap"><table class="edit"><tbody>${state.teachers.map((t) => `<tr><td>${esc(t.name)}</td><td><input type="number" min="0" max="${maxHours}" data-t="${t.id}" value="${hours[t.id] || 0}" style="max-width:90px" aria-label="Hours for ${esc(t.name)}"></td></tr>`).join('')}</tbody></table></div>`, () => {
     duty.assignments = [...$('#modalContent').querySelectorAll('input[data-t]')]
@@ -545,6 +667,10 @@ function renderStats(box) {
     <div class="stat"><b>${s.dispreferred}</b><span>non-preferred periods used</span></div>
     <div class="stat"><b>${s.teacherMin}</b><span>teacher days below minimum</span></div>
     ${state.duties.length ? `<div class="stat"><b>${s.dutyUncovered}</b><span>duty periods uncovered</span></div>` : ''}
+    ${s.ends ? `<div class="stat"><b>${s.ends}</b><span>lessons in a first/last period</span></div>` : ''}
+    ${s.roomPref ? `<div class="stat"><b>${s.roomPref}</b><span>lessons not in their preferred room</span></div>` : ''}
+    ${s.roomSame ? `<div class="stat"><b>${s.roomSame}</b><span>room changes within one lesson</span></div>` : ''}
+    ${s.consecutiveDays ? `<div class="stat"><b>${s.consecutiveDays}</b><span>sessions on consecutive days</span></div>` : ''}
     <div class="stat"><b>${s.cost}</b><span>weighted score (lower is better)</span></div>
   </div>
   ${unplaced.length ? `<div class="unplaced"><h3>Not placed (${unplaced.length})</h3><ul class="issues">${unplaced.map((u) => `<li class="err">${esc(describeUnit(state, u.id))}</li>`).join('')}</ul>
@@ -631,17 +757,28 @@ const gridFor = (e, mode, id) => (mode === 'duty' ? dutyGridHtml(e, id) : gridHt
 // whose first cell is already covered is drawn inside the covering block, never as its own cell.
 function gridLayout(e, mode, id) {
   const at = {};
+  // Extend block `entry` (first cell `first`) down to `end`, swallowing any block that starts
+  // inside it and reaching its last cell too, so every covered cell points at `first`.
+  const extend = (entry, first, end) => {
+    for (let k = first + 1; k <= end; k++) {
+      const o = at[k];
+      if (o && o.cov === undefined) { entry.extra.push(o.u, ...o.extra); end = Math.max(end, k + o.span - 1); }
+      at[k] = { cov: first };
+    }
+    entry.span = end - first + 1;
+  };
   unitsFor(e, mode, id).forEach((u) => {
     const cells = cellsOf(e, u); const first = cells[0], last = cells[cells.length - 1];
     const taken = at[first];
-    if (taken) { (taken.cov === undefined ? taken : at[taken.cov]).extra.push(u); return; }
-    const entry = { u, span: last - first + 1, extra: [] };
-    for (let k = first + 1; k <= last; k++) {
-      const o = at[k];
-      if (o && o.cov === undefined) entry.extra.push(o.u, ...o.extra);
-      at[k] = { cov: first };
+    if (taken) {
+      const hostFirst = taken.cov === undefined ? first : taken.cov; const host = at[hostFirst];
+      host.extra.push(u);
+      extend(host, hostFirst, Math.max(last, hostFirst + host.span - 1));
+      return;
     }
+    const entry = { u, span: 1, extra: [] };
     at[first] = entry;
+    extend(entry, first, last);
   });
   return at;
 }
@@ -798,9 +935,12 @@ function lessonMenu(unitId) {
   e.remove(u.i);
   const roomRows = u.parts.map((part, k) => {
     if (!part.roomCands) return '';
+    // With an alternative set, the first candidate is the row's preferred room.
+    const lesson = part.kind === 'lesson' ? find('lessons', part.lessonId) : null;
+    const pref = lesson && lesson.roomAlt && lesson.room && !lesson.room.startsWith('type:') ? lesson.room : null;
     const opts = part.roomCands.map((r) => {
       const busy = e.roomConflicts(u.i, pos.s, u.parts.map((_, j) => (j === k ? r : null))).size > 0 || cells.some((c) => e.blocked['r' + r].has(c));
-      return `<option value="${r}" ${pos.rooms[k] === r ? 'selected' : ''} ${busy && pos.rooms[k] !== r ? 'disabled' : ''}>${esc(find('rooms', r)?.name)}${busy && pos.rooms[k] !== r ? ' (busy)' : ''}</option>`;
+      return `<option value="${r}" ${pos.rooms[k] === r ? 'selected' : ''} ${busy && pos.rooms[k] !== r ? 'disabled' : ''}>${esc(find('rooms', r)?.name)}${r === pref ? ' (preferred)' : ''}${busy && pos.rooms[k] !== r ? ' (busy)' : ''}</option>`;
     }).join('');
     return `<label class="row" style="margin:6px 0">${esc(describePart(part))}: <select data-part="${k}">${opts}</select></label>`;
   }).join('');
