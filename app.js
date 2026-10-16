@@ -181,10 +181,12 @@ function cleanupRefs() {
 
 const textCol = (label, f, ph = '') => ({ label, input: (x) => `<input data-f="${f}" value="${esc(x[f])}" placeholder="${ph}" aria-label="${label}">` });
 const numCol = (label, f, title, max = teachingPeriods(state)) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="number" min="0" max="${max}" data-f="${f}" value="${x[f] || ''}" placeholder="—" style="max-width:80px" aria-label="${label}">` });
+const deptCol = () => ({ label: '<span title="The teacher’s department (add departments on the Subjects tab). The lesson editor offers a subject’s department first.">Department</span>',
+  input: (x) => `<select data-f="departmentId" aria-label="Department"><option value="">— none —</option>${state.departments.map((d) => `<option value="${d.id}" ${x.departmentId === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>` });
 const boolCol = (label, f, title) => ({ label: `<span title="${title}">${label}</span>`, input: (x) => `<input type="checkbox" data-f="${f}" ${x[f] ? 'checked' : ''} aria-label="${label}">` });
 
 function renderTeachers(root) {
-  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'e.g. ARA'),
+  const cols = [textCol('Name', 'name'), textCol('Code', 'code', 'e.g. ARA'), deptCol(),
     numCol('Max/day', 'maxPerDay', 'Hard limit: never more periods than this in one day'),
     numCol('Min/day', 'minPerDay', 'Preference: on days they teach, at least this many periods'),
     numCol('Max in a row', 'maxConsecutive', 'Preference: no more than this many teaching periods back to back (a break or lunch ends the run)'),
@@ -246,8 +248,8 @@ function renderRooms(root) {
 function renderSubjects(root) {
   const p = panel(root, 'Subjects', 'Colour and short code are used in the timetables. Availability: ✕ = the subject is never scheduled then (PE never in period 1), ~ = avoided when possible; it applies to every lesson of the subject.');
   p.querySelector('[data-slot=actions]').innerHTML = `<button data-add>+ Add</button>`;
-  p.insertAdjacentHTML('beforeend', state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Colour</th><th>Name</th><th>Code</th><th></th><th></th></tr></thead><tbody>
-    ${state.subjects.map((s) => `<tr data-id="${s.id}"><td><input type="color" data-f="color" value="${esc(s.color)}" aria-label="Colour"></td><td><input data-f="name" value="${esc(s.name)}" aria-label="Name"></td><td><input data-f="code" value="${esc(s.code)}" style="max-width:100px" aria-label="Code"></td><td><button class="ghost" data-avail title="Periods when this subject is never (✕) or preferably not (~) scheduled, for every class and teacher">${availLabel(s)}</button></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}
+  p.insertAdjacentHTML('beforeend', state.subjects.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Colour</th><th>Name</th><th>Code</th><th>Department</th><th></th><th></th></tr></thead><tbody>
+    ${state.subjects.map((s) => `<tr data-id="${s.id}"><td><input type="color" data-f="color" value="${esc(s.color)}" aria-label="Colour"></td><td><input data-f="name" value="${esc(s.name)}" aria-label="Name"></td><td><input data-f="code" value="${esc(s.code)}" style="max-width:100px" aria-label="Code"></td><td><select data-f="departmentId" aria-label="Department"><option value="">— none —</option>${state.departments.map((d) => `<option value="${d.id}" ${s.departmentId === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></td><td><button class="ghost" data-avail title="Periods when this subject is never (✕) or preferably not (~) scheduled, for every class and teacher">${availLabel(s)}</button></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="hint">Nothing here yet. Click “+ Add”.</p>');
   p.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
@@ -255,7 +257,7 @@ function renderSubjects(root) {
   });
   p.addEventListener('click', (e) => {
     if (e.target.dataset.add !== undefined) {
-      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [] });
+      state.subjects.push({ id: uid(), name: `Subject ${state.subjects.length + 1}`, code: '', color: PALETTE[state.subjects.length % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], departmentId: '' });
       changed(); render();
     } else if (e.target.dataset.avail !== undefined) {
       const sj = find('subjects', e.target.closest('tr').dataset.id); editAvailability(sj, `Subject: ${sj.name}`);
@@ -265,6 +267,26 @@ function renderSubjects(root) {
       if (!confirm(`Delete subject${n ? ` and its ${n} lesson(s)` : ''}?`)) return;
       state.subjects = state.subjects.filter((s) => s.id !== id); cleanupRefs(); changed(); render();
     }
+  });
+
+  // Departments group teachers and subjects; the Lessons tab offers a subject's department first.
+  const dp = panel(root, 'Departments', 'Departments group teachers and subjects (set both in their tables). In Lessons the teacher list starts with the subject’s department, and rows can be filtered by department.');
+  dp.querySelector('[data-slot=actions]').innerHTML = '<button data-add>+ Add department</button>';
+  dp.insertAdjacentHTML('beforeend', state.departments.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Subjects</th><th>Teachers</th><th></th></tr></thead><tbody>
+    ${state.departments.map((d) => `<tr data-id="${d.id}"><td><input data-f="name" value="${esc(d.name)}" aria-label="Department name"></td>
+      <td>${state.subjects.filter((x) => x.departmentId === d.id).map((x) => `<span class="chip">${esc(x.name)}</span>`).join('') || '<span class="hint">none</span>'}</td>
+      <td>${state.teachers.filter((x) => x.departmentId === d.id).map((x) => `<span class="chip">${esc(x.name)}</span>`).join('') || '<span class="hint">none</span>'}</td>
+      <td><button class="danger" data-del title="Delete">✕</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No departments yet.</p>');
+  dp.addEventListener('change', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr && e.target.dataset.f === 'name') { state.departments.find((d) => d.id === tr.dataset.id).name = e.target.value; changed(); } });
+  dp.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (btn.dataset.add !== undefined) { state.departments.push({ id: uid(), name: `Department ${state.departments.length + 1}` }); changed(); render(); return; }
+    const tr = btn.closest('tr[data-id]'); if (!tr || btn.dataset.del === undefined) return;
+    const id = tr.dataset.id;
+    if (!confirm('Delete this department? Its teachers and subjects stay but lose the department.')) return;
+    state.departments = state.departments.filter((d) => d.id !== id);
+    [...state.teachers, ...state.subjects].forEach((x) => { if (x.departmentId === id) x.departmentId = ''; });
+    changed(); render();
   });
 }
 
@@ -367,9 +389,20 @@ function renderLessons(root) {
   if (ui.gradeFilter && !state.grades.some((g) => g.id === ui.gradeFilter)) ui.gradeFilter = '';
   const gradeClasses = state.classes.filter((c) => !ui.gradeFilter || c.gradeId === ui.gradeFilter);
   if (ui.lessonFilter && !gradeClasses.some((c) => c.id === ui.lessonFilter)) ui.lessonFilter = '';
-  p.querySelector('[data-slot=actions]').innerHTML = `${state.grades.length ? `<select data-gfilter aria-label="Filter by grade"><option value="">All grades</option>${state.grades.map((g) => `<option value="${g.id}" ${ui.gradeFilter === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` : ''}<select data-filter aria-label="Filter by class"><option value="">All classes</option>${gradeClasses.map((c) => `<option value="${c.id}" ${ui.lessonFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><button data-add>+ Add lesson</button>`;
+  p.querySelector('[data-slot=actions]').innerHTML = `${state.grades.length ? `<select data-gfilter aria-label="Filter by grade"><option value="">All grades</option>${state.grades.map((g) => `<option value="${g.id}" ${ui.gradeFilter === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>` : ''}${state.departments.length ? `<select data-dfilter aria-label="Filter by department"><option value="">All departments</option>${state.departments.map((d) => `<option value="${d.id}" ${ui.deptFilter === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>` : ''}<select data-filter aria-label="Filter by class"><option value="">All classes</option>${gradeClasses.map((c) => `<option value="${c.id}" ${ui.lessonFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><button data-add>+ Add lesson</button>`;
   const inGrade = (l) => !ui.gradeFilter || (l.classIds || []).some((id) => find('classes', id)?.gradeId === ui.gradeFilter);
-  const list = state.lessons.filter((l) => inGrade(l) && (!ui.lessonFilter || (l.classIds || []).includes(ui.lessonFilter)));
+  if (ui.deptFilter && !state.departments.some((d) => d.id === ui.deptFilter)) ui.deptFilter = '';
+  const inDept = (l) => !ui.deptFilter || find('subjects', l.subjectId)?.departmentId === ui.deptFilter;
+  const list = state.lessons.filter((l) => inGrade(l) && inDept(l) && (!ui.lessonFilter || (l.classIds || []).includes(ui.lessonFilter)));
+  // The subject's department's teachers come first; every other teacher stays selectable.
+  const teacherOptions = (l) => {
+    const dept = find('subjects', l.subjectId)?.departmentId;
+    const o = (x) => `<option value="${x.id}" ${x.id === l.teacherId ? 'selected' : ''}>${esc(x.name)}</option>`;
+    const head = `<option value="">— choose —</option>`;
+    if (!dept) return head + state.teachers.map(o).join('');
+    const inD = state.teachers.filter((x) => x.departmentId === dept), rest = state.teachers.filter((x) => x.departmentId !== dept);
+    return head + `<optgroup label="${esc(find('departments', dept).name)} department">${inD.map(o).join('')}</optgroup>${rest.length ? `<optgroup label="Other teachers">${rest.map(o).join('')}</optgroup>` : ''}`;
+  };
   // Subjects of the row's grade curriculum come first; every other subject stays selectable.
   const subjectOptions = (l) => {
     const cur = curriculumSubjects(state, l.classIds);
@@ -386,7 +419,7 @@ function renderLessons(root) {
     <div class="table-wrap"><table class="edit lessons"><thead><tr><th>Subject</th><th>Teacher</th><th>Classes</th><th title="Preferred room, or any room of a type">Room</th><th title="Fallback: any room of this type">Alternatives</th><th title="Length of every weekly session, e.g. 2 2 1">Distribution</th><th title="Rows with the same name are scheduled simultaneously">Parallel group</th><th></th><th></th><th></th><th></th></tr></thead><tbody>
     ${list.map((l) => `<tr data-id="${l.id}">
       <td><select data-f="subjectId" aria-label="Subject">${subjectOptions(l)}</select></td>
-      <td><select data-f="teacherId" aria-label="Teacher">${opt(state.teachers, l.teacherId, '— choose —')}</select></td>
+      <td><select data-f="teacherId" aria-label="Teacher">${teacherOptions(l)}</select></td>
       <td><button class="ghost" data-classes>${(l.classIds || []).map((id) => `<span class="chip">${esc(find('classes', id)?.name)}</span>`).join('') || '— choose —'}</button></td>
       <td><select data-f="room" aria-label="Room">${roomOptions(l.room, l)}</select></td>
       <td><select data-f="roomAlt" aria-label="Alternative rooms" ${l.room.startsWith('type:') ? 'disabled title="Room is already any room of a type"' : ''}>${roomAltOptions(l.roomAlt)}</select></td>
@@ -400,6 +433,7 @@ function renderLessons(root) {
     : '<p class="hint">No lessons yet. Add subjects, teachers and classes first, then click “+ Add lesson”.</p>');
   p.addEventListener('change', (e) => {
     if (e.target.dataset.gfilter !== undefined) { ui.gradeFilter = e.target.value; render(); return; }
+    if (e.target.dataset.dfilter !== undefined) { ui.deptFilter = e.target.value; render(); return; }
     if (e.target.dataset.filter !== undefined) { ui.lessonFilter = e.target.value; render(); return; }
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const l = find('lessons', tr.dataset.id); const f = e.target.dataset.f;
@@ -414,7 +448,7 @@ function renderLessons(root) {
     if (f === 'roomAlt' && !l.room) { l.room = l.roomAlt; l.roomAlt = ''; }
     if (f === 'room' && l.room.startsWith('type:')) l.roomAlt = '';
     changed();
-    if (f === 'room' || f === 'roomAlt') render();
+    if (f === 'room' || f === 'roomAlt' || f === 'subjectId') render();
   });
   p.addEventListener('click', (e) => {
     const btn = e.target.closest('button'); if (!btn) return;

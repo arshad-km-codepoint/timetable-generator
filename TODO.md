@@ -35,7 +35,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 ### Data lists
 
 - [x] **(core) Grades/courses** with a curriculum (subject × weekly sessions) used to filter subject and class drop-downs and to warn when a class lacks a curriculum subject. Curriculum is subject × weekly *periods*; the Lessons subject drop-down lists the grade's subjects first (others stay selectable), Lessons can be filtered by grade, and the class picker groups classes by grade.
-- [ ] Departments (teacher and subject membership; filters in the lesson editor).
+- [x] Departments (teacher and subject membership; filters in the lesson editor). Departments are managed on the Subjects tab; teachers and subjects have a Department column; in Lessons the teacher list starts with the subject's department and rows can be filtered by department.
 - [ ] Tasks / activity types (teaching, on-call, meeting, management) assignable to lessons, meetings, duties and activities, with their own availability template.
 - [x] **(core) Complementary activities:** teacher-only load with weekly periods, daily min/max and optional non-consecutive daily periods. Max/day and non-consecutive are hard, min/day is a weighted preference (`activityMin`); an activity may also count toward its teacher's max periods/day; allowed periods can be restricted.
 - [ ] Elective subject sets (subjects of one class allowed to overlap, with a max-overlap limit and incompatible pairs).

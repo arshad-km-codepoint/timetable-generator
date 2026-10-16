@@ -25,7 +25,7 @@
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
   const classDefaults = () => ({ homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
-  const teacherDefaults = () => ({ maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
+  const teacherDefaults = () => ({ departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
   // ---------- State ----------
@@ -45,7 +45,7 @@
         weights: { ...TT().DEFAULT_WEIGHTS },
         attempts: 3,
       },
-      teachers: [], classes: [], grades: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
+      teachers: [], classes: [], grades: [], departments: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
       timetable: { placements: [], generatedAt: null, difficulty: null },
     };
   }
@@ -56,7 +56,7 @@
     // Nine periods a day: 1–3, morning break, 4–5, lunch, 6–7.
     s.settings.periods.splice(3, 0, { label: 'Break', start: '10:25', end: '10:45', type: 'break' });
     s.settings.periods.splice(6, 0, { label: 'Lunch', start: '12:20', end: '13:10', type: 'lunch' });
-    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], ...extra });
+    const subj = (name, code, i, extra = {}) => ({ id: uid(), name, code, color: PALETTE[i % PALETTE.length], unavailable: [], dispreferred: [], dispreferred2: [], departmentId: '', ...extra });
     const S = {
       math: subj('Mathematics', 'MAT', 0), eng: subj('English', 'ENG', 1), sci: subj('Science', 'SCI', 2),
       his: subj('History', 'HIS', 3), geo: subj('Geography', 'GEO', 4), pe: subj('Physical Ed.', 'PE', 5, { dispreferred: ['0-0', '1-0', '2-0', '3-0', '4-0'] }),
@@ -74,6 +74,11 @@
       fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
     };
     s.teachers = Object.values(T);
+    // Departments: who and what belongs to each (the lesson editor offers a subject's department first).
+    s.departments = [['Mathematics', [S.math, S.ict], [T.m1, T.m2, T.ic]], ['Languages', [S.eng, S.fre, S.spa], [T.e1, T.e2, T.fr, T.sp]], ['Science', [S.sci], [T.s1, T.s2]],
+      ['Humanities', [S.his, S.geo], [T.h1]], ['Arts & PE', [S.pe, S.art, S.mus], [T.pe, T.ar]]].map(([name, subs, tchs]) => {
+      const d = { id: uid(), name }; subs.forEach((x) => { x.departmentId = d.id; }); tchs.forEach((x) => { x.departmentId = d.id; }); return d;
+    });
     s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], dispreferred2: [], ...classDefaults(), size: 26 }));
     s.rooms = [
       ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [], dispreferred2: [], capacity: 30 })),
@@ -349,6 +354,8 @@
     });
     s.rooms.forEach((r) => { r.capacity = Math.max(0, Math.floor(Number(r.capacity)) || 0); });
     s.subjects = s.subjects || [];
+    s.departments = (Array.isArray(s.departments) ? s.departments : []).filter((d) => d && d.id).map((d) => ({ id: d.id, name: typeof d.name === 'string' ? d.name : 'Department' }));
+    for (const list of [s.teachers, s.subjects]) for (const x of list) if (!s.departments.some((d) => d.id === x.departmentId)) x.departmentId = '';
     s.grades = Array.isArray(s.grades) ? s.grades.filter((g) => g && g.id) : [];
     s.grades.forEach((g) => {
       g.name = typeof g.name === 'string' ? g.name : 'Grade';

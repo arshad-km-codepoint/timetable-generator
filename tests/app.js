@@ -723,6 +723,22 @@ check('(r) tutors: migrate, new rows and applyTutor start with the tutor, and a 
   blank.lengths = [1, 1, 1, 1, 1];
   assert.ok(!hasMsg(s, /fewer than the 5 days/));
 });
+check('(s) departments: migrate drops dangling references; the sample puts every teacher and subject in one', () => {
+  const s = school('tttt', 2);
+  const subj = add.subject(s), t = add.teacher(s);
+  subj.departmentId = 'gone'; t.departmentId = 'gone';
+  s.departments = [{ id: 'd1', name: 'Maths' }, null, { name: 'no id' }, { id: 'd2', name: 7 }];
+  M.migrate(s);
+  eq(s.departments, [{ id: 'd1', name: 'Maths' }, { id: 'd2', name: 'Department' }]);
+  eq([subj.departmentId, t.departmentId], ['', '']);
+  subj.departmentId = 'd1'; t.departmentId = 'd2'; M.migrate(s);
+  eq([subj.departmentId, t.departmentId], ['d1', 'd2'], 'real references are kept');
+  eq(M.migrate({ settings: M.emptyState().settings, teachers: [{ id: 't', name: 'T' }], classes: [], rooms: [], subjects: [], lessons: [] }).departments, [], 'files without departments');
+  const sample = M.sampleState();
+  assert.ok(sample.departments.length >= 4);
+  assert.ok(sample.teachers.every((x) => x.departmentId) && sample.subjects.every((x) => x.departmentId), 'everyone is in a department');
+  assert.strictEqual(sample.subjects.find((x) => x.name === 'Mathematics').departmentId, sample.teachers.find((x) => x.name === 'Anita Rao').departmentId);
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));
