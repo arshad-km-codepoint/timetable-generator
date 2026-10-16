@@ -43,7 +43,7 @@ function scenarioA() {
     san: add.subject(s, 'Sanskrit', 'SAN'), cs: add.subject(s, 'Computer', 'CS'), pe: add.subject(s, 'Physical Ed.', 'PE'),
     art: add.subject(s, 'Art', 'ART'), mus: add.subject(s, 'Music', 'MUS'), lib: add.subject(s, 'Library', 'LIB'),
   };
-  for (let i = 1; i <= 12; i++) add.room(s, `Room ${100 + i}`, 'Classroom');
+  for (let i = 1; i <= 20; i++) add.room(s, `Room ${100 + i}`, 'Classroom'); // one per division
   ['Lab 1', 'Lab 2'].forEach((n) => add.room(s, n, 'ScienceLab'));
   ['Computer Lab 1', 'Computer Lab 2'].forEach((n) => add.room(s, n, 'ComputerLab'));
   add.room(s, 'Ground', 'Sports'); add.room(s, 'Indoor Gym', 'Sports');

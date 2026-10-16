@@ -547,7 +547,11 @@ function validate() {
   e.units.forEach((u) => u.parts.forEach((p) => { if (p.roomCands && p.roomCands.length) { const k = p.roomCands.join(','); need[k] = (need[k] || 0) + u.len; } }));
   for (const k in need) {
     const cap = k.split(',').reduce((a, id) => a + availableSlots(find('rooms', id)), 0);
-    if (need[k] > cap) issues.push({ lvl: 'err', msg: `Rooms ${k.split(',').map((id) => find('rooms', id).name).join(', ')} are needed for ${need[k]} periods but have ${cap} slots.` });
+    const names = k.split(',').map((id) => find('rooms', id).name);
+    const label = names.length > 3 ? `${names.slice(0, 3).join(', ')} … (${names.length} rooms)` : names.join(', ');
+    if (need[k] > cap) issues.push({ lvl: 'err', msg: `Rooms ${label} are needed for ${need[k]} periods but have ${cap} slots.` });
+    // Near-full room sets leave no freedom to keep class days compact.
+    else if (need[k] > 0.9 * cap) issues.push({ lvl: 'warn', msg: `Rooms ${label} are ${Math.round(need[k] / cap * 100)}% booked (${need[k]} of ${cap} periods) — expect free periods inside class days. Add rooms or move some lessons to other room types.` });
   }
   const seen = new Set();
   e.units.forEach((u) => { if (!u.starts.length && !seen.has(u.key)) { seen.add(u.key); issues.push({ lvl: 'err', msg: `${describeUnit(u.id)} has no period where all its teachers and classes are available.` }); } });
