@@ -13,7 +13,9 @@ const { Engine, Solver } = ctx.window.Timetable;
 let seq = 0;
 const id = (p) => `${p}${(++seq).toString(36)}`;
 const PAL = ['#2f6fdb', '#d9534f', '#1f8a4c', '#b7791f', '#7b4fd6', '#0f8f99', '#c2417e', '#5c6f2b', '#8a5a44', '#4a6fa5', '#d0682f', '#3d8f6f'];
+// Each scenario numbers its ids from 1, so adding rows to one scenario never renumbers another.
 function school(name, days, periodTimes) {
+  seq = 0;
   return {
     settings: { name, days, periods: periodTimes.map(([s, e, type], i) => ({ label: type ? type[0].toUpperCase() + type.slice(1) : String(i + 1), start: s, end: e, ...(type ? { type } : {}) })), weights: { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 }, attempts: 2 },
     teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],

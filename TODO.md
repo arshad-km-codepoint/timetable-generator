@@ -13,7 +13,7 @@ Open tasks from the code review of the solver-hardening and scenario commits (`c
 
 ## Tests (`tests/scenarios.js`)
 
-- [ ] **Reset the id counter per scenario.** One global `seq` is shared by all builders, so adding rooms to scenario A renumbered every id in B, C and D and rewrote ~14,000 fixture lines with no real change. Reset `seq` in `school()` or prefix ids per scenario.
+- [x] **Reset the id counter per scenario.** One global `seq` is shared by all builders, so adding rooms to scenario A renumbered every id in B, C and D and rewrote ~14,000 fixture lines with no real change. Reset `seq` in `school()` or prefix ids per scenario.
 
 ## Known limitations (not bugs)
 
