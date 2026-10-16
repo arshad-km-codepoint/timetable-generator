@@ -864,6 +864,9 @@ check('(y) free half-days migrate and are checked against the half-days a teache
   t.unavailable = ['0-0', '0-1', '0-3', '0-4'];
   assert.ok(hasMsg(s, /can only teach in 2 half-days/), msgs(s).join('\n'));
 });
+check('(z2) the concentrate flag migrates to a boolean', () => {
+  const s = school('tttt', 2); const t = add.teacher(s); t.concentrate = 'yes'; M.migrate(s); assert.strictEqual(t.concentrate, true); delete t.concentrate; M.migrate(s); assert.strictEqual(t.concentrate, false);
+});
 check('(z) exclusive-period settings migrate with safe defaults', () => {
   const s = school('tttt', 2);
   const t = add.teacher(s);

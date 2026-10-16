@@ -11,6 +11,7 @@
     dispreferred: 'Lesson in a non-preferred period (~)', dispreferred2: 'Lesson in a strongly non-preferred period (~~)', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
+    concentrate: 'Teacher working more days than their load needs (per extra day)',
     freeHalves: 'Teacher short of the free mornings / afternoons they asked for (per half-day)',
     afterBreak: 'Lesson in the first period after a break', afternoon: 'Lesson in the afternoon (after lunch)', sameHour: 'Same hour of the day repeated (or varied) across a lesson row’s sessions',
     activityMin: 'Day below the minimum periods of an activity or lesson row (per period short)',
@@ -28,7 +29,7 @@
   // Week rules a teacher can carry (0 / false = none).
   // Class attributes (0 / '' / false = none): homeroom, grade, size, daily cap, strict no-gaps, free periods in ~ slots.
   const classDefaults = () => ({ code: '', extKey: '', homeroom: '', gradeId: '', size: 0, maxPerDay: 0, noGaps: false, forceFree: false, tutorId: '', tutorDaily: false, tutorEarly: false, tutorLate: false });
-  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, freeHalves: 0, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false, exclusiveWindow: 1, exclusiveWrap: false, noFirstLast: false, noSplitDay: false });
+  const teacherDefaults = () => ({ extKey: '', departmentId: '', maxPerDay: 0, minPerDay: 0, maxConsecutive: 0, freeDays: 0, freeHalves: 0, concentrate: false, maxPresenceDay: 0, maxPresenceWeek: 0, presenceStrict: false, noLastFirst: false, exclusiveWindow: 1, exclusiveWrap: false, noFirstLast: false, noSplitDay: false });
   const PERIOD_TYPES = { teaching: 'Teaching', break: 'Break', lunch: 'Lunch' };
 
   // ---------- State ----------
@@ -365,7 +366,7 @@
       for (const k of ['maxConsecutive', 'maxPresenceDay', 'maxPresenceWeek', 'freeDays', 'freeHalves']) t[k] = Math.max(0, Math.floor(Number(t[k])) || 0);
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
       t.exclusiveWindow = Math.max(1, Math.floor(Number(t.exclusiveWindow)) || 1);
-      for (const k of ['exclusiveWrap', 'noFirstLast', 'noSplitDay']) t[k] = !!t[k];
+      for (const k of ['exclusiveWrap', 'noFirstLast', 'noSplitDay', 'concentrate']) t[k] = !!t[k];
       for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
     });
     s.classes.forEach((c) => {

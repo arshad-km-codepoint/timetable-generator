@@ -1053,6 +1053,32 @@ check('exclusive periods: window of n at each end, Friday→Monday wrap, first+l
   assert.strictEqual(r.engine.totalCost().exclusive, 0, `${r.placements.map((p) => `${p.day}/${p.period}`)}`);
 });
 
+check('concentrate: working days beyond the fewest the load needs are charged; balancing is switched off for that teacher', () => {
+  const s = school({ days: 5, periods: 4 });
+  const subj = add.subject(s), c = add.cls(s, 'A'), t = add.teacher(s, 'T', { concentrate: true, maxPerDay: 3 });
+  const l = add.lesson(s, subj, t, [c], 0, 1, { lengths: [1, 1, 1, 1, 1, 1] });
+  const at = (days) => new Engine(s, days.map((d, k) => pl(l, k, d, k % 4, 1)));
+  assert.strictEqual(new Engine(s, []).tDayCap[t.id], 3, 'the teacher\'s own cap');
+  assert.strictEqual(at([0, 0, 0, 1, 1, 1]).teacherSpread(t.id), 0, 'six periods at three a day need two days');
+  assert.strictEqual(at([0, 0, 0, 1, 1, 2]).teacherSpread(t.id), 1, 'three days instead of two');
+  assert.strictEqual(at([0, 1, 2, 3, 4, 4]).teacherSpread(t.id), 3);
+  const e = at([0, 1, 2, 3, 4, 4]);
+  assert.strictEqual(e.totalCost().concentrate, 3);
+  assert.strictEqual(e.teacherBalance(t.id), 0, 'balancing is off for a teacher who concentrates');
+  t.concentrate = false;
+  assert.ok(at([0, 1, 2, 3, 4, 4]).teacherBalance(t.id) >= 0);
+  assert.strictEqual(new Engine(s, []).tRule[t.id].concentrate, false);
+  assert.strictEqual(at([0, 1, 2, 3, 4, 4]).totalCost().concentrate, 0);
+  // Without a cap the day capacity is the most periods a day offers.
+  const s2 = school({ days: 4, periods: 4 }); s2.settings.weights = { concentrate: 5, balance: 0, late: 0 };
+  const sj = add.subject(s2), c2 = add.cls(s2, 'A'), t2 = add.teacher(s2, 'T', { concentrate: true });
+  add.lesson(s2, sj, t2, [c2], 0, 1, { lengths: [1, 1, 1, 1, 1, 1, 1, 1] });
+  assert.strictEqual(new Engine(s2, []).tDayCap[t2.id], 4);
+  const r = solveAll(s2);
+  assert.strictEqual(r.placed, r.total);
+  assert.strictEqual(new Set(r.placements.map((p) => p.day)).size, 2, 'eight periods in the two days they need');
+});
+
 // ---------- complementary activities ----------
 const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
 const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });

@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5, freeHalves: 4 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5, freeHalves: 4, concentrate: 1 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart', 'before', 'after']);
 
 // A room record with count N > 1 stands for N identical unnamed rooms ("20 general classrooms"):
@@ -124,10 +124,18 @@ class Engine {
         if (ps.length) this.tHalves[t.id].push({ d, ps });
       }
     }
+    // The most periods a teacher can hold on one day (their cap, or the day with most usable slots).
+    this.tDayCap = {};
+    for (const t of data.teachers) {
+      let best = 0;
+      for (let d = 0; d < D; d++) { let n = 0; for (let p = 0; p < P; p++) if (this.periodTypes[p] === 'teaching' && !this.general.has(d * P + p) && !this.blocked['t' + t.id].has(d * P + p)) n++; best = Math.max(best, n); }
+      const cap = Math.floor(Number(t.maxPerDay)) || 0;
+      this.tDayCap[t.id] = cap > 0 ? Math.min(cap, best || cap) : best;
+    }
     this.tRule = {};
     for (const t of data.teachers) {
       const n = (v) => Math.max(0, Math.floor(Number(v)) || 0);
-      const r = { maxCons: n(t.maxConsecutive), presDay: n(t.maxPresenceDay), presWeek: n(t.maxPresenceWeek), strict: !!t.presenceStrict, free: n(t.freeDays), exclusive: !!t.noLastFirst, exWindow: n(t.exclusiveWindow) || 1, exWrap: !!t.exclusiveWrap, noFirstLast: !!t.noFirstLast, noSplitDay: !!t.noSplitDay, freeHalves: n(t.freeHalves) };
+      const r = { maxCons: n(t.maxConsecutive), presDay: n(t.maxPresenceDay), presWeek: n(t.maxPresenceWeek), strict: !!t.presenceStrict, free: n(t.freeDays), exclusive: !!t.noLastFirst, exWindow: n(t.exclusiveWindow) || 1, exWrap: !!t.exclusiveWrap, noFirstLast: !!t.noFirstLast, noSplitDay: !!t.noSplitDay, freeHalves: n(t.freeHalves), concentrate: !!t.concentrate };
       r.exAny = r.exclusive || r.noFirstLast || r.noSplitDay;
       r.day = !!(r.maxCons || r.presDay); r.week = !!(r.presWeek || r.exclusive);
       r.hard = !!(r.free || (r.strict && (r.presDay || r.presWeek)));
@@ -894,6 +902,19 @@ class Engine {
     return Math.max(0, week - r.presWeek);
   }
 
+  // Working days beyond the fewest the lesson load needs (lessons only; the fewest = load / the most
+  // a day can hold), for teachers whose load should be concentrated.
+  teacherSpread(t) {
+    const occ = this.occ['t' + t]; let load = 0, days = 0;
+    for (let d = 0; d < this.D; d++) {
+      let n = 0;
+      for (let p = 0; p < this.P; p++) { const o = occ[d * this.P + p]; if (this.teach[d * this.P + p] && o >= 0 && this.units[o].kind === 'lesson') n++; }
+      if (n) { days++; load += n; }
+    }
+    const cap = this.tDayCap[t];
+    return cap ? Math.max(0, days - Math.ceil(load / cap)) : 0;
+  }
+
   // Free half-days still missing: the wish is `freeHalves` mornings or afternoons without any lesson.
   teacherFreeHalvesMissing(t) {
     const need = Math.min(this.tRule[t].freeHalves, this.tHalves[t].length); const occ = this.occ['t' + t];
@@ -911,6 +932,7 @@ class Engine {
     if (r.exAny && this.W.exclusive) c += this.W.exclusive * this.teacherExclusive(t);
     if (r.presWeek && this.W.presence) c += this.W.presence * this.teacherPresenceWeek(t);
     if (r.freeHalves && this.W.freeHalves) c += this.W.freeHalves * this.teacherFreeHalvesMissing(t);
+    if (r.concentrate && this.W.concentrate) c += this.W.concentrate * this.teacherSpread(t);
     return c;
   }
 
@@ -919,7 +941,7 @@ class Engine {
   // is as even as whole periods allow, so a perfect week costs nothing.
   teacherBalance(t) {
     const days = this.balDays[t];
-    if (days.length - this.tRule[t].free < 2) return 0;
+    if (this.tRule[t].concentrate || days.length - this.tRule[t].free < 2) return 0;   // concentrating the load is the opposite of balancing it
     const occ = this.occ['t' + t]; let loads = [];
     for (const d of days) {
       let n = 0;
@@ -1074,7 +1096,7 @@ class Engine {
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0, freeHalves: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0, freeHalves: 0, concentrate: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
@@ -1087,6 +1109,7 @@ class Engine {
       if (r.exAny) { const x = this.teacherExclusive(t); st.exclusive += x; c += this.W.exclusive * x; }
       if (r.presWeek) { const x = this.teacherPresenceWeek(t); st.presence += x; c += this.W.presence * x; }
       if (r.freeHalves) { const x = this.teacherFreeHalvesMissing(t); st.freeHalves += x; c += this.W.freeHalves * x; }
+      if (r.concentrate) { const x = this.teacherSpread(t); st.concentrate += x; c += this.W.concentrate * x; }
     }
     for (let d = 0; d < this.D; d++) {
       for (const t in this.teachers) {
