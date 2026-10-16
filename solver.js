@@ -121,15 +121,18 @@ class Engine {
       const parts = []; const rows = [];
       for (const l of lessons) {
         const classes = (l.classIds || []).filter((id) => this.classes[id]);
-        const roomCands = this.roomCandidates(l.room, data.rooms, l.roomAlt);
+        // 'home' = the class homeroom: one room shared by all the row's classes, from the class record.
+        const home = l.room === 'home' ? this.homeRoom(classes) : null;
+        const spec = home ? home.room : l.room;
+        const roomCands = home && !home.room ? null : this.roomCandidates(spec, data.rooms, l.roomAlt);
         const flex = l.flexible && typeof l.flexible === 'object' ? { total: Number(l.flexible.total), min: Number(l.flexible.min), max: Number(l.flexible.max) } : null;
         const lengths = flex ? null : Array.isArray(l.lengths) ? l.lengths.map(Number) : Array.from({ length: Math.max(0, Number(l.sessions) || 0) }, () => Math.max(1, Math.min(P, Number(l.length) || 1)));
         const bad = !this.subjects[l.subjectId] ? 'has no subject' : !this.teachers[l.teacherId] ? 'has no teacher'
-          : !classes.length ? 'has no class' : roomCands && !roomCands.length ? 'needs a room type that has no rooms'
+          : !classes.length ? 'has no class' : home && home.why ? home.why : roomCands && !roomCands.length ? 'needs a room type that has no rooms'
             : lengths && lengths.some((n) => !Number.isInteger(n) || n < 1 || n > P) ? `has a session length outside 1–${P}`
               : flex && !(Number.isInteger(flex.total) && flex.total >= 1 && Number.isInteger(flex.min) && Number.isInteger(flex.max) && flex.min >= 1 && flex.min <= flex.max && flex.max <= P) ? 'has an invalid flexible distribution' : null;
         if (bad) { this.problems.push({ lessonIds: [l.id], msg: bad }); continue; }
-        const prefRoom = l.room && !String(l.room).startsWith('type:') && this.rooms[l.room] ? l.room : null;
+        const prefRoom = spec && !String(spec).startsWith('type:') && this.rooms[spec] ? spec : null;
         parts.push({ kind: 'lesson', ref: l.id, lessonId: l.id, teacher: l.teacherId, classes, roomCands, prefRoom, sameRoom: !!l.sameRoom });
         rows.push({ l, lengths, flex });
       }
@@ -359,6 +362,14 @@ class Engine {
     const out = spec.startsWith('type:') ? ofType(spec.slice(5)) : rooms.some((r) => r.id === spec) ? [spec] : [];
     if (alt && String(alt).startsWith('type:')) for (const r of ofType(String(alt).slice(5))) if (!out.includes(r)) out.push(r);
     return out;
+  }
+
+  // The homeroom a row's classes share: { room } or { why } when a class has none or they differ.
+  homeRoom(classIds) {
+    const homes = classIds.map((c) => this.classes[c].homeroom);
+    if (homes.some((h) => !h || !this.rooms[h])) return { why: classIds.length > 1 ? 'uses the class homeroom but one of its classes has no homeroom' : 'uses the class homeroom but its class has no homeroom' };
+    if (new Set(homes).size > 1) return { why: 'uses the class homeroom but its classes have different homerooms' };
+    return { room: homes[0] };
   }
 
   // Room part k of another placed unit of ui's group uses (sameRoom rows must follow it), or null.

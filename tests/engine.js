@@ -793,6 +793,56 @@ check('roomDemand: nested sets, usable periods, general template, meetings and c
   assert.ok(m, 'meeting added');
 });
 
+// ---------- class homeroom ----------
+check("homeroom: room 'home' resolves to the class's room; no homeroom or clashing homerooms are reported", () => {
+  const s = school({ days: 3, periods: 4 });
+  const subj = add.subject(s), t = add.teacher(s, 'T');
+  const r1 = add.room(s, 'R1'), r2 = add.room(s, 'R2');
+  const a = add.cls(s, 'A', { homeroom: r1.id }), b = add.cls(s, 'B', { homeroom: r2.id }), none = add.cls(s, 'N');
+  const la = add.lesson(s, subj, t, [a], 3, 1, { room: 'home' });
+  const e = new Engine(s, []);
+  eq(e.units[0].parts[0].roomCands, [r1.id]);
+  assert.strictEqual(e.units[0].parts[0].prefRoom, r1.id);
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  assert.ok(r.placements.every((p) => p.rooms[0] === r1.id), 'every session in the homeroom');
+  // Moving the class's homeroom moves its lessons.
+  a.homeroom = r2.id;
+  assert.ok(solveAll(s).placements.every((p) => p.rooms[0] === r2.id));
+  // No homeroom, a deleted room, mixed homerooms.
+  a.homeroom = r1.id;
+  const lb = add.lesson(s, subj, add.teacher(s, 'U'), [none], 1, 1, { room: 'home' });
+  const lab = add.lesson(s, subj, add.teacher(s, 'V'), [a, b], 1, 1, { room: 'home' });
+  const lc = add.lesson(s, subj, add.teacher(s, 'W'), [a, none], 1, 1, { room: 'home' });
+  const bad = new Engine(s, []).problems;
+  const msg = (l) => (bad.find((p) => p.lessonIds.includes(l.id)) || {}).msg;
+  assert.strictEqual(msg(lb), 'uses the class homeroom but its class has no homeroom');
+  assert.strictEqual(msg(lab), 'uses the class homeroom but its classes have different homerooms');
+  assert.strictEqual(msg(lc), 'uses the class homeroom but one of its classes has no homeroom');
+  b.homeroom = 'gone';
+  assert.strictEqual(new Engine(s, []).problems.find((p) => p.lessonIds.includes(lab.id)).msg, 'uses the class homeroom but one of its classes has no homeroom', 'unknown room counts as none');
+  void la;
+});
+
+check('homeroom with an alternative type: the homeroom is preferred, the type is the fallback (roomPref counted)', () => {
+  const s = school({ days: 1, periods: 2 });
+  const subj = add.subject(s);
+  const r1 = add.room(s, 'R1'), r2 = add.room(s, 'R2');
+  const a = add.cls(s, 'A', { homeroom: r1.id }), b = add.cls(s, 'B');
+  // B's lessons are pinned to R1 and fill it, so A's homeroom lessons have to go to R2 (the fallback).
+  const lb = add.lesson(s, subj, add.teacher(s, 'TB'), [b], 2, 1, { room: r1.id });
+  const la = add.lesson(s, subj, add.teacher(s, 'TA'), [a], 2, 1, { room: 'home', roomAlt: 'type:Classroom' });
+  const { engine, placements, placed, total } = solveAll(s);
+  assert.strictEqual(placed, total);
+  assert.ok(placedOf(placements, la).every((p) => p.rooms[0] === r2.id));
+  assert.strictEqual(engine.totalCost().roomPref, 2, 'both sessions are outside the preferred room');
+  // Without the fallback the same rows cannot all be placed.
+  la.roomAlt = '';
+  const r = solveAll(s);
+  assert.ok(r.placed < r.total);
+  void lb;
+});
+
 // ---------- teacher week rules (maxConsecutive, presence, freeDays, noLastFirst) ----------
 const heldDays = (engine, t) => Array.from({ length: engine.D }, (_, d) => engine.heldPeriods(t.id, d, () => false).length);
 

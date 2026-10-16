@@ -3,7 +3,7 @@
 // Model function takes the state it works on. `state` is autosaved to localStorage.
 const {
   uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES: REL_LABELS, emptyState, sampleState, migrate,
-  newLesson, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
+  newLesson, homeroomOf, applyHomeroom, parseLengths, canPartition, partition, sessionsOf, periodsOf, lengthsText, dropDeadRelations, addRelation, removeRelation, removeLesson,
   periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
   availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements, describeLesson, describeUnit, validate,
 } = window.Model;
@@ -120,23 +120,25 @@ function availLabel(x) {
   return `Availability${b || s ? ` (${[b && `${b} ✕`, s && `${s} ~`].filter(Boolean).join(', ')})` : ''}`;
 }
 
-function entityEditor(root, { list, title, hint, cols, loadKey }) {
+function entityEditor(root, { list, title, hint, cols, loadKey, extra }) {
   const p = panel(root, title, hint);
   p.querySelector('[data-slot=actions]').innerHTML = `<button data-add>+ Add</button>`;
   const load = loadKey ? workload(state)[loadKey] : null;
   const rows = state[list].map((x) => `<tr data-id="${x.id}">
       ${cols.map((c) => `<td>${c.input(x)}</td>`).join('')}
       ${load ? `<td class="load ${(load[x.id] || 0) > availableSlots(state, x) ? 'over' : ''}">${load[x.id] || 0} / ${availableSlots(state, x)}</td>` : ''}
+      ${extra ? `<td>${extra.html(x)}</td>` : ''}
       <td><button class="ghost" data-avail>${availLabel(x)}</button></td>
       <td><button class="danger" data-del title="Delete">✕</button></td></tr>`).join('');
   p.insertAdjacentHTML('beforeend', state[list].length
-    ? `<div class="table-wrap"><table class="edit"><thead><tr>${cols.map((c) => `<th>${c.label}</th>`).join('')}${load ? '<th>Periods / free</th>' : ''}<th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-wrap"><table class="edit"><thead><tr>${cols.map((c) => `<th>${c.label}</th>`).join('')}${load ? '<th>Periods / free</th>' : ''}${extra ? `<th>${extra.label}</th>` : ''}<th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : `<p class="hint">Nothing here yet. Click “+ Add”.</p>`);
   p.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const x = find(list, tr.dataset.id);
     x[e.target.dataset.f] = e.target.type === 'number' ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     changed();
+    if (cols.rerender && cols.rerender.includes(e.target.dataset.f)) render();
   });
   p.addEventListener('click', (e) => {
     if (e.target.dataset.add !== undefined) { state[list].push(cols.newItem()); changed(); render(); return; }
@@ -146,6 +148,8 @@ function entityEditor(root, { list, title, hint, cols, loadKey }) {
       if (!confirm(`Delete “${x.name}”? Lessons that use it will be updated.`)) return;
       state[list] = state[list].filter((y) => y !== x);
       cleanupRefs(); changed(); render();
+    } else if (extra && e.target.dataset[extra.act] !== undefined) {
+      extra.run(x);
     } else if (e.target.dataset.avail !== undefined) {
       editAvailability(x, `${title.replace(/es$|s$/, '')}: ${x.name}`);
     }
@@ -158,8 +162,9 @@ function cleanupRefs() {
   state.lessons.forEach((l) => {
     if (!t.has(l.teacherId)) l.teacherId = '';
     l.classIds = (l.classIds || []).filter((id) => c.has(id));
-    if (l.room && !l.room.startsWith('type:') && !r.has(l.room)) l.room = '';
+    if (l.room && l.room !== 'home' && !l.room.startsWith('type:') && !r.has(l.room)) l.room = '';
   });
+  state.classes.forEach((c) => { if (c.homeroom && !r.has(c.homeroom)) c.homeroom = ''; });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
   dropDeadRelations(state);
   state.meetings.forEach((m) => {
@@ -188,9 +193,21 @@ function renderTeachers(root) {
 }
 
 function renderClasses(root) {
-  const cols = [textCol('Name', 'name', 'e.g. 7B')];
-  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [] });
-  entityEditor(root, { list: 'classes', title: 'Classes', hint: 'Class groups of students. Use ✕ for fixed events (assembly), ~ for periods to leave free if possible.', cols, loadKey: 'c' });
+  const cols = [textCol('Name', 'name', 'e.g. 7B'),
+    { label: '<span title="The room this class normally sits in. Lessons set to “Class homeroom” use it, and follow it when it changes.">Homeroom</span>',
+      input: (x) => `<select data-f="homeroom" aria-label="Homeroom"><option value="">— none —</option>${state.rooms.map((r) => `<option value="${r.id}" ${x.homeroom === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` }];
+  cols.newItem = () => ({ id: uid(), name: `Class ${state.classes.length + 1}`, unavailable: [], dispreferred: [], homeroom: '' });
+  cols.rerender = ['homeroom'];
+  const extra = {
+    label: 'Lessons', act: 'homeApply',
+    html: (x) => { const n = state.lessons.filter((l) => l.room === 'home' && (l.classIds || []).includes(x.id)).length; return `<button class="ghost small" data-home-apply ${x.homeroom ? '' : 'disabled'} title="Set the room of this class’s own lessons that have none (or ask for any room of the homeroom’s type) to “Class homeroom”">Use in lessons${n ? ` (${n} now)` : ''}</button>`; },
+    run: (x) => {
+      const r = applyHomeroom(state, x.id);
+      toast(r.none + r.type ? `${r.none + r.type} lesson row(s) of ${x.name} now use the homeroom${r.type ? ` (${r.type} keep “Any ${find('rooms', x.homeroom).type}” as a fallback)` : ''}.` : `No lesson row of ${x.name} needed changing.`, 4000);
+      changed(); render();
+    },
+  };
+  entityEditor(root, { list: 'classes', title: 'Classes', hint: 'Class groups of students. Use ✕ for fixed events (assembly), ~ for periods to leave free if possible. Give a class a homeroom once, then pick “Class homeroom” as the room of its lessons (or use the button) — changing the homeroom later moves all of them.', cols, loadKey: 'c', extra });
 }
 
 function renderRooms(root) {
@@ -222,9 +239,11 @@ function renderSubjects(root) {
   });
 }
 
-function roomOptions(sel) {
+function roomOptions(sel, lesson = null) {
   const types = [...new Set(state.rooms.map((r) => r.type).filter(Boolean))];
-  return `<option value="" ${!sel ? 'selected' : ''}>No room needed</option>
+  const homeName = lesson && find('rooms', homeroomOf(state, lesson.classIds))?.name;
+  const home = lesson ? `<option value="home" ${sel === 'home' ? 'selected' : ''}>Class homeroom${homeName ? ` (${esc(homeName)})` : sel === 'home' ? ' (none set!)' : ''}</option>` : '';
+  return `<option value="" ${!sel ? 'selected' : ''}>No room needed</option>${home}
     <optgroup label="Any room of type">${types.map((t) => `<option value="type:${esc(t)}" ${sel === 'type:' + t ? 'selected' : ''}>Any ${esc(t)}</option>`).join('')}</optgroup>
     <optgroup label="Specific room">${state.rooms.map((r) => `<option value="${r.id}" ${sel === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`;
 }
@@ -267,7 +286,7 @@ function renderLessons(root) {
       <td><select data-f="subjectId" aria-label="Subject">${opt(state.subjects, l.subjectId)}</select></td>
       <td><select data-f="teacherId" aria-label="Teacher">${opt(state.teachers, l.teacherId, '— choose —')}</select></td>
       <td><button class="ghost" data-classes>${(l.classIds || []).map((id) => `<span class="chip">${esc(find('classes', id)?.name)}</span>`).join('') || '— choose —'}</button></td>
-      <td><select data-f="room" aria-label="Room">${roomOptions(l.room)}</select></td>
+      <td><select data-f="room" aria-label="Room">${roomOptions(l.room, l)}</select></td>
       <td><select data-f="roomAlt" aria-label="Alternative rooms" ${l.room.startsWith('type:') ? 'disabled title="Room is already any room of a type"' : ''}>${roomAltOptions(l.roomAlt)}</select></td>
       <td><div class="row dist-cell">${distributionCell(l, eng)}<small class="hint" title="Periods per week">= ${periodsOf(l)}</small><button class="ghost small ${l.flexible ? 'on' : ''}" data-flex title="Let the engine choose the distribution">Flexible</button></div></td>
       <td><input data-f="parallel" list="parallelGroups" value="${esc(l.parallel || '')}" placeholder="—" style="max-width:140px" aria-label="Parallel group"></td>
@@ -297,7 +316,7 @@ function renderLessons(root) {
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.dataset.add !== undefined) {
       if (!state.subjects.length) { toast('Add a subject first.'); return; }
-      state.lessons.push(newLesson(state.subjects[0].id, ui.lessonFilter ? [ui.lessonFilter] : []));
+      state.lessons.push(newLesson(state.subjects[0].id, ui.lessonFilter ? [ui.lessonFilter] : [], state));
       changed(); render(); return;
     }
     const tr = btn.closest('tr[data-id]'); if (!tr) return;
@@ -948,7 +967,7 @@ function lessonMenu(unitId) {
     if (!part.roomCands) return '';
     // With an alternative set, the first candidate is the row's preferred room.
     const lesson = part.kind === 'lesson' ? find('lessons', part.lessonId) : null;
-    const pref = lesson && lesson.roomAlt && lesson.room && !lesson.room.startsWith('type:') ? lesson.room : null;
+    const pref = lesson && lesson.roomAlt && lesson.room && !lesson.room.startsWith('type:') ? (lesson.room === 'home' ? homeroomOf(state, lesson.classIds) : lesson.room) : null;
     const opts = part.roomCands.map((r) => {
       const busy = e.roomConflicts(u.i, pos.s, u.parts.map((_, j) => (j === k ? r : null))).size > 0 || cells.some((c) => e.blocked['r' + r].has(c));
       return `<option value="${r}" ${pos.rooms[k] === r ? 'selected' : ''} ${busy && pos.rooms[k] !== r ? 'disabled' : ''}>${esc(find('rooms', r)?.name)}${r === pref ? ' (preferred)' : ''}${busy && pos.rooms[k] !== r ? ' (busy)' : ''}</option>`;

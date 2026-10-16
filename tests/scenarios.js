@@ -195,8 +195,9 @@ function scenarioC() {
   lib.freeDays = 2; pe[0].maxConsecutive = 3; lib.maxPresenceDay = 6; lib.presenceStrict = true; mor.noLastFirst = true;
   cls.forEach((c, i) => {
     const t = ct[i]; const grade = Math.floor(i / 3) + 1;
-    // homeroom: the class teacher's own room
-    const home = s.rooms[i].id;
+    // homeroom: the class's own room, assigned once on the class
+    c.homeroom = s.rooms[i].id;
+    const home = 'home';
     // English: one double and four singles; Maths: 6 periods in blocks of 1–2, distribution chosen by the engine.
     add.lesson(s, S.eng, t, [c], 5, 1, home, '', false).lengths = [2, 1, 1, 1, 1];
     add.lesson(s, S.mat, t, [c], 6, 1, home, '', false).flexible = { total: 6, min: 1, max: 2 };
@@ -324,10 +325,17 @@ function audit(s, placements, chosen = {}) {
       }
       if (unitTeachers.has(l.teacherId)) err('teacher twice in one parallel unit'); unitTeachers.add(l.teacherId);
       const room = pl.rooms[k];
-      if (l.room) {
+      // 'home' = the class homeroom: the one room all the row's classes name (read from the class records).
+      let want = l.room;
+      if (want === 'home') {
+        const homes = new Set(l.classIds.map((c) => C[c].homeroom));
+        want = homes.size === 1 && [...homes][0] ? [...homes][0] : '';
+        if (!want) err(`homeroom row without one shared homeroom ${lid}`);
+      }
+      if (want) {
         if (!room) err(`missing room ${lid}`);
         else {
-          const prefOk = l.room.startsWith('type:') ? R[room]?.type === l.room.slice(5) : room === l.room;
+          const prefOk = want.startsWith('type:') ? R[room]?.type === want.slice(5) : room === want;
           const altOk = !!l.roomAlt && l.roomAlt.startsWith('type:') && R[room]?.type === l.roomAlt.slice(5);
           if (!prefOk && !altOk) err(`wrong room for ${lid}`);
           (roomsUsed[lid] ||= new Set()).add(room);

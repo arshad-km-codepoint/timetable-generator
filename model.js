@@ -69,7 +69,7 @@
       fr: t('Kofi Mensah', 'KME'), sp: t('Lucia Romero', 'LRO'),
     };
     s.teachers = Object.values(T);
-    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [] }));
+    s.classes = ['6A', '6B', '7A', '7B', '8A', '8B'].map((n) => ({ id: uid(), name: n, unavailable: [], dispreferred: [], homeroom: '' }));
     s.rooms = [
       ...['R101', 'R102', 'R103', 'R104', 'R105', 'R106'].map((n) => ({ id: uid(), name: n, type: 'Classroom', unavailable: [], dispreferred: [] })),
       ...[['Science Lab 1', 'Lab'], ['Science Lab 2', 'Lab'], ['Sports Hall', 'Gym'], ['Art Studio', 'Art'], ['Computer Lab', 'Computer']]
@@ -118,8 +118,29 @@
   function lessonDefaults() {
     return { room: '', roomAlt: '', sameRoom: false, lengths: [1], flexible: null, maxOnePerDay: true, parallel: '', allowBreakInside: false, penalizeEnds: false, avoidConsecutiveDays: false, relations: [] };
   }
-  function newLesson(subjectId, classIds = []) {
-    return { ...lessonDefaults(), id: uid(), subjectId, teacherId: '', classIds };
+  // A new row for one class that has a homeroom starts in it (pass the state `s` to enable that).
+  function newLesson(subjectId, classIds = [], s = null) {
+    const home = s && classIds.length === 1 ? homeroomOf(s, classIds) : '';
+    return { ...lessonDefaults(), id: uid(), subjectId, teacherId: '', classIds, room: home ? 'home' : '' };
+  }
+  // The room all of `classIds` share as homeroom, or '' (none set, unknown room, or they differ).
+  function homeroomOf(s, classIds) {
+    const homes = (classIds || []).map((id) => { const c = (s.classes || []).find((x) => x.id === id); return c && (s.rooms || []).some((r) => r.id === c.homeroom) ? c.homeroom : ''; });
+    return homes.length && homes.every((h) => h && h === homes[0]) ? homes[0] : '';
+  }
+  // Point the class's own rows at its homeroom: rows with no room, and rows asking for “Any <type>”
+  // of the homeroom's type (they keep that type as the fallback). Rows with another room, shared
+  // rows and rows that already use the homeroom are left alone.
+  function applyHomeroom(s, classId) {
+    const c = (s.classes || []).find((x) => x.id === classId); const room = c && (s.rooms || []).find((r) => r.id === c.homeroom);
+    const out = { none: 0, type: 0 };
+    if (!room) return out;
+    for (const l of s.lessons) {
+      if ((l.classIds || []).length !== 1 || l.classIds[0] !== classId) continue;
+      if (!l.room) { l.room = 'home'; out.none++; }
+      else if (room.type && l.room === 'type:' + room.type) { l.room = 'home'; l.roomAlt = l.roomAlt || 'type:' + room.type; out.type++; }
+    }
+    return out;
   }
   // "221", "2,2,1" or "2 2 1" → [2, 2, 1]; null when empty, non-numeric, zero or a block above `max`.
   function parseLengths(text, max = Infinity) {
@@ -226,6 +247,7 @@
       t.presenceStrict = !!t.presenceStrict; t.noLastFirst = !!t.noLastFirst;
       for (const k of ['maxPerDay', 'minPerDay']) if (t[k] === undefined) t[k] = 0;
     });
+    s.classes.forEach((c) => { if (!s.rooms.some((r) => r.id === c.homeroom)) c.homeroom = ''; });
     s.subjects = s.subjects || [];
     s.lessons = s.lessons || [];
     s.lessons.forEach((l) => migrateLesson(l));
@@ -414,6 +436,13 @@
       // classes (or meetings) compete for them; one class filling its own homeroom is fine.
       else if (r.users > 1 && r.demand > 0.9 * r.capacity) issues.push({ lvl: 'warn', msg: `${Label} ${be} ${Math.round(r.demand / r.capacity * 100)}% booked (${r.demand} of ${r.capacity} periods, ${r.users} classes and meetings competing) — expect free periods inside class days. Add rooms or move some lessons to other room types.` });
     }
+    // Homerooms: a room shared by several classes, and parallel rows that all want the same homeroom.
+    const homeUsers = {};
+    s.classes.forEach((c) => { if (c.homeroom) (homeUsers[c.homeroom] ||= []).push(c.name); });
+    for (const rid in homeUsers) if (homeUsers[rid].length > 1) issues.push({ lvl: 'warn', msg: `Classes ${homeUsers[rid].join(' and ')} share the homeroom ${find(s, 'rooms', rid).name}, so their lessons compete for it.` });
+    const homeRows = {};
+    s.lessons.forEach((l) => { const g = (l.parallel || '').trim().toLowerCase(); const h = l.room === 'home' ? homeroomOf(s, l.classIds) : ''; if (g && h && !l.roomAlt) (homeRows[g + '|' + h] ||= []).push(l); });
+    for (const k in homeRows) if (homeRows[k].length > 1) issues.push({ lvl: 'err', msg: `${homeRows[k].map((l) => describeLesson(s, l.id)).join(' & ')} run in parallel but all use the homeroom ${find(s, 'rooms', k.split('|')[1]).name} — give all but one an alternative room or another room.` });
     const seen = new Set();
     e.units.forEach((u) => { if (!u.starts.length && !seen.has(u.key)) { seen.add(u.key); issues.push({ lvl: 'err', msg: `${describeUnit(s, u.id)} has no period where all its teachers and classes are available.` }); } });
     // Longest run of consecutive teaching periods in a day (period types are the same every day).
@@ -468,7 +497,7 @@
   window.Model = {
     uid, esc, PALETTE, teacherDefaults, WEIGHT_LABELS, PERIOD_TYPES, RELATION_TYPES,
     emptyState, sampleState, migrate, find,
-    lessonDefaults, newLesson, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
+    lessonDefaults, newLesson, homeroomOf, applyHomeroom, parseLengths, canPartition, partition, isLengths, sessionsOf, periodsOf, lengthsText, flexibleOf,
     dropDeadRelations, symmetrizeRelations, addRelation, removeRelation, removeLesson,
     periodType, isTeachingPeriod, teachingPeriods, generalBlocked, dutyKind, slotDisabled, selectableKeys, cellsOf,
     availableSlots, dutySlots, workload, usesDispreferred, pruneDeadKeys, prunePlacements,

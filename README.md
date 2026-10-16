@@ -7,7 +7,7 @@ No build step, no server, no dependencies — open `index.html` in a browser.
 ## Workflow
 
 1. **Week** – days and periods (with times).
-2. **Teachers / Classes / Rooms** – availability template per element with three states: available, **~ non-preferred** (soft, weighted) and **✕ prohibited** (hard). Teachers also get **max periods/day** (hard), **min periods/day** (soft), **max periods in a row**, **free days**, **presence/day and /week** (soft, or hard with *Strict*) and a **no last→first period** rule. Rooms have a type; rooms of one type form a set of alternatives.
+2. **Teachers / Classes / Rooms** – availability template per element with three states: available, **~ non-preferred** (soft, weighted) and **✕ prohibited** (hard). Teachers also get **max periods/day** (hard), **min periods/day** (soft), **max periods in a row**, **free days**, **presence/day and /week** (soft, or hard with *Strict*) and a **no last→first period** rule. Rooms have a type; rooms of one type form a set of alternatives. Classes can have a **homeroom**, assigned once: lessons set to “Class homeroom” use it and follow it when it changes.
 3. **Subjects** – name, short code, colour.
 4. **Lessons** – subject × teacher × class(es), sessions per week, single/double/triple, room (specific / any of a type / none), "max one per day", and **parallel group**: rows with the same group name run simultaneously (split classes, electives, setted groups), each with its own teacher and room.
 5. **Meetings & duties** – **teacher meetings** (members, sessions/week, single/double, optional room, allowed periods) and **on-call duties** (service such as library supervision, duty periods, max teachers per period, weekly hours per teacher).

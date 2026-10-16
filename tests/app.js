@@ -413,6 +413,57 @@ check('(h) a room set with no usable slot is an error naming the room', () => {
   add.lesson(s, subj, add.teacher(s, 'T'), [a], 1, 1, { room: r.id });
   assert.ok(hasMsg(s, /err: Hall is needed for 1 periods but has only 0 usable slots\./), rooms(s).join('\n'));
 });
+// ---------- (i) class homeroom ----------
+check('(i) migrate gives every class a homeroom and drops one that no longer exists', () => {
+  const s = school('tttt', 2);
+  const r = addRoom(s, 'R1'); const a = add.cls(s, 'A'); const b = add.cls(s, 'B');
+  delete a.homeroom; b.homeroom = 'gone';
+  M.migrate(s);
+  eq([a.homeroom, b.homeroom], ['', '']);
+  b.homeroom = r.id; M.migrate(s);
+  assert.strictEqual(b.homeroom, r.id, 'a real homeroom is kept');
+});
+check('(i) homeroomOf, newLesson and applyHomeroom', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), t = add.teacher(s);
+  const home = addRoom(s, 'Home A'), other = addRoom(s, 'Hall', 'Sports'); addRoom(s, 'R2');
+  const a = add.cls(s, 'A'), b = add.cls(s, 'B'); a.homeroom = home.id; b.homeroom = home.id;
+  assert.strictEqual(M.homeroomOf(s, [a.id]), home.id);
+  assert.strictEqual(M.homeroomOf(s, [a.id, b.id]), home.id, 'classes sharing one homeroom');
+  b.homeroom = other.id;
+  assert.strictEqual(M.homeroomOf(s, [a.id, b.id]), '', 'different homerooms');
+  assert.strictEqual(M.homeroomOf(s, [add.cls(s, 'N').id]), '', 'no homeroom');
+  assert.strictEqual(M.newLesson(subj.id, [a.id], s).room, 'home', 'a new row for a class with a homeroom starts in it');
+  assert.strictEqual(M.newLesson(subj.id, [a.id]).room, '', 'without the state nothing changes');
+  assert.strictEqual(M.newLesson(subj.id, [a.id, b.id], s).room, '', 'shared rows are left alone');
+  const none = add.lesson(s, subj, t, [a], 2, 1, { room: '' });
+  const anyType = add.lesson(s, subj, t, [a], 2, 1, { room: 'type:Classroom' });
+  const hall = add.lesson(s, subj, t, [a], 2, 1, { room: other.id });
+  const shared = add.lesson(s, subj, t, [a, b], 2, 1, { room: '' });
+  const bRow = add.lesson(s, subj, t, [b], 2, 1, { room: '' });
+  eq(M.applyHomeroom(s, a.id), { none: 1, type: 1 });
+  eq([none.room, anyType.room, anyType.roomAlt, hall.room, shared.room, bRow.room], ['home', 'home', 'type:Classroom', other.id, '', ''], 'only A’s own rows with no room or any Classroom change');
+  eq(M.applyHomeroom(s, a.id), { none: 0, type: 0 }, 'idempotent');
+  eq(M.applyHomeroom(s, add.cls(s, 'N2').id), { none: 0, type: 0 }, 'a class without a homeroom changes nothing');
+});
+check('(i) validate: shared homeroom warning, parallel rows on one homeroom, a row whose class has none', () => {
+  const s = school('tttt', 5);
+  const subj = add.subject(s), a = add.cls(s, 'A'), b = add.cls(s, 'B'); const home = addRoom(s, 'Home'); addRoom(s, 'Spare');
+  a.homeroom = home.id; b.homeroom = home.id;
+  add.lesson(s, subj, add.teacher(s, 'T'), [a], 2, 1, { room: 'home' });
+  assert.ok(hasMsg(s, /warn: Classes A and B share the homeroom Home/), msgs(s).join('\n'));
+  b.homeroom = '';
+  assert.ok(!hasMsg(s, /share the homeroom/));
+  const split = add.lesson(s, subj, add.teacher(s, 'U'), [a], 2, 1, { room: 'home', parallel: 'Split' });
+  const split2 = add.lesson(s, subj, add.teacher(s, 'V'), [a], 2, 1, { room: 'home', parallel: 'Split' });
+  assert.ok(hasMsg(s, /err: .*run in parallel but all use the homeroom Home/), msgs(s).join('\n'));
+  split2.roomAlt = 'type:Classroom';
+  split.roomAlt = 'type:Classroom';
+  assert.ok(!hasMsg(s, /run in parallel but all use the homeroom/), 'with a fallback they can take different rooms');
+  const orphan = add.lesson(s, subj, add.teacher(s, 'W'), [b], 1, 1, { room: 'home' });
+  assert.ok(hasMsg(s, /err: .*uses the class homeroom but its class has no homeroom/), msgs(s).join('\n'));
+  void orphan;
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

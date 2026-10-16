@@ -46,7 +46,7 @@ Source: GHC's shipped help files (planner, editor, engine, file platform), the u
 
 ### Classes and rooms
 
-- [ ] **(core) Class homeroom** assigned once and applied to all its lessons.
+- [x] **(core) Class homeroom** assigned once and applied to all its lessons. A class has a `homeroom`; a lesson row whose room is “Class homeroom” follows it (with an optional “Any <type>” fallback). “Use in lessons” on the class converts its own rows with no room, or with “Any <type>” of the homeroom's type; new rows for a class start in its homeroom.
 - [ ] Tutor/advisory teacher per class, "add class units with tutor" (primary), and tutor-every-day / early / late preferences.
 - [ ] Class size and room capacity, with a validation warning when the assigned room is too small.
 - [ ] Max daily occupancy per class; strict "no gaps" per class; force free periods into non-preferred slots.
