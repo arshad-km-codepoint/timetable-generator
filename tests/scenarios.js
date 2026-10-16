@@ -15,7 +15,7 @@ const id = (p) => `${p}${(++seq).toString(36)}`;
 const PAL = ['#2f6fdb', '#d9534f', '#1f8a4c', '#b7791f', '#7b4fd6', '#0f8f99', '#c2417e', '#5c6f2b', '#8a5a44', '#4a6fa5', '#d0682f', '#3d8f6f'];
 function school(name, days, periodTimes) {
   return {
-    settings: { name, days, periods: periodTimes.map(([s, e], i) => ({ label: String(i + 1), start: s, end: e })), weights: { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 }, attempts: 2 },
+    settings: { name, days, periods: periodTimes.map(([s, e, type], i) => ({ label: type ? type[0].toUpperCase() + type.slice(1) : String(i + 1), start: s, end: e, ...(type ? { type } : {}) })), weights: { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 }, attempts: 2 },
     teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], duties: [],
     timetable: { placements: [], generatedAt: null, difficulty: null },
   };
@@ -96,10 +96,12 @@ function scenarioA() {
 }
 
 // ---------- Scenario B: Senior secondary 11-12 with streams and option blocks ----------
+// Period classes: a 15-minute break after period 3 (index 3) and an explicit lunch (index 7);
+// teaching periods are indices 0-2, 4-6, 8-9.
 function scenarioB() {
   const s = school('Scenario B — Grades 11–12, streams with option blocks',
     ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-    [['08:00', '08:45'], ['08:45', '09:30'], ['09:30', '10:15'], ['10:35', '11:20'], ['11:20', '12:05'], ['12:05', '12:50'], ['13:30', '14:15'], ['14:15', '15:00']]);
+    [['08:00', '08:45'], ['08:45', '09:30'], ['09:30', '10:15'], ['10:15', '10:30', 'break'], ['10:30', '11:15'], ['11:15', '12:00'], ['12:00', '12:45'], ['12:45', '13:30', 'lunch'], ['13:30', '14:15'], ['14:15', '15:00']]);
   const sub = (n, c) => add.subject(s, n, c);
   const S = {
     eng: sub('English', 'ENG'), pe: sub('Health & PE', 'HPE'), phy: sub('Physics', 'PHY'), che: sub('Chemistry', 'CHE'), mat: sub('Mathematics', 'MAT'),
@@ -117,7 +119,7 @@ function scenarioB() {
   const t = {
     eng1: T('Eng – Meera', 'MEE'), eng2: T('Eng – Thomas', 'THO'), pe1: T('PE – Arjun', 'ARJ'), pe2: T('PE – Sana', 'SAN'),
     phy: T('Physics – Ravi', 'RAV'), che: T('Chem – Fatima', 'FAT'), mat1: T('Maths – Ken', 'KEN'), mat2: T('Maths – Priya', 'PRI'),
-    bio: T('Bio – Olu', 'OLU', { unavailable: ['4-6', '4-7'] }), cs: T('CS – Ahmed', 'AHM'), acc: T('Acc – Neha', 'NEH'), bst: T('BSt – John', 'JOH'),
+    bio: T('Bio – Olu', 'OLU', { unavailable: ['4-8', '4-9'] }), cs: T('CS – Ahmed', 'AHM'), acc: T('Acc – Neha', 'NEH'), bst: T('BSt – John', 'JOH'),
     eco: T('Eco – Divya', 'DIV'), his: T('History – Li', 'LIW'), pol: T('PolSci – Omar', 'OMA', { dispreferred: ['0-0', '1-0', '2-0'] }), geo: T('Geo – Rosa', 'ROS'),
     psy: T('Psych – Ali', 'ALI'), ent: T('Entre – Kim', 'KIM'),
   };
@@ -144,14 +146,17 @@ function scenarioB() {
     add.lesson(s, S.cs, t.cs, [c.sciA, c.sciB], 4, 1, 'type:ComputerLab', `G${g} Block S`);
     add.lesson(s, S.psy, t.psy, [c.com, c.hum], 4, 1, 'type:Classroom', `G${g} Block S`);
     add.lesson(s, S.ped, g === 11 ? t.pe2 : t.pe1, all, 4, 1, 'type:Sports', `G${g} Block S`);
-    // Practicals (double periods in specialist labs)
-    add.lesson(s, S.phy, t.phy, [c.sciA], 1, 2, 'type:PhysicsLab'); add.lesson(s, S.phy, t.phy, [c.sciB], 1, 2, 'type:PhysicsLab');
+    // Practicals (double periods in specialist labs); physics practicals may run across the break
+    add.lesson(s, S.phy, t.phy, [c.sciA], 1, 2, 'type:PhysicsLab').allowBreakInside = true;
+    add.lesson(s, S.phy, t.phy, [c.sciB], 1, 2, 'type:PhysicsLab').allowBreakInside = true;
     add.lesson(s, S.che, t.che, [c.sciA], 1, 2, 'type:ChemLab'); add.lesson(s, S.che, t.che, [c.sciB], 1, 2, 'type:ChemLab');
     add.lesson(s, S.bio, t.bio, [c.sciB], 1, 2, 'type:BioLab');
     add.lesson(s, S.ent, t.ent, [c.com], 3, 1, 'type:Classroom');
   });
-  s.meetings.push({ id: id('m'), name: 'Senior-school team', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: '', allowed: slotsWhere(s, (d, p) => p >= 6) });
-  s.duties.push({ id: id('d'), name: 'Lab safety supervision', maxPerSlot: 1, allowed: slotsWhere(s, (d, p) => p >= 6), assignments: [t.cs, t.psy, t.ent, t.geo, t.acc].map((x) => ({ teacherId: x.id, hours: 2 })) });
+  s.meetings.push({ id: id('m'), name: 'Senior-school team', teacherIds: s.teachers.map((x) => x.id), sessions: 1, length: 1, room: '', allowed: slotsWhere(s, (d, p) => p >= 8) });
+  s.duties.push({ id: id('d'), name: 'Lab safety supervision', maxPerSlot: 1, allowed: slotsWhere(s, (d, p) => p >= 8), assignments: [t.cs, t.psy, t.ent, t.geo, t.acc].map((x) => ({ teacherId: x.id, hours: 2 })) });
+  // Break supervision: 5 break periods × 2 teachers = 10 slots for 12 assigned hours (2 stay unplaced by design).
+  s.duties.push({ id: id('d'), kind: 'break', name: 'Playground duty', maxPerSlot: 2, allowed: [], assignments: [t.eng1, t.eng2, t.pe1, t.pe2, t.his, t.pol].map((x) => ({ teacherId: x.id, hours: 2 })) });
   return s;
 }
 
@@ -217,14 +222,32 @@ function audit(s, placements) {
   const seenUnits = new Set();
   const placedPerLesson = {}, perDay = {}, tTeach = {};
   const parallelSlot = {}; // tag|session -> slot
+  // Period classes and the general template (settings.blocked), read straight from the data.
+  const ptype = (p) => (s.settings.periods[p] && s.settings.periods[p].type) || 'teaching';
+  const general = new Set(s.settings.blocked || []);
+  // Cells of a lesson/meeting placement: `len` consecutive periods, or — when the unit may
+  // straddle a break — the next `len` teaching periods with break/lunch skipped.
+  const cellsOf = (pl, allowBreak) => {
+    const out = []; let p = pl.period;
+    while (out.length < pl.len && p < P) { if (ptype(p) === 'teaching' || !allowBreak) out.push([pl.day, p]); p++; }
+    if (out.length < pl.len) err(`out of bounds ${pl.unitId}`);
+    return out;
+  };
+  const checkTeachingCells = (cells, what) => {
+    for (const [d, p] of cells) {
+      if (ptype(p) !== 'teaching') err(`${what} on ${ptype(p)} period ${d}-${p}`);
+      if (general.has(`${d}-${p}`)) err(`${what} on general-blocked period ${d}-${p}`);
+    }
+  };
   for (const pl of placements) {
     if (seenUnits.has(pl.unitId)) err(`duplicate placement ${pl.unitId}`);
     seenUnits.add(pl.unitId);
-    if (pl.day < 0 || pl.day >= D || pl.period < 0 || pl.period + pl.len > P) err(`out of bounds ${pl.unitId}`);
+    if (pl.day < 0 || pl.day >= D || pl.period < 0 || pl.period >= P) err(`out of bounds ${pl.unitId}`);
     const base = pl.unitId.split('#')[0];
-    const cells = Array.from({ length: pl.len }, (_, q) => [pl.day, pl.period + q]);
     if (base.startsWith('m:')) {
       const m = M[base.slice(2)]; if (!m) { err('unknown meeting'); continue; }
+      const cells = cellsOf(pl, false);
+      checkTeachingCells(cells, `meeting ${m.name}`);
       for (const [d, p] of cells) {
         if (m.allowed.length && !m.allowed.includes(`${d}-${p}`)) err(`meeting ${m.name} outside allowed period`);
         for (const t of new Set(m.teacherIds)) { book('T' + t, d, p, pl.unitId); if (T[t].unavailable.includes(`${d}-${p}`)) err(`meeting member prohibited`); }
@@ -234,8 +257,11 @@ function audit(s, placements) {
     }
     if (base.startsWith('d:')) {
       const [, did, tid] = base.split(':'); const svc = DU[did];
-      const [d, p] = cells[0];
+      const [d, p] = [pl.day, pl.period];
+      if (pl.len !== 1) err(`duty ${svc.name} longer than one period`);
       if (svc.allowed.length && !svc.allowed.includes(`${d}-${p}`)) err('duty outside duty periods');
+      if (svc.kind === 'break') { if (ptype(p) !== 'break') err(`break duty ${svc.name} on ${ptype(p)} period ${d}-${p}`); }
+      else checkTeachingCells([[d, p]], `duty ${svc.name}`);
       book('T' + tid, d, p, pl.unitId); book('S' + did, d, p, pl.unitId);
       if (T[tid].unavailable.includes(`${d}-${p}`)) err('duty teacher prohibited');
       continue;
@@ -246,6 +272,9 @@ function audit(s, placements) {
     ids.forEach((lid, k) => {
       const l = L[lid]; if (!l) { err('unknown lesson'); return; }
       if (pl.len !== l.length) err(`wrong length ${lid}`);
+      // A lesson that may not straddle a break must occupy consecutive teaching periods.
+      const cells = cellsOf(pl, !!l.allowBreakInside);
+      checkTeachingCells(cells, `lesson ${lid}`);
       placedPerLesson[lid] = (placedPerLesson[lid] || 0) + 1;
       if (l.parallel) {
         const key = `${l.parallel}|${session}`;
@@ -285,15 +314,32 @@ function audit(s, placements) {
   return { errs, overlaps, expectedLessons, placedLessons, cellsChecked: Object.keys(grid).length };
 }
 
-// Gaps in class days (soft) — to show quality, not correctness.
+// Gaps in class days (soft) — to show quality, not correctness. Free teaching periods between
+// a class's first and last lesson, counted separately before and after lunch; breaks never count.
 function classGaps(s, placements) {
   const P = s.settings.periods.length; const occ = {};
+  const ptype = (p) => s.settings.periods[p].type || 'teaching';
+  const general = new Set(s.settings.blocked || []);
   for (const pl of placements) {
     const base = pl.unitId.split('#')[0]; if (base.startsWith('m:') || base.startsWith('d:')) continue;
-    for (const lid of base.split('+')) for (const c of s.lessons.find((l) => l.id === lid).classIds) for (let q = 0; q < pl.len; q++) (occ[`${c}:${pl.day}`] ||= new Set()).add(pl.period + q);
+    for (const lid of base.split('+')) {
+      const l = s.lessons.find((x) => x.id === lid);
+      const cells = []; for (let p = pl.period; p < P && cells.length < pl.len; p++) if (ptype(p) === 'teaching' || !l.allowBreakInside) cells.push(p);
+      for (const c of l.classIds) for (const p of cells) (occ[`${c}:${pl.day}`] ||= new Set()).add(p);
+    }
   }
   let gaps = 0;
-  for (const k in occ) { const ps = [...occ[k]]; gaps += Math.max(...ps) - Math.min(...ps) + 1 - ps.length; }
+  for (const k in occ) {
+    const d = Number(k.split(':')[1]);
+    let seg = [];
+    const segs = [];
+    for (let p = 0; p < P; p++) {
+      if (ptype(p) === 'lunch') { if (seg.length) segs.push(seg); seg = []; }
+      else if (ptype(p) === 'teaching' && !general.has(`${d}-${p}`)) seg.push(p);
+    }
+    if (seg.length) segs.push(seg);
+    for (const sg of segs) { const idx = sg.map((p, i) => (occ[k].has(p) ? i : -1)).filter((i) => i >= 0); if (idx.length) gaps += Math.max(...idx) - Math.min(...idx) + 1 - idx.length; }
+  }
   return gaps;
 }
 
