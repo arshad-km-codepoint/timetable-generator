@@ -171,6 +171,7 @@ function cleanupRefs() {
     l.classIds = (l.classIds || []).filter((id) => c.has(id));
     if (l.room && l.room !== 'home' && !l.room.startsWith('type:') && !r.has(l.room)) l.room = '';
   });
+  state.associations.forEach((a) => { a.teacherIds = (a.teacherIds || []).filter((id) => t.has(id)); });
   state.classes.forEach((c) => { if (c.homeroom && !r.has(c.homeroom)) c.homeroom = ''; if (c.tutorId && !t.has(c.tutorId)) c.tutorId = ''; });
   state.grades.forEach((g) => { g.curriculum = g.curriculum.filter((e) => s.has(e.subjectId)); });
   state.lessons = state.lessons.filter((l) => s.has(l.subjectId));
@@ -205,6 +206,24 @@ function renderTeachers(root) {
     { label: '<span title="Combinations of periods the teacher should not have together">Exclusive</span>', input: (x) => `<button class="ghost small ${x.noLastFirst || x.noFirstLast || x.noSplitDay ? 'on' : ''}" data-exclusive>${[x.noLastFirst && 'last→first', x.noFirstLast && 'first+last', x.noSplitDay && 'am+pm'].filter(Boolean).join(', ') || 'none'}</button>` }];
   cols.newItem = () => ({ id: uid(), name: `Teacher ${state.teachers.length + 1}`, code: '', unavailable: [], dispreferred: [], dispreferred2: [], ...teacherDefaults() });
   entityEditor(root, { cellActs: { exclusive: editExclusive }, list: 'teachers', title: 'Teachers', hint: 'Availability: ✕ = prohibited (never scheduled), ~ = non-preferred (avoided when possible). Prefer ~ over ✕ — it keeps the timetable solvable. Load includes meetings and teaching-period duties (break supervision is counted against break periods instead); red = more periods than free slots. Max/day counts teaching only.', cols, loadKey: 't' });
+  renderAssociations(root);
+}
+
+// Associated timetables: teachers of one set should start and finish each day together.
+function renderAssociations(root) {
+  const p = panel(root, 'Associated timetables', 'A named set of teachers who should start and finish their days at the same time (e.g. the two teachers of a shared class, or a team that carpools). The generator charges the spread of their first and last periods on every day they all teach.');
+  p.querySelector('[data-slot=actions]').innerHTML = '<button data-add>+ Add set</button>';
+  p.insertAdjacentHTML('beforeend', state.associations.length ? `<div class="table-wrap"><table class="edit"><thead><tr><th>Name</th><th>Teachers</th><th></th></tr></thead><tbody>
+    ${state.associations.map((a) => `<tr data-id="${a.id}"><td><input data-f="name" value="${esc(a.name)}" aria-label="Set name"></td><td><button class="ghost" data-members>${(a.teacherIds || []).map((id) => `<span class="chip">${esc(find('teachers', id)?.name)}</span>`).join('') || '— choose —'}</button></td><td><button class="danger" data-del>✕</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No sets yet.</p>');
+  p.addEventListener('change', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr && e.target.dataset.f === 'name') { state.associations.find((a) => a.id === tr.dataset.id).name = e.target.value; changed(); } });
+  p.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (btn.dataset.add !== undefined) { state.associations.push({ id: uid(), name: `Set ${state.associations.length + 1}`, teacherIds: [] }); changed(); render(); return; }
+    const tr = btn.closest('tr[data-id]'); if (!tr) return;
+    const a = state.associations.find((x) => x.id === tr.dataset.id);
+    if (btn.dataset.del !== undefined) { state.associations = state.associations.filter((x) => x !== a); changed(); render(); }
+    else if (btn.dataset.members !== undefined) pickTeachers(a);
+  });
 }
 
 // Period combinations a teacher should not have together (soft, weighted by “excluded period combinations”).
@@ -1002,6 +1021,7 @@ function renderStats(box) {
     ${s.afterBreak ? `<div class="stat"><b>${s.afterBreak}</b><span>lessons right after a break they avoid</span></div>` : ''}
     ${s.afternoon ? `<div class="stat"><b>${s.afternoon}</b><span>lessons in an afternoon they avoid</span></div>` : ''}
     ${s.sameHour ? `<div class="stat"><b>${s.sameHour}</b><span>same-hour repeats / variations against a row’s wish</span></div>` : ''}
+    ${s.association ? `<div class="stat"><b>${s.association}</b><span>periods apart for associated teachers</span></div>` : ''}
     ${s.concentrate ? `<div class="stat"><b>${s.concentrate}</b><span>teacher days beyond the fewest needed</span></div>` : ''}
     ${s.freeHalves ? `<div class="stat"><b>${s.freeHalves}</b><span>free half-days teachers are short of</span></div>` : ''}
     ${s.balance ? `<div class="stat"><b>${s.balance}</b><span>teacher periods off an even week</span></div>` : ''}

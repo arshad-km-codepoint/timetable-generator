@@ -876,6 +876,17 @@ check('(z) exclusive-period settings migrate with safe defaults', () => {
   t.exclusiveWindow = '3.9'; M.migrate(s);
   assert.strictEqual(t.exclusiveWindow, 3);
 });
+check('(aa) associations: migrate drops unknown teachers; a set with fewer than two is flagged', () => {
+  const s = school('tttt', 2);
+  const t1 = add.teacher(s, 'A'), t2 = add.teacher(s, 'B');
+  s.associations = [{ id: 'a1', name: 'Team', teacherIds: [t1.id, 'gone', t1.id, t2.id] }, null, { name: 'no id' }, { id: 'a2', name: 7, teacherIds: 'x' }];
+  M.migrate(s);
+  eq(s.associations, [{ id: 'a1', name: 'Team', teacherIds: [t1.id, t2.id] }, { id: 'a2', name: 'Association', teacherIds: [] }]);
+  assert.ok(hasMsg(s, /warn: Associated timetable “Association” needs at least two teachers/), msgs(s).join('\n'));
+  assert.ok(!hasMsg(s, /“Team” needs/));
+  eq(M.migrate({ settings: M.emptyState().settings, teachers: [], classes: [], rooms: [], subjects: [], lessons: [] }).associations, []);
+  assert.ok(M.sampleState().associations.length === 1);
+});
 check('(f) sampleState() still validates clean and has lengths on every row', () => {
   const s = M.sampleState();
   assert.ok(s.lessons.every((l) => M.isLengths(l.lengths) && !('sessions' in l)));

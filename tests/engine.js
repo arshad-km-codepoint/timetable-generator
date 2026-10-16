@@ -1079,6 +1079,35 @@ check('concentrate: working days beyond the fewest the load needs are charged; b
   assert.strictEqual(new Set(r.placements.map((p) => p.day)).size, 2, 'eight periods in the two days they need');
 });
 
+check('associated timetables: members start and finish together; the spread is costed and the annealer closes it', () => {
+  const s = school({ days: 2, periods: 6 });
+  const subj = add.subject(s), a = add.teacher(s, 'A'), b = add.teacher(s, 'B'), x = add.teacher(s, 'X');
+  const ca = add.cls(s, 'CA'), cb = add.cls(s, 'CB'), cx = add.cls(s, 'CX');
+  const la = add.lesson(s, subj, a, [ca], 0, 1, { lengths: [1, 1] }), lb = add.lesson(s, subj, b, [cb], 0, 1, { lengths: [1, 1] }), lx = add.lesson(s, subj, x, [cx], 0, 1, { lengths: [1] });
+  s.associations = [{ id: 'g', name: 'Team', teacherIds: [a.id, b.id, 'ghost', a.id] }, { id: 'solo', name: 'One', teacherIds: [x.id] }];
+  const e0 = new Engine(s, []);
+  assert.strictEqual(e0.assocs.length, 1, 'unknown teachers and duplicates are ignored; a set of one is dropped');
+  eq(e0.assocs[0].teachers, [a.id, b.id]);
+  // Monday: A teaches periods 0 and 3, B teaches periods 1 and 5 → starts differ by 1, ends differ by 2.
+  const e = new Engine(s, [pl(la, 0, 0, 0, 1), pl(la, 1, 0, 3, 1), pl(lb, 0, 0, 1, 1), pl(lb, 1, 0, 5, 1)]);
+  assert.strictEqual(e.assocDayCost(e.assocs[0], 0), 3);
+  assert.strictEqual(e.assocDayCost(e.assocs[0], 1), 0, 'a day nobody teaches costs nothing');
+  assert.strictEqual(e.totalCost().association, 3);
+  const flat = new Engine({ ...s, settings: { ...s.settings, weights: { association: 0 } } }, e.placements());
+  assert.ok(Math.abs(e.totalCost().cost - flat.totalCost().cost - 3 * e.W.association) < 0.11, 'carried by the cost');
+  const ui = e.unitById[`${la.id}#0`].i;
+  assert.ok(Math.abs(e.localCost(ui, [0]) - flat.localCost(ui, [0]) - 3 * e.W.association) < 1e-9, 'and by localCost');
+  assert.ok(Math.abs(e.areaCost([ui], [0]) - flat.areaCost([ui], [0]) - 3 * e.W.association) < 1e-9, 'and by areaCost');
+  // One member teaching alone that day: no pair, no cost.
+  const e2 = new Engine(s, [pl(la, 0, 0, 0, 1), pl(la, 1, 0, 3, 1)]);
+  assert.strictEqual(e2.assocDayCost(e2.assocs[0], 0), 0);
+  // Over a solve the two teachers' days line up.
+  s.settings.weights = { association: 20, late: 0, teacherGap: 0.01, balance: 0 };
+  const r = solveAll(s);
+  assert.strictEqual(r.placed, r.total);
+  assert.strictEqual(r.engine.totalCost().association, 0, r.placements.map((p) => `${p.unitId.slice(0, 3)}${p.day}/${p.period}`).join(' '));
+});
+
 // ---------- complementary activities ----------
 const addActivity = (s, name, teacher, periods, extra = {}) => { const x = { id: id('a'), name, teacherId: teacher.id, periods, minPerDay: 0, maxPerDay: 0, nonConsecutive: false, countLoad: false, allowed: [], ...extra }; (s.activities ||= []).push(x); return x; };
 const apl = (a, k, day, period) => ({ unitId: `a:${a.id}#${k}`, day, period, len: 1, rooms: [null], locked: false });

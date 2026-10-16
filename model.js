@@ -11,6 +11,7 @@
     dispreferred: 'Lesson in a non-preferred period (~)', dispreferred2: 'Lesson in a strongly non-preferred period (~~)', teacherMin: 'Teacher below minimum periods/day', late: 'Lesson late in the day (per period)',
     dutyUncovered: 'Duty period with nobody on call',
     ends: 'Lesson in the first or last period of a day', roomPref: 'Lesson not in its preferred room',
+    association: 'Associated teachers starting / finishing apart (per period of spread)',
     concentrate: 'Teacher working more days than their load needs (per extra day)',
     freeHalves: 'Teacher short of the free mornings / afternoons they asked for (per half-day)',
     afterBreak: 'Lesson in the first period after a break', afternoon: 'Lesson in the afternoon (after lunch)', sameHour: 'Same hour of the day repeated (or varied) across a lesson row’s sessions',
@@ -50,7 +51,7 @@
         weights: { ...TT().DEFAULT_WEIGHTS },
         attempts: 3,
       },
-      teachers: [], classes: [], grades: [], departments: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
+      teachers: [], classes: [], grades: [], departments: [], associations: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
       timetable: { placements: [], generatedAt: null, difficulty: null },
     };
   }
@@ -129,6 +130,8 @@
     s.activities = [{ id: uid(), name: 'Lab preparation', teacherId: T.s1.id, periods: 3, minPerDay: 0, maxPerDay: 1, nonConsecutive: true, countLoad: false, allowed: [] }];
     // A pin: the first Maths session of 6A is fixed on Tuesday, period 2, before generation.
     s.pins = [{ kind: 'lesson', id: s.lessons.find((l) => l.subjectId === S.math.id && l.classIds[0] === s.classes[0].id).id, k: 0, day: 1, period: 1 }];
+    // Associated timetables: the two science teachers start and finish their days together where they can.
+    s.associations = [{ id: uid(), name: 'Science team', teacherIds: [T.s1.id, T.s2.id] }];
     // One grade per year; its curriculum is what the year's first class is taught.
     s.grades = [['Year 6', '6'], ['Year 7', '7'], ['Year 8', '8']].map(([name, y]) => {
       const classes = s.classes.filter((c) => c.name.startsWith(y));
@@ -380,6 +383,7 @@
     s.subjects = s.subjects || [];
     s.departments = (Array.isArray(s.departments) ? s.departments : []).filter((d) => d && d.id).map((d) => ({ id: d.id, name: typeof d.name === 'string' ? d.name : 'Department' }));
     for (const list of [s.teachers, s.subjects]) for (const x of list) if (!s.departments.some((d) => d.id === x.departmentId)) x.departmentId = '';
+    s.associations = (Array.isArray(s.associations) ? s.associations : []).filter((a) => a && a.id).map((a) => ({ id: a.id, name: typeof a.name === 'string' ? a.name : 'Association', teacherIds: [...new Set((Array.isArray(a.teacherIds) ? a.teacherIds : []).filter((id) => s.teachers.some((t) => t.id === id)))] }));
     s.grades = Array.isArray(s.grades) ? s.grades.filter((g) => g && g.id) : [];
     // Abbreviations and external keys (for export / exchange); days and periods carry keys too.
     const str = (v) => (typeof v === 'string' ? v : '');
@@ -716,6 +720,7 @@
       if (a.maxPerDay && a.periods > a.maxPerDay * days) issues.push({ lvl: 'err', msg: `Activity “${a.name}” has ${a.periods} periods but max ${a.maxPerDay}/day over the ${days} day(s) ${t.name} can be there holds only ${a.maxPerDay * days}.` });
       if (slots.length < a.periods) issues.push({ lvl: 'err', msg: `Activity “${a.name}” has ${a.periods} periods but only ${slots.length} usable slot(s) for ${t.name}.` });
     });
+    s.associations.forEach((a) => { if (a.teacherIds.length < 2) issues.push({ lvl: 'warn', msg: `Associated timetable “${a.name}” needs at least two teachers to have any effect.` }); });
     // Codes and external keys identify elements to the outside world, so they must be unique per list.
     const dup = (label, list, field) => {
       const seen = {};

@@ -18,7 +18,7 @@ function school(name, days, periodTimes) {
   seq = 0;
   return {
     settings: { name, days, periods: periodTimes.map(([s, e, type], i) => ({ label: type ? type[0].toUpperCase() + type.slice(1) : String(i + 1), start: s, end: e, ...(type ? { type } : {}) })), weights: { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1 }, attempts: 2 },
-    teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [],
+    teachers: [], classes: [], rooms: [], subjects: [], lessons: [], meetings: [], activities: [], duties: [], pins: [], associations: [],
     timetable: { placements: [], generatedAt: null, difficulty: null },
   };
 }
@@ -244,6 +244,8 @@ function scenarioC() {
   });
   // Grade-level planning: the 3 class teachers of a grade together — only possible when all 3 divisions are with specialists.
   for (let g = 0; g < 5; g++) s.meetings.push({ id: id('m'), name: `Grade ${g + 1} planning`, teacherIds: ct.slice(g * 3, g * 3 + 3).map((x) => x.id), sessions: 1, length: 1, room: '', allowed: [] });
+  // Associated timetables: the two Arabic teachers and the two PE teachers start and finish their days together where possible.
+  s.associations.push({ id: id('g'), name: 'Arabic team', teacherIds: ara.map((x) => x.id) }, { id: id('g'), name: 'PE team', teacherIds: pe.map((x) => x.id) });
   // Pinned: a double English, an EVS session, a grade planning meeting and an activity.
   const find1 = (pred) => { const l = s.lessons.find(pred); assert.ok(l, 'pin target exists'); return l; };
   s.pins.push({ kind: 'lesson', id: find1((l) => l.subjectId === S.eng.id && l.classIds[0] === cls[4].id).id, k: 0, day: 2, period: 1 });
@@ -595,7 +597,7 @@ for (const [key, s] of scenarios) {
   console.log(`\n=== ${s.settings.name}`);
   console.log(`  size: ${s.classes.length} classes, ${s.teachers.length} teachers, ${s.rooms.length} rooms, ${s.lessons.length} lesson rows, ${e0.units.length} units to place (${e0.problems.length} data problems)`);
   console.log(`  result: ${best.placed}/${best.total} placed in ${secs}s (2 attempts) · lesson sessions ${a.placedLessons}/${a.expectedLessons} (periods ${a.placedPeriods}/${a.expectedPeriods}) · unplaced by kind ${JSON.stringify(unplacedKinds)}`);
-  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}, over-long runs ${best.cost.consecutive}, presence over ${best.cost.presence}, last→first ${best.cost.exclusive}, tutor wishes missed ${best.cost.tutor}`);
+  console.log(`  quality: class gaps ${best.cost.classGaps} (independent count ${classGaps(s, best.placements)}), teacher gaps ${best.cost.teacherGaps}, non-preferred used ${best.cost.dispreferred}, duty uncovered ${best.cost.dutyUncovered}, day ends ${best.cost.ends}, non-preferred rooms ${best.cost.roomPref}, extra rooms ${best.cost.roomSame}, adjacent days ${best.cost.consecutiveDays}, teacher week imbalance ${best.cost.balance}, over-long runs ${best.cost.consecutive}, presence over ${best.cost.presence}, last→first ${best.cost.exclusive}, tutor wishes missed ${best.cost.tutor}, association spread ${best.cost.association}`);
   console.log(`  AUDIT: ${a.overlaps} overlaps, ${a.errs.length} rule violations across ${a.cellsChecked} entity-periods${a.errs.length ? '\n   ' + [...new Set(a.errs)].slice(0, 8).join('\n   ') : ''}`);
   if (a.errs.length) allClean = false;
   // Room demand: a set's capacity may never be below what a real timetable already holds in it.

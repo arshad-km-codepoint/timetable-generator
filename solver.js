@@ -10,7 +10,7 @@
 // chooses for a `flexible` row); rows may be tied by relations (different days, not at the
 // same time, (non-)consecutive, days apart) that are hard rules like any other clash.
 
-const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5, freeHalves: 4, concentrate: 1 };
+const DEFAULT_WEIGHTS = { classGap: 3, teacherGap: 1, sameDay: 4, late: 0.15, dispreferred: 2, teacherMin: 2, dutyUncovered: 1, ends: 0.5, roomPref: 1, roomSame: 0.5, consecutiveDays: 1, balance: 0.25, consecutive: 1, presence: 1, exclusive: 1, activityMin: 2, dispreferred2: 6, roomSize: 3, classGapStrict: 30, tutorDaily: 1, tutorEnds: 1, afterBreak: 0.5, afternoon: 0.5, sameHour: 0.5, freeHalves: 4, concentrate: 1, association: 0.5 };
 const RELATION_TYPES = new Set(['differentDays', 'notSameTime', 'nonConsecutive', 'consecutive', 'daysApart', 'before', 'after']);
 
 // A room record with count N > 1 stands for N identical unnamed rooms ("20 general classrooms"):
@@ -132,6 +132,10 @@ class Engine {
       const cap = Math.floor(Number(t.maxPerDay)) || 0;
       this.tDayCap[t.id] = cap > 0 ? Math.min(cap, best || cap) : best;
     }
+    // Associated timetables: named sets of teachers who should start and finish their days together.
+    this.assocs = (Array.isArray(data.associations) ? data.associations : []).map((a) => ({ id: a.id, teachers: [...new Set((a.teacherIds || []).filter((t) => data.teachers.some((x) => x.id === t)))] })).filter((a) => a.teachers.length >= 2);
+    this.assocOf = {};
+    for (const t of data.teachers) this.assocOf[t.id] = this.assocs.filter((a) => a.teachers.includes(t.id));
     this.tRule = {};
     for (const t of data.teachers) {
       const n = (v) => Math.max(0, Math.floor(Number(v)) || 0);
@@ -915,6 +919,24 @@ class Engine {
     return cap ? Math.max(0, days - Math.ceil(load / cap)) : 0;
   }
 
+  // How far apart the members of an association start and finish on day d: the spread of their
+  // first periods plus the spread of their last periods (members without lessons that day are left out).
+  assocDayCost(a, d) {
+    let fMin = Infinity, fMax = -Infinity, lMin = Infinity, lMax = -Infinity, n = 0;
+    for (const t of a.teachers) {
+      const occ = this.occ['t' + t]; let first = -1, last = -1;
+      for (let p = 0; p < this.P; p++) if (this.teach[d * this.P + p] && occ[d * this.P + p] >= 0) { if (first < 0) first = p; last = p; }
+      if (first < 0) continue;
+      n++; fMin = Math.min(fMin, first); fMax = Math.max(fMax, first); lMin = Math.min(lMin, last); lMax = Math.max(lMax, last);
+    }
+    return n < 2 ? 0 : (fMax - fMin) + (lMax - lMin);
+  }
+  assocCost(teachers, days) {
+    const seen = new Set(); let c = 0;
+    for (const t of teachers) for (const a of this.assocOf[t]) { if (seen.has(a)) continue; seen.add(a); for (const d of days) c += this.W.association * this.assocDayCost(a, d); }
+    return c;
+  }
+
   // Free half-days still missing: the wish is `freeHalves` mornings or afternoons without any lesson.
   teacherFreeHalvesMissing(t) {
     const need = Math.min(this.tRule[t].freeHalves, this.tHalves[t].length); const occ = this.occ['t' + t];
@@ -1075,6 +1097,7 @@ class Engine {
       if (u.service) c += this.W.dutyUncovered * this.uncovered(u.service, d);
     }
     for (const t of u.teachers) c += this.teacherWeekCost(t);
+    if (this.assocs.length) c += this.assocCost(u.teachers, days);
     return c + this.unitCost(ui) + this.groupCost(u.key);
   }
 
@@ -1091,12 +1114,13 @@ class Engine {
     }
     for (const key of keys) c += this.groupCost(key);
     for (const t of ts) c += this.teacherWeekCost(t);
+    if (this.assocs.length) c += this.assocCost(ts, days);
     for (const ui of uis) c += this.unitCost(ui);
     return c;
   }
 
   totalCost() {
-    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0, freeHalves: 0, concentrate: 0 };
+    const st = { teacherGaps: 0, classGaps: 0, sameDay: 0, dispreferred: 0, teacherMin: 0, dutyUncovered: 0, ends: 0, roomPref: 0, roomSame: 0, consecutiveDays: 0, balance: 0, consecutive: 0, presence: 0, exclusive: 0, activityMin: 0, roomTooSmall: 0, tutor: 0, sameHour: 0, afterBreak: 0, afternoon: 0, freeHalves: 0, concentrate: 0, association: 0 };
     let c = 0;
     for (const key in this.groupUnits) {
       const g = this.groupStats(key);
@@ -1127,6 +1151,7 @@ class Engine {
         const extra = Math.max(0, this.sameDayCount(key, d) - 1);
         st.sameDay += extra; c += this.W.sameDay * extra;
       }
+      for (const a of this.assocs) { const x = this.assocDayCost(a, d); st.association += x; c += this.W.association * x; }
       for (const id in this.services) { const n = this.uncovered(id, d); st.dutyUncovered += n; c += this.W.dutyUncovered * n; }
     }
     this.units.forEach((u, i) => {
